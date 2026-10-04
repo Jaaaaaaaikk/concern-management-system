@@ -33,6 +33,11 @@ async function login() {
 
         await navigateTo('/dashboard')
     } catch (error) {
+        if (error?.statusCode === 403) {
+            await navigateTo('/account-deactivated')
+            return
+        }
+
         errorMessage.value =
             error?.data?.statusMessage ||
             error?.data?.message ||

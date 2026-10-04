@@ -1,15 +1,15 @@
 <script setup>
 
+import CreateUserModal from '../components/users/CreateUserModal.vue'
+import EditUserModal from '../components/users/EditUserModal.vue'
+
 definePageMeta({
     middleware: 'auth'
 })
 
-
-
 const users = ref([])
 const roles = ref([])
 const organizations = ref([])
-
 const currentUser = ref(null)
 
 const loading = ref(true)
@@ -21,7 +21,6 @@ const successMessage = ref('')
 
 const showModal = ref(false)
 const showEditModal = ref(false)
-
 const editingUser = ref(null)
 
 const form = ref({
@@ -44,15 +43,16 @@ const editForm = ref({
     organization_id: ''
 })
 
-/*
-|--------------------------------------------------------------------------
-| Current User
-|--------------------------------------------------------------------------
-*/
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalUsers = ref(0)
+const totalPages = ref(0)
 
 async function loadCurrentUser() {
     try {
-        const response = await $fetch('/api/auth/me')
+        const response = await $fetch('/api/auth/me', {
+            cache: 'no-store'
+        })
 
         currentUser.value = response.user
     } catch (error) {
@@ -62,35 +62,43 @@ async function loadCurrentUser() {
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Load Users
-|--------------------------------------------------------------------------
-*/
-
 async function loadUsers() {
-    try {
-        const response = await $fetch('/api/users')
+    const response = await $fetch('/api/users', {
+        cache: 'no-store',
+        query: {
+            page: currentPage.value,
+            limit: pageSize.value
+        }
+    })
 
-        users.value = response.users || []
-    } catch (error) {
-        errorMessage.value =
-            error?.data?.statusMessage ||
-            'Failed to load users.'
-    }
+    users.value =
+        response.users || []
+
+    totalUsers.value =
+        Number(
+            response.pagination?.total || 0
+        )
+
+    totalPages.value =
+        Number(
+            response.pagination?.totalPages || 0
+        )
+
+    currentPage.value =
+        Number(
+            response.pagination?.page ||
+            currentPage.value
+        )
 }
-
-/*
-|--------------------------------------------------------------------------
-| Load Roles
-|--------------------------------------------------------------------------
-*/
 
 async function loadRoles() {
     try {
-        const response = await $fetch('/api/roles')
+        const response = await $fetch('/api/roles', {
+            cache: 'no-store'
+        })
 
-        roles.value = response.roles || []
+        roles.value =
+            response.roles || []
     } catch (error) {
         errorMessage.value =
             error?.data?.statusMessage ||
@@ -98,17 +106,14 @@ async function loadRoles() {
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Load Organizations
-|--------------------------------------------------------------------------
-*/
-
 async function loadOrganizations() {
     try {
-        const response = await $fetch('/api/organizations')
+        const response = await $fetch('/api/organizations', {
+            cache: 'no-store'
+        })
 
-        organizations.value = response.organizations || []
+        organizations.value =
+            response.organizations || []
     } catch (error) {
         errorMessage.value =
             error?.data?.statusMessage ||
@@ -116,61 +121,167 @@ async function loadOrganizations() {
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Load All Data
-|--------------------------------------------------------------------------
-*/
+async function loadUsersWithLoading() {
+    loading.value = true
+    errorMessage.value = ''
+
+    try {
+        await loadUsers()
+    } catch (error) {
+        errorMessage.value =
+            error?.data?.statusMessage ||
+            error?.statusMessage ||
+            'Failed to load users.'
+    } finally {
+        loading.value = false
+    }
+}
 
 async function loadData() {
     loading.value = true
     errorMessage.value = ''
 
-    await Promise.all([
-        loadCurrentUser(),
-        loadUsers(),
-        loadRoles(),
-        loadOrganizations()
-    ])
-
-    loading.value = false
+    try {
+        await Promise.all([
+            loadCurrentUser(),
+            loadUsers(),
+            loadRoles(),
+            loadOrganizations()
+        ])
+    } catch (error) {
+        errorMessage.value =
+            error?.data?.statusMessage ||
+            error?.statusMessage ||
+            'Failed to load user data.'
+    } finally {
+        loading.value = false
+    }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Role Helpers
-|--------------------------------------------------------------------------
-*/
+const showingFrom = computed(() => {
+    if (totalUsers.value === 0) {
+        return 0
+    }
 
-/*
- * Check if the selected role in the Add User form
- * is Superadmin.
- */
+    return (
+        (currentPage.value - 1) *
+        pageSize.value
+    ) + 1
+})
+
+const showingTo = computed(() => {
+    if (totalUsers.value === 0) {
+        return 0
+    }
+
+    return Math.min(
+        currentPage.value * pageSize.value,
+        totalUsers.value
+    )
+})
+
+const paginationPages = computed(() => {
+    const total = totalPages.value
+    const current = currentPage.value
+
+    if (total <= 7) {
+        return Array.from(
+            { length: total },
+            (_, index) => index + 1
+        )
+    }
+
+    if (current <= 4) {
+        return [
+            1,
+            2,
+            3,
+            4,
+            5,
+            '...',
+            total
+        ]
+    }
+
+    if (current >= total - 3) {
+        return [
+            1,
+            '...',
+            total - 4,
+            total - 3,
+            total - 2,
+            total - 1,
+            total
+        ]
+    }
+
+    return [
+        1,
+        '...',
+        current - 1,
+        current,
+        current + 1,
+        '...',
+        total
+    ]
+})
+
+async function goToPage(page) {
+    if (
+        page === '...' ||
+        page === currentPage.value ||
+        page < 1 ||
+        page > totalPages.value
+    ) {
+        return
+    }
+
+    currentPage.value = page
+
+    await loadUsersWithLoading()
+}
+
+async function goToPreviousPage() {
+    if (currentPage.value <= 1) {
+        return
+    }
+
+    currentPage.value -= 1
+
+    await loadUsersWithLoading()
+}
+
+async function goToNextPage() {
+    if (
+        currentPage.value >= totalPages.value
+    ) {
+        return
+    }
+
+    currentPage.value += 1
+
+    await loadUsersWithLoading()
+}
+
 const isSuperadminRole = computed(() => {
     const selectedRole = roles.value.find(
-        role => Number(role.id) === Number(form.value.role_id)
+        role =>
+            Number(role.id) ===
+            Number(form.value.role_id)
     )
 
     return selectedRole?.name === 'superadmin'
 })
 
-/*
- * Check if the selected role in the Edit User form
- * is Superadmin.
- */
 const isEditSuperadminRole = computed(() => {
     const selectedRole = roles.value.find(
-        role => Number(role.id) === Number(editForm.value.role_id)
+        role =>
+            Number(role.id) ===
+            Number(editForm.value.role_id)
     )
 
     return selectedRole?.name === 'superadmin'
 })
-
-/*
-|--------------------------------------------------------------------------
-| Add User
-|--------------------------------------------------------------------------
-*/
 
 function openCreateModal() {
     errorMessage.value = ''
@@ -189,10 +300,6 @@ function openCreateModal() {
     showModal.value = true
 }
 
-/*
- * When the selected role changes in Add User:
- * Superadmin does not need an organization.
- */
 function handleRoleChange() {
     if (isSuperadminRole.value) {
         form.value.organization_id = ''
@@ -200,7 +307,9 @@ function handleRoleChange() {
 }
 
 function closeModal() {
-    if (saving.value) return
+    if (saving.value) {
+        return
+    }
 
     showModal.value = false
 }
@@ -211,16 +320,16 @@ async function createUser() {
     successMessage.value = ''
 
     try {
-        /*
-         * Superadmin must not have an organization.
-         */
-        const organizationId = isSuperadminRole.value
-            ? null
-            : (
-                form.value.organization_id
-                    ? Number(form.value.organization_id)
-                    : null
-            )
+        const organizationId =
+            isSuperadminRole.value
+                ? null
+                : (
+                    form.value.organization_id
+                        ? Number(
+                            form.value.organization_id
+                        )
+                        : null
+                )
 
         await $fetch('/api/users', {
             method: 'POST',
@@ -235,43 +344,31 @@ async function createUser() {
             }
         })
 
-        successMessage.value = 'User created successfully.'
+        successMessage.value =
+            'User created successfully.'
 
         showModal.value = false
+        currentPage.value = 1
 
-        await loadUsers()
+        await loadUsersWithLoading()
     } catch (error) {
         errorMessage.value =
             error?.data?.statusMessage ||
+            error?.statusMessage ||
             'Failed to create user.'
     } finally {
         saving.value = false
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Edit User
-|--------------------------------------------------------------------------
-*/
-
 function openEditModal(user) {
     errorMessage.value = ''
     successMessage.value = ''
-
     editingUser.value = user
 
     editForm.value = {
         username: user.username || '',
-
-        /*
-         * Password is intentionally empty.
-         *
-         * We never load the existing password.
-         * Leave this blank to keep the current password.
-         */
         password: '',
-
         first_name: user.first_name || '',
         middle_name: user.middle_name || '',
         last_name: user.last_name || '',
@@ -279,12 +376,10 @@ function openEditModal(user) {
         organization_id: user.organization_id || ''
     }
 
-    /*
-     * If the existing user is already a Superadmin,
-     * make sure the organization field is empty.
-     */
     const selectedRole = roles.value.find(
-        role => Number(role.id) === Number(user.role_id)
+        role =>
+            Number(role.id) ===
+            Number(user.role_id)
     )
 
     if (selectedRole?.name === 'superadmin') {
@@ -294,10 +389,6 @@ function openEditModal(user) {
     showEditModal.value = true
 }
 
-/*
- * When the selected role changes in Edit User:
- * Superadmin does not need an organization.
- */
 function handleEditRoleChange() {
     if (isEditSuperadminRole.value) {
         editForm.value.organization_id = ''
@@ -305,42 +396,36 @@ function handleEditRoleChange() {
 }
 
 function closeEditModal() {
-    if (updating.value) return
+    if (updating.value) {
+        return
+    }
 
     showEditModal.value = false
     editingUser.value = null
-
-    /*
-     * Clear password from memory when closing the modal.
-     */
     editForm.value.password = ''
 }
 
 async function updateUser() {
-    if (!editingUser.value) return
+    if (!editingUser.value) {
+        return
+    }
 
     updating.value = true
     errorMessage.value = ''
     successMessage.value = ''
 
     try {
-        /*
-         * Superadmin must not have an organization.
-         */
-        const organizationId = isEditSuperadminRole.value
-            ? null
-            : (
-                editForm.value.organization_id
-                    ? Number(editForm.value.organization_id)
-                    : null
-            )
+        const organizationId =
+            isEditSuperadminRole.value
+                ? null
+                : (
+                    editForm.value.organization_id
+                        ? Number(
+                            editForm.value.organization_id
+                        )
+                        : null
+                )
 
-        /*
-         * Build the update request.
-         *
-         * Password is intentionally NOT included by default.
-         * This means an empty password keeps the existing password.
-         */
         const body = {
             username: editForm.value.username,
             first_name: editForm.value.first_name,
@@ -350,51 +435,50 @@ async function updateUser() {
             organization_id: organizationId
         }
 
-        /*
-         * Only send a password when Superadmin
-         * entered a new password.
-         */
-        if (editForm.value.password.trim() !== '') {
-            body.password = editForm.value.password
+        if (
+            editForm.value.password.trim() !== ''
+        ) {
+            body.password =
+                editForm.value.password
         }
 
-        /*
-         * Correct API URL.
-         *
-         * Do NOT put spaces inside the URL.
-         */
-        await $fetch(`/api/users/${editingUser.value.id}`, {
-            method: 'PUT',
-            body
-        })
+        await $fetch(
+            `/api/users/${editingUser.value.id}`,
+            {
+                method: 'PUT',
+                body
+            }
+        )
 
-        successMessage.value = 'User updated successfully.'
+        successMessage.value =
+            'User updated successfully.'
 
         showEditModal.value = false
         editingUser.value = null
-
-        /*
-         * Clear the password field after saving.
-         */
         editForm.value.password = ''
 
-        await loadUsers()
+        await loadUsersWithLoading()
+
+        // Refresh the current user's information as well.
+        // This is useful if the superadmin edits their own account.
+        await loadCurrentUser()
     } catch (error) {
         errorMessage.value =
             error?.data?.statusMessage ||
+            error?.statusMessage ||
             'Failed to update user.'
     } finally {
         updating.value = false
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| User Status
-|--------------------------------------------------------------------------
-*/
-
 async function toggleStatus(user) {
+    // Prevent the currently logged-in user from changing
+    // their own account status from the interface.
+    if (isCurrentUser(user)) {
+        return
+    }
+
     const newStatus =
         user.status === 'active'
             ? 'inactive'
@@ -409,38 +493,42 @@ async function toggleStatus(user) {
         `Are you sure you want to ${action} ${user.username}?`
     )
 
-    if (!confirmed) return
+    if (!confirmed) {
+        return
+    }
 
     updating.value = true
     errorMessage.value = ''
     successMessage.value = ''
 
     try {
-        await $fetch(`/api/users/${user.id}/status`, {
-            method: 'PATCH',
-            body: {
-                status: newStatus
+        await $fetch(
+            `/api/users/${user.id}/status`,
+            {
+                method: 'PATCH',
+                body: {
+                    status: newStatus
+                }
             }
-        })
+        )
 
         successMessage.value =
             `User ${action}d successfully.`
 
-        await loadUsers()
+        await loadUsersWithLoading()
     } catch (error) {
         errorMessage.value =
             error?.data?.statusMessage ||
+            error?.statusMessage ||
             `Failed to ${action} user.`
     } finally {
         updating.value = false
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Display Helpers
-|--------------------------------------------------------------------------
-*/
+function isCurrentUser(user) {
+    return Number(user.id) === Number(currentUser.value?.id)
+}
 
 function fullName(user) {
     return [
@@ -453,9 +541,17 @@ function fullName(user) {
 }
 
 function roleLabel(role) {
-    if (role === 'superadmin') return 'Superadmin'
-    if (role === 'admin') return 'Admin'
-    if (role === 'user') return 'User'
+    if (role === 'superadmin') {
+        return 'Superadmin'
+    }
+
+    if (role === 'admin') {
+        return 'Admin'
+    }
+
+    if (role === 'user') {
+        return 'User'
+    }
 
     return role || '-'
 }
@@ -468,12 +564,6 @@ function statusClass(status) {
     return 'bg-red-100 text-red-700'
 }
 
-/*
-|--------------------------------------------------------------------------
-| Logout
-|--------------------------------------------------------------------------
-*/
-
 async function logout() {
     try {
         await $fetch('/api/auth/logout', {
@@ -484,12 +574,6 @@ async function logout() {
     }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Initial Load
-|--------------------------------------------------------------------------
-*/
-
 onMounted(() => {
     loadData()
 })
@@ -497,77 +581,108 @@ onMounted(() => {
 </script>
 
 <template>
+
     <div class="min-h-screen bg-slate-100">
 
         <!-- Sidebar -->
-        <aside class="fixed inset-y-0 left-0 z-30 w-64 bg-slate-900 text-white">
 
-            <!-- System Header -->
-            <div class="flex h-16 items-center border-b border-slate-700 px-6">
+        <aside
+            class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-slate-900 text-white"
+        >
+
+            <div class="border-b border-slate-800 px-6 py-5">
 
                 <h1 class="text-lg font-bold">
-                    Concern Management
+                    ICT Felcris Centrale
                 </h1>
+
+                <p class="mt-1 text-xs text-slate-400">
+                    Concern Management System
+                </p>
 
             </div>
 
-            <!-- Navigation -->
-            <nav class="space-y-2 p-4">
+            <nav class="flex-1 space-y-1 px-3 py-4">
 
-                <!-- Dashboard -->
-                <NuxtLink to="/dashboard" class="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800">
-                    Dashboard
+                <NuxtLink
+                    to="/dashboard"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                >
+                    <span>▦</span>
+                    <span>Dashboard</span>
                 </NuxtLink>
 
-                <!-- Organizations -->
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
-                    class="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800">
-                    Manage Organizations
+                <NuxtLink
+                    v-if="currentUser?.role_name === 'superadmin'"
+                    to="/organizations"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                >
+                    <span>▣</span>
+                    <span>Manage Organizations</span>
                 </NuxtLink>
 
-                <!-- Users - Active -->
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
-                    class="block rounded-lg bg-slate-700 px-4 py-3 text-sm font-medium text-white">
-                    Manage Users
+                <NuxtLink
+                    v-if="currentUser?.role_name === 'superadmin'"
+                    to="/users"
+                    class="flex items-center gap-3 rounded-lg bg-slate-800 px-4 py-3 text-sm font-medium text-white"
+                >
+                    <span>♙</span>
+                    <span>Manage Users</span>
                 </NuxtLink>
 
-                <!-- Concerns -->
-                <NuxtLink to="/concerns" class="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800">
-                    Manage Concerns
+                <NuxtLink
+                    to="/concerns"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                >
+                    <span>⚠</span>
+                    <span>Manage Concerns</span>
                 </NuxtLink>
 
-                <!-- Reports -->
-                <NuxtLink v-if="
-                    currentUser?.role_name === 'superadmin' ||
-                    currentUser?.role_name === 'admin'
-                " to="/reports" class="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800">
-                    Manage Reports
+                <NuxtLink
+                    v-if="
+                        currentUser?.role_name === 'superadmin' ||
+                        currentUser?.role_name === 'admin'
+                    "
+                    to="/reports"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                >
+                    <span>▤</span>
+                    <span>Manage Reports</span>
                 </NuxtLink>
 
             </nav>
 
-            <!-- User Information -->
-            <div class="absolute bottom-0 w-full border-t border-slate-700 p-4">
+            <div class="border-t border-slate-800 p-4">
 
-                <div class="mb-3">
+                <div class="mb-3 rounded-lg bg-slate-800 p-3">
 
-                    <p class="truncate text-sm font-medium">
-                        {{ currentUser?.first_name }}
-                        {{ currentUser?.last_name }}
+                    <p class="truncate text-sm font-semibold text-white">
+                        {{
+                            currentUser
+                                ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
+                                : '-'
+                        }}
                     </p>
 
-                    <p class="truncate text-xs text-slate-400">
-                        {{ currentUser?.role_name }}
+                    <p class="mt-1 text-xs text-slate-400">
+                        {{ currentUser?.role_name || '-' }}
                     </p>
 
-                    <p class="truncate text-xs text-slate-400">
-                        {{ currentUser?.organization_name }}
+                    <p
+                        v-if="currentUser?.organization_name"
+                        class="mt-1 truncate text-xs text-slate-500"
+                        :title="currentUser.organization_name"
+                    >
+                        {{ currentUser.organization_name }}
                     </p>
 
                 </div>
 
-                <button @click="logout"
-                    class="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700">
+                <button
+                    type="button"
+                    @click="logout"
+                    class="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-300"
+                >
                     Logout
                 </button>
 
@@ -575,87 +690,181 @@ onMounted(() => {
 
         </aside>
 
-        <!-- Main content -->
+        <!-- Main Content -->
+
         <main class="ml-64 min-h-screen">
 
-            <!-- Header -->
-            <header class="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-white px-8">
+            <div class="mx-auto w-full max-w-[1600px] px-6 py-8">
 
-                <div>
+                <!-- Header -->
 
-                    <h2 class="text-xl font-semibold text-gray-900">
-                        Users
-                    </h2>
+                <div
+                    class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+                >
 
-                    <p class="mt-1 text-sm text-slate-500">
-                        Manage system users and their roles.
+                    <div>
+
+                        <h2 class="text-2xl font-bold text-slate-800">
+                            Users
+                        </h2>
+
+                        <p class="mt-1 text-sm text-slate-500">
+                            Manage system users and their roles.
+                        </p>
+
+                    </div>
+
+                    <button
+                        type="button"
+                        @click="openCreateModal"
+                        class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md active:scale-[0.99]"
+                    >
+
+                        <span class="text-lg leading-none">
+                            +
+                        </span>
+
+                        Add User
+
+                    </button>
+
+                </div>
+
+                <!-- Error -->
+
+                <div
+                    v-if="errorMessage"
+                    class="mb-5 flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700"
+                >
+
+                    <p>
+                        {{ errorMessage }}
                     </p>
 
+                    <button
+                        type="button"
+                        @click="errorMessage = ''"
+                        class="cursor-pointer text-xl leading-none text-red-400 transition hover:text-red-700"
+                    >
+                        ×
+                    </button>
+
                 </div>
 
-                <button @click="openCreateModal"
-                    class="rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800">
-                    + Add User
-                </button>
+                <!-- Success -->
 
-            </header>
+                <div
+                    v-if="successMessage"
+                    class="mb-5 flex items-start justify-between gap-4 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700"
+                >
 
-            <div class="p-8">
+                    <p>
+                        {{ successMessage }}
+                    </p>
 
-                <!-- Messages -->
-                <div v-if="successMessage"
-                    class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                    {{ successMessage }}
+                    <button
+                        type="button"
+                        @click="successMessage = ''"
+                        class="cursor-pointer text-xl leading-none text-green-400 transition hover:text-green-700"
+                    >
+                        ×
+                    </button>
+
                 </div>
 
-                <div v-if="errorMessage"
-                    class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {{ errorMessage }}
-                </div>
+                <!-- Users Table -->
 
-                <!-- Loading -->
-                <div v-if="loading" class="rounded-xl bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
-                    Loading users...
-                </div>
+                <div
+                    class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                >
 
-                <!-- Table -->
-                <div v-else class="overflow-hidden rounded-xl bg-white shadow-sm">
+                    <!-- Table Header -->
+
+                    <div class="border-b border-slate-200 px-5 py-4">
+
+                        <h3 class="text-base font-semibold text-slate-800">
+                            User List
+                        </h3>
+
+                        <p
+                            v-if="loading"
+                            class="mt-1 flex items-center gap-2 text-xs text-slate-400"
+                        >
+
+                            <span
+                                class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-slate-300"
+                            ></span>
+
+                            Loading users...
+
+                        </p>
+
+                        <p
+                            v-else
+                            class="mt-1 text-xs text-slate-500"
+                        >
+
+                            <template v-if="totalUsers > 0">
+
+                                Showing
+                                {{ showingFrom }}–{{ showingTo }}
+                                of
+                                {{ totalUsers }}
+                                user{{ totalUsers === 1 ? '' : 's' }}
+
+                            </template>
+
+                            <template v-else>
+                                No users
+                            </template>
+
+                        </p>
+
+                    </div>
+
+                    <!-- Table -->
 
                     <div class="overflow-x-auto">
 
-                        <table class="min-w-full divide-y divide-slate-200">
+                        <table class="min-w-[1000px] w-full text-left">
 
                             <thead class="bg-slate-50">
 
-                                <tr>
+                                <tr class="border-b border-slate-200">
 
                                     <th
-                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Username
                                     </th>
 
                                     <th
-                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Name
                                     </th>
 
                                     <th
-                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Role
                                     </th>
 
                                     <th
-                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Organization
                                     </th>
 
                                     <th
-                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Status
                                     </th>
 
                                     <th
-                                        class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Actions
                                     </th>
 
@@ -663,68 +872,168 @@ onMounted(() => {
 
                             </thead>
 
-                            <tbody class="divide-y divide-slate-100">
+                            <!-- Loading -->
 
-                                <!-- No Users -->
-                                <tr v-if="users.length === 0">
+                            <tbody
+                                v-if="loading"
+                                class="divide-y divide-slate-100"
+                            >
 
-                                    <td colspan="6" class="px-6 py-10 text-center text-sm text-slate-500">
-                                        No users found.
+                                <tr
+                                    v-for="row in 5"
+                                    :key="row"
+                                    class="animate-pulse"
+                                >
+
+                                    <td class="px-5 py-5">
+                                        <div class="h-4 w-28 rounded bg-slate-200"></div>
+                                    </td>
+
+                                    <td class="px-5 py-5">
+                                        <div class="h-4 w-36 rounded bg-slate-200"></div>
+                                    </td>
+
+                                    <td class="px-5 py-5">
+                                        <div class="h-6 w-20 rounded-full bg-slate-200"></div>
+                                    </td>
+
+                                    <td class="px-5 py-5">
+                                        <div class="h-4 w-32 rounded bg-slate-200"></div>
+                                    </td>
+
+                                    <td class="px-5 py-5">
+                                        <div class="h-6 w-16 rounded-full bg-slate-200"></div>
+                                    </td>
+
+                                    <td class="px-5 py-5">
+                                        <div class="h-9 w-28 rounded bg-slate-200"></div>
                                     </td>
 
                                 </tr>
 
-                                <!-- Users -->
-                                <tr v-for="user in users" :key="user.id" class="hover:bg-slate-50">
+                            </tbody>
+
+                            <!-- Empty -->
+
+                            <tbody
+                                v-else-if="users.length === 0"
+                                class="divide-y divide-slate-100"
+                            >
+
+                                <tr>
+
+                                    <td
+                                        colspan="6"
+                                        class="px-5 py-12 text-center"
+                                    >
+
+                                        <p class="text-sm font-medium text-slate-600">
+                                            No users found.
+                                        </p>
+
+                                        <p class="mt-1 text-xs text-slate-400">
+                                            There are no users to display.
+                                        </p>
+
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+
+                            <!-- Users -->
+
+                            <tbody
+                                v-else
+                                class="divide-y divide-slate-100"
+                            >
+
+                                <tr
+                                    v-for="user in users"
+                                    :key="user.id"
+                                    class="transition hover:bg-slate-50"
+                                >
 
                                     <!-- Username -->
-                                    <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-800">
+
+                                    <td class="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">
+
                                         {{ user.username }}
+
+                                        <span
+                                            v-if="isCurrentUser(user)"
+                                            class="ml-2 rounded-full bg-blue-100 px-2 py-1 text-[11px] font-medium text-blue-700"
+                                        >
+                                            You
+                                        </span>
+
                                     </td>
 
                                     <!-- Name -->
-                                    <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">
-                                        {{ fullName(user) }}
+
+                                    <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
+                                        {{ fullName(user) || '-' }}
                                     </td>
 
                                     <!-- Role -->
-                                    <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-700">
-                                        {{ roleLabel(user.role_name) }}
+
+                                    <td class="whitespace-nowrap px-5 py-4">
+
+                                        <span
+                                            class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+                                        >
+                                            {{ roleLabel(user.role_name) }}
+                                        </span>
+
                                     </td>
 
                                     <!-- Organization -->
-                                    <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
+
+                                    <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
                                         {{ user.organization_name || '-' }}
                                     </td>
 
                                     <!-- Status -->
-                                    <td class="whitespace-nowrap px-6 py-4">
 
-                                        <span class="rounded-full px-3 py-1 text-xs font-medium"
-                                            :class="statusClass(user.status)">
-                                            {{ user.status }}
+                                    <td class="whitespace-nowrap px-5 py-4">
+
+                                        <span
+                                            class="rounded-full px-3 py-1 text-xs font-medium"
+                                            :class="statusClass(user.status)"
+                                        >
+                                            {{
+                                                user.status === 'active'
+                                                    ? 'Active'
+                                                    : 'Inactive'
+                                            }}
                                         </span>
 
                                     </td>
 
                                     <!-- Actions -->
-                                    <td class="whitespace-nowrap px-6 py-4 text-right">
 
-                                        <div class="flex justify-end gap-2">
+                                    <td class="whitespace-nowrap px-5 py-4">
 
-                                            <!-- Edit -->
-                                            <button @click="openEditModal(user)"
-                                                class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100">
+                                        <div class="flex items-center gap-2">
+
+                                            <!-- Edit is still available for your own account -->
+
+                                            <button
+                                                type="button"
+                                                @click="openEditModal(user)"
+                                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                                            >
                                                 Edit
                                             </button>
 
-                                            <!-- Activate / Deactivate -->
-                                            <button @click="toggleStatus(user)" :disabled="updating"
-                                                class="rounded-lg border px-3 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                                                :class="user.status === 'active'
-                                                        ? 'border-red-200 text-red-600 hover:bg-red-50'
-                                                        : 'border-green-200 text-green-600 hover:bg-green-50'
-                                                    ">
+                                            <!-- Activate/Deactivate is hidden for your own account -->
+
+                                            <button
+                                                v-if="!isCurrentUser(user)"
+                                                type="button"
+                                                @click="toggleStatus(user)"
+                                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                                            >
                                                 {{
                                                     user.status === 'active'
                                                         ? 'Deactivate'
@@ -744,371 +1053,111 @@ onMounted(() => {
 
                     </div>
 
+                    <!-- Pagination -->
+
+                    <div
+                        v-if="!loading && totalPages > 1"
+                        class="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+
+                        <p class="text-xs text-slate-500">
+
+                            Page
+                            {{ currentPage }}
+                            of
+                            {{ totalPages }}
+
+                        </p>
+
+                        <div class="flex items-center gap-1">
+
+                            <button
+                                type="button"
+                                @click="goToPreviousPage"
+                                :disabled="currentPage === 1"
+                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Previous
+                            </button>
+
+                            <template
+                                v-for="(page, index) in paginationPages"
+                                :key="`${page}-${index}`"
+                            >
+
+                                <span
+                                    v-if="page === '...'"
+                                    class="px-2 py-2 text-sm text-slate-400"
+                                >
+                                    ...
+                                </span>
+
+                                <button
+                                    v-else
+                                    type="button"
+                                    @click="goToPage(page)"
+                                    :class="
+                                        page === currentPage
+                                            ? 'bg-slate-900 text-white'
+                                            : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
+                                    "
+                                    class="min-w-9 cursor-pointer rounded-lg px-3 py-2 text-sm font-medium transition"
+                                >
+                                    {{ page }}
+                                </button>
+
+                            </template>
+
+                            <button
+                                type="button"
+                                @click="goToNextPage"
+                                :disabled="
+                                    currentPage === totalPages ||
+                                    totalPages === 0
+                                "
+                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Next
+                            </button>
+
+                        </div>
+
+                    </div>
+
                 </div>
 
             </div>
 
         </main>
 
-        <!-- ================================================================ -->
-        <!-- Add User Modal -->
-        <!-- ================================================================ -->
+        <!-- Create User Modal -->
 
-        <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+        <CreateUserModal
+            :show="showModal"
+            :form="form"
+            :roles="roles"
+            :organizations="organizations"
+            :is-superadmin-role="isSuperadminRole"
+            :saving="saving"
+            @close="closeModal"
+            @submit="createUser"
+            @role-change="handleRoleChange"
+        />
 
-            <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-xl">
-
-                <!-- Modal Header -->
-                <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-
-                    <div>
-
-                        <h3 class="text-lg font-bold text-slate-800">
-                            Add User
-                        </h3>
-
-                        <p class="mt-1 text-sm text-slate-500">
-                            Create a new system user.
-                        </p>
-
-                    </div>
-
-                    <button @click="closeModal" class="text-2xl text-slate-400 hover:text-slate-700">
-                        ×
-                    </button>
-
-                </div>
-
-                <form @submit.prevent="createUser" class="space-y-5 p-6">
-
-                    <!-- Username and Password -->
-                    <div class="grid gap-5 md:grid-cols-2">
-
-                        <!-- Username -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Username
-                            </label>
-
-                            <input v-model="form.username" type="text" required autocomplete="username"
-                                class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                        </div>
-
-                        <!-- Password -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Password
-                            </label>
-
-                            <input v-model="form.password" type="password" required minlength="8"
-                                autocomplete="new-password"
-                                class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                            <p class="mt-1 text-xs text-slate-500">
-                                Password must be at least 8 characters.
-                            </p>
-
-                        </div>
-
-                    </div>
-
-                    <!-- Name -->
-                    <div class="grid gap-5 md:grid-cols-3">
-
-                        <!-- First Name -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                First Name
-                            </label>
-
-                            <input v-model="form.first_name" type="text" required
-                                class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                        </div>
-
-                        <!-- Middle Name -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Middle Name
-                            </label>
-
-                            <input v-model="form.middle_name" type="text"
-                                class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                        </div>
-
-                        <!-- Last Name -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Last Name
-                            </label>
-
-                            <input v-model="form.last_name" type="text" required
-                                class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                        </div>
-
-                    </div>
-
-                    <!-- Role and Organization -->
-                    <div class="grid gap-5 md:grid-cols-2">
-
-                        <!-- Role -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Role
-                            </label>
-
-                            <select v-model="form.role_id" @change="handleRoleChange" required
-                                class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500">
-
-                                <option value="" disabled>
-                                    Select role
-                                </option>
-
-                                <option v-for="role in roles" :key="role.id" :value="role.id">
-                                    {{ roleLabel(role.name) }}
-                                </option>
-
-                            </select>
-
-                        </div>
-
-                        <!-- Organization -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Organization
-                            </label>
-
-                            <select v-model="form.organization_id" :disabled="isSuperadminRole"
-                                :required="!isSuperadminRole"
-                                class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
-
-                                <option value="">
-                                    No organization
-                                </option>
-
-                                <option v-for="organization in organizations" :key="organization.id"
-                                    :value="organization.id">
-                                    {{ organization.name }}
-                                </option>
-
-                            </select>
-
-                            <p v-if="isSuperadminRole" class="mt-1 text-xs text-slate-500">
-                                Superadmin does not require an organization.
-                            </p>
-
-                        </div>
-
-                    </div>
-
-                    <!-- Buttons -->
-                    <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
-
-                        <button type="button" @click="closeModal"
-                            class="rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                            Cancel
-                        </button>
-
-                        <button type="submit" :disabled="saving"
-                            class="rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
-                            {{ saving ? 'Saving...' : 'Create User' }}
-                        </button>
-
-                    </div>
-
-                </form>
-
-            </div>
-
-        </div>
-
-        <!-- ================================================================ -->
         <!-- Edit User Modal -->
-        <!-- ================================================================ -->
 
-        <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-
-            <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-xl">
-
-                <!-- Modal Header -->
-                <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-
-                    <div>
-
-                        <h3 class="text-lg font-bold text-slate-800">
-                            Edit User
-                        </h3>
-
-                        <p class="mt-1 text-sm text-slate-500">
-                            Update user information.
-                        </p>
-
-                    </div>
-
-                    <button @click="closeEditModal" class="text-2xl text-slate-400 hover:text-slate-700">
-                        ×
-                    </button>
-
-                </div>
-
-                <form @submit.prevent="updateUser" class="space-y-5 p-6">
-
-                    <!-- Username -->
-                    <div>
-
-                        <label class="mb-2 block text-sm font-medium text-slate-700">
-                            Username
-                        </label>
-
-                        <input v-model="editForm.username" type="text" required autocomplete="username"
-                            class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                    </div>
-
-                    <!-- New Password -->
-                    <div>
-
-                        <label class="mb-2 block text-sm font-medium text-slate-700">
-                            New Password
-                        </label>
-
-                        <input v-model="editForm.password" type="password" minlength="8" autocomplete="new-password"
-                            placeholder="Leave blank to keep current password"
-                            class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                        <p class="mt-1 text-xs text-slate-500">
-                            Leave this blank if you do not want to change the
-                            password.
-                        </p>
-
-                    </div>
-
-                    <!-- Name -->
-                    <div class="grid gap-5 md:grid-cols-3">
-
-                        <!-- First Name -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                First Name
-                            </label>
-
-                            <input v-model="editForm.first_name" type="text" required
-                                class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                        </div>
-
-                        <!-- Middle Name -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Middle Name
-                            </label>
-
-                            <input v-model="editForm.middle_name" type="text"
-                                class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                        </div>
-
-                        <!-- Last Name -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Last Name
-                            </label>
-
-                            <input v-model="editForm.last_name" type="text" required
-                                class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500" />
-
-                        </div>
-
-                    </div>
-
-                    <!-- Role and Organization -->
-                    <div class="grid gap-5 md:grid-cols-2">
-
-                        <!-- Role -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Role
-                            </label>
-
-                            <select v-model="editForm.role_id" @change="handleEditRoleChange" required
-                                class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500">
-
-                                <option value="" disabled>
-                                    Select role
-                                </option>
-
-                                <option v-for="role in roles" :key="role.id" :value="role.id">
-                                    {{ roleLabel(role.name) }}
-                                </option>
-
-                            </select>
-
-                        </div>
-
-                        <!-- Organization -->
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Organization
-                            </label>
-
-                            <select v-model="editForm.organization_id" :disabled="isEditSuperadminRole"
-                                :required="!isEditSuperadminRole"
-                                class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400">
-
-                                <option value="">
-                                    No organization
-                                </option>
-
-                                <option v-for="organization in organizations" :key="organization.id"
-                                    :value="organization.id">
-                                    {{ organization.name }}
-                                </option>
-
-                            </select>
-
-                            <p v-if="isEditSuperadminRole" class="mt-1 text-xs text-slate-500">
-                                Superadmin does not require an organization.
-                            </p>
-
-                        </div>
-
-                    </div>
-
-                    <!-- Buttons -->
-                    <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
-
-                        <button type="button" @click="closeEditModal"
-                            class="rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                            Cancel
-                        </button>
-
-                        <button type="submit" :disabled="updating"
-                            class="rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
-                            {{ updating ? 'Updating...' : 'Save Changes' }}
-                        </button>
-
-                    </div>
-
-                </form>
-
-            </div>
-
-        </div>
+        <EditUserModal
+            :show="showEditModal"
+            :form="editForm"
+            :roles="roles"
+            :organizations="organizations"
+            :is-superadmin-role="isEditSuperadminRole"
+            :updating="updating"
+            @close="closeEditModal"
+            @submit="updateUser"
+            @role-change="handleEditRoleChange"
+        />
 
     </div>
+
 </template>

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "chart.js": "^4.5.1",
     "mysql2": "^3.24.5",
     "nuxt": "^4.5.2",
     "vue": "^3.5.43",
@@ -19,5 +20,8 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "tailwindcss": "^4.3.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }
