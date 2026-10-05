@@ -1,5 +1,5 @@
 <script setup>
-await navigateTo('/login')
+await navigateTo('/dashboard')
 </script>
 
 <template>

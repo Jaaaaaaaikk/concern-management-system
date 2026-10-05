@@ -1,26 +1,35 @@
 <script setup>
 
 import CreateUserModal from '../components/users/CreateUserModal.vue'
+
 import EditUserModal from '../components/users/EditUserModal.vue'
+import { useToast } from '~/composables/useToast'
 
 definePageMeta({
     middleware: 'auth'
 })
 
 const users = ref([])
+
 const roles = ref([])
+
 const organizations = ref([])
-const currentUser = ref(null)
+
+const currentUser = useState('current-user', () => null)
 
 const loading = ref(true)
+
 const saving = ref(false)
+
 const updating = ref(false)
 
 const errorMessage = ref('')
-const successMessage = ref('')
+const { showToast } = useToast()
 
 const showModal = ref(false)
+
 const showEditModal = ref(false)
+
 const editingUser = ref(null)
 
 const form = ref({
@@ -40,29 +49,42 @@ const editForm = ref({
     middle_name: '',
     last_name: '',
     role_id: '',
-    organization_id: ''
+    organization_id: '',
+    profile_photo_url: '',
+    profile_photo_file: null,
+    profile_photo_remove: false
 })
 
 const currentPage = ref(1)
+
 const pageSize = ref(10)
+
 const totalUsers = ref(0)
+
 const totalPages = ref(0)
 
 async function loadCurrentUser() {
+
     try {
+
         const response = await $fetch('/api/auth/me', {
             cache: 'no-store'
         })
 
         currentUser.value = response.user
+
     } catch (error) {
+
         errorMessage.value =
             error?.data?.statusMessage ||
             'Failed to load current user.'
+
     }
+
 }
 
 async function loadUsers() {
+
     const response = await $fetch('/api/users', {
         cache: 'no-store',
         query: {
@@ -89,109 +111,153 @@ async function loadUsers() {
             response.pagination?.page ||
             currentPage.value
         )
+
 }
 
 async function loadRoles() {
+
     try {
+
         const response = await $fetch('/api/roles', {
             cache: 'no-store'
         })
 
         roles.value =
             response.roles || []
+
     } catch (error) {
+
         errorMessage.value =
             error?.data?.statusMessage ||
             'Failed to load roles.'
+
     }
+
 }
 
 async function loadOrganizations() {
+
     try {
+
         const response = await $fetch('/api/organizations', {
             cache: 'no-store'
         })
 
         organizations.value =
             response.organizations || []
+
     } catch (error) {
+
         errorMessage.value =
             error?.data?.statusMessage ||
             'Failed to load organizations.'
+
     }
+
 }
 
 async function loadUsersWithLoading() {
+
     loading.value = true
+
     errorMessage.value = ''
 
     try {
+
         await loadUsers()
+
     } catch (error) {
+
         errorMessage.value =
             error?.data?.statusMessage ||
             error?.statusMessage ||
             'Failed to load users.'
+
     } finally {
+
         loading.value = false
+
     }
+
 }
 
 async function loadData() {
+
     loading.value = true
+
     errorMessage.value = ''
 
     try {
+
         await Promise.all([
             loadCurrentUser(),
             loadUsers(),
             loadRoles(),
             loadOrganizations()
         ])
+
     } catch (error) {
+
         errorMessage.value =
             error?.data?.statusMessage ||
             error?.statusMessage ||
             'Failed to load user data.'
+
     } finally {
+
         loading.value = false
+
     }
+
 }
 
 const showingFrom = computed(() => {
+
     if (totalUsers.value === 0) {
+
         return 0
+
     }
 
     return (
         (currentPage.value - 1) *
         pageSize.value
     ) + 1
+
 })
 
 const showingTo = computed(() => {
+
     if (totalUsers.value === 0) {
+
         return 0
+
     }
 
     return Math.min(
         currentPage.value * pageSize.value,
         totalUsers.value
     )
+
 })
 
 const paginationPages = computed(() => {
+
     const total = totalPages.value
+
     const current = currentPage.value
 
     if (total <= 7) {
+
         return Array.from(
             { length: total },
             (_, index) => index + 1
         )
+
     }
 
     if (current <= 4) {
+
         return [
             1,
             2,
@@ -201,9 +267,11 @@ const paginationPages = computed(() => {
             '...',
             total
         ]
+
     }
 
     if (current >= total - 3) {
+
         return [
             1,
             '...',
@@ -213,6 +281,7 @@ const paginationPages = computed(() => {
             total - 1,
             total
         ]
+
     }
 
     return [
@@ -224,46 +293,60 @@ const paginationPages = computed(() => {
         '...',
         total
     ]
+
 })
 
 async function goToPage(page) {
+
     if (
         page === '...' ||
         page === currentPage.value ||
         page < 1 ||
         page > totalPages.value
     ) {
+
         return
+
     }
 
     currentPage.value = page
 
     await loadUsersWithLoading()
+
 }
 
 async function goToPreviousPage() {
+
     if (currentPage.value <= 1) {
+
         return
+
     }
 
     currentPage.value -= 1
 
     await loadUsersWithLoading()
+
 }
 
 async function goToNextPage() {
+
     if (
         currentPage.value >= totalPages.value
     ) {
+
         return
+
     }
 
     currentPage.value += 1
 
     await loadUsersWithLoading()
+
 }
 
 const isSuperadminRole = computed(() => {
+
     const selectedRole = roles.value.find(
         role =>
             Number(role.id) ===
@@ -271,9 +354,11 @@ const isSuperadminRole = computed(() => {
     )
 
     return selectedRole?.name === 'superadmin'
+
 })
 
 const isEditSuperadminRole = computed(() => {
+
     const selectedRole = roles.value.find(
         role =>
             Number(role.id) ===
@@ -281,11 +366,12 @@ const isEditSuperadminRole = computed(() => {
     )
 
     return selectedRole?.name === 'superadmin'
+
 })
 
 function openCreateModal() {
+
     errorMessage.value = ''
-    successMessage.value = ''
 
     form.value = {
         username: '',
@@ -298,28 +384,39 @@ function openCreateModal() {
     }
 
     showModal.value = true
+
 }
 
 function handleRoleChange() {
+
     if (isSuperadminRole.value) {
+
         form.value.organization_id = ''
+
     }
+
 }
 
 function closeModal() {
+
     if (saving.value) {
+
         return
+
     }
 
     showModal.value = false
+
 }
 
 async function createUser() {
+
     saving.value = true
+
     errorMessage.value = ''
-    successMessage.value = ''
 
     try {
+
         const organizationId =
             isSuperadminRole.value
                 ? null
@@ -344,26 +441,35 @@ async function createUser() {
             }
         })
 
-        successMessage.value =
-            'User created successfully.'
-
         showModal.value = false
+
         currentPage.value = 1
 
         await loadUsersWithLoading()
+
+        showToast('User created successfully.')
+
     } catch (error) {
-        errorMessage.value =
+
+        showToast(
             error?.data?.statusMessage ||
             error?.statusMessage ||
-            'Failed to create user.'
+            'Failed to create user.',
+            'error'
+        )
+
     } finally {
+
         saving.value = false
+
     }
+
 }
 
 function openEditModal(user) {
+
     errorMessage.value = ''
-    successMessage.value = ''
+
     editingUser.value = user
 
     editForm.value = {
@@ -373,7 +479,10 @@ function openEditModal(user) {
         middle_name: user.middle_name || '',
         last_name: user.last_name || '',
         role_id: user.role_id || '',
-        organization_id: user.organization_id || ''
+        organization_id: user.organization_id || '',
+        profile_photo_url: user.profile_photo || '',
+        profile_photo_file: null,
+        profile_photo_remove: false
     }
 
     const selectedRole = roles.value.find(
@@ -383,38 +492,55 @@ function openEditModal(user) {
     )
 
     if (selectedRole?.name === 'superadmin') {
+
         editForm.value.organization_id = ''
+
     }
 
     showEditModal.value = true
+
 }
 
 function handleEditRoleChange() {
+
     if (isEditSuperadminRole.value) {
+
         editForm.value.organization_id = ''
+
     }
+
 }
 
 function closeEditModal() {
+
     if (updating.value) {
+
         return
+
     }
 
     showEditModal.value = false
+
     editingUser.value = null
+
     editForm.value.password = ''
+
 }
 
 async function updateUser() {
+
     if (!editingUser.value) {
+
         return
+
     }
 
     updating.value = true
+
     errorMessage.value = ''
-    successMessage.value = ''
 
     try {
+
         const organizationId =
             isEditSuperadminRole.value
                 ? null
@@ -438,8 +564,10 @@ async function updateUser() {
         if (
             editForm.value.password.trim() !== ''
         ) {
+
             body.password =
                 editForm.value.password
+
         }
 
         await $fetch(
@@ -450,11 +578,46 @@ async function updateUser() {
             }
         )
 
-        successMessage.value =
-            'User updated successfully.'
+        let profilePhotoError = ''
+
+        if (
+            editForm.value.profile_photo_file ||
+            editForm.value.profile_photo_remove
+        ) {
+            const photoForm = new FormData()
+
+            if (editForm.value.profile_photo_file) {
+                photoForm.append(
+                    'photo',
+                    editForm.value.profile_photo_file
+                )
+            } else {
+                photoForm.append('remove', 'true')
+            }
+
+            try {
+                const photoResponse = await $fetch(
+                    `/api/users/${editingUser.value.id}/profile-photo`,
+                    {
+                        method: 'PUT',
+                        body: photoForm
+                    }
+                )
+
+                editForm.value.profile_photo_url =
+                    photoResponse.profile_photo || ''
+            } catch (error) {
+                profilePhotoError =
+                    error?.data?.statusMessage ||
+                    error?.statusMessage ||
+                    'Profile photo could not be updated.'
+            }
+        }
 
         showEditModal.value = false
+
         editingUser.value = null
+
         editForm.value.password = ''
 
         await loadUsersWithLoading()
@@ -462,21 +625,38 @@ async function updateUser() {
         // Refresh the current user's information as well.
         // This is useful if the superadmin edits their own account.
         await loadCurrentUser()
+        showToast(
+            profilePhotoError
+                ? `User details were saved, but the profile photo was not updated: ${profilePhotoError}`
+                : 'User updated successfully.',
+            profilePhotoError ? 'error' : 'success'
+        )
+
     } catch (error) {
-        errorMessage.value =
+
+        showToast(
             error?.data?.statusMessage ||
             error?.statusMessage ||
-            'Failed to update user.'
+            'Failed to update user.',
+            'error'
+        )
+
     } finally {
+
         updating.value = false
+
     }
+
 }
 
 async function toggleStatus(user) {
+
     // Prevent the currently logged-in user from changing
     // their own account status from the interface.
     if (isCurrentUser(user)) {
+
         return
+
     }
 
     const newStatus =
@@ -494,14 +674,17 @@ async function toggleStatus(user) {
     )
 
     if (!confirmed) {
+
         return
+
     }
 
     updating.value = true
+
     errorMessage.value = ''
-    successMessage.value = ''
 
     try {
+
         await $fetch(
             `/api/users/${user.id}/status`,
             {
@@ -512,25 +695,34 @@ async function toggleStatus(user) {
             }
         )
 
-        successMessage.value =
-            `User ${action}d successfully.`
-
         await loadUsersWithLoading()
+        showToast(`User ${action}d successfully.`)
+
     } catch (error) {
-        errorMessage.value =
+
+        showToast(
             error?.data?.statusMessage ||
             error?.statusMessage ||
-            `Failed to ${action} user.`
+            `Failed to ${action} user.`,
+            'error'
+        )
+
     } finally {
+
         updating.value = false
+
     }
+
 }
 
 function isCurrentUser(user) {
+
     return Number(user.id) === Number(currentUser.value?.id)
+
 }
 
 function fullName(user) {
+
     return [
         user.first_name,
         user.middle_name,
@@ -538,44 +730,71 @@ function fullName(user) {
     ]
         .filter(Boolean)
         .join(' ')
+
 }
 
 function roleLabel(role) {
+
     if (role === 'superadmin') {
+
         return 'Superadmin'
+
     }
 
     if (role === 'admin') {
+
         return 'Admin'
+
     }
 
     if (role === 'user') {
+
         return 'User'
+
     }
 
     return role || '-'
+
 }
 
 function statusClass(status) {
+
     if (status === 'active') {
+
         return 'bg-green-100 text-green-700'
+
     }
 
     return 'bg-red-100 text-red-700'
+
 }
 
 async function logout() {
+
     try {
+
         await $fetch('/api/auth/logout', {
             method: 'POST'
         })
+
     } finally {
+
         await navigateTo('/login')
+
+    }
+
+}
+
+function updateProfilePhoto(profilePhoto) {
+    if (currentUser.value) {
+        currentUser.value.profile_photo = profilePhoto
     }
 }
 
 onMounted(() => {
+
     loadData()
+
 })
 
 </script>
@@ -584,13 +803,18 @@ onMounted(() => {
 
     <div class="min-h-screen bg-slate-100">
 
-        <!-- Sidebar -->
+        <MobileNavigation
+            :current-user="currentUser"
+            @logout="logout"
+            @profile-updated="updateProfilePhoto"
+        />
 
+        <!-- Sidebar -->
         <aside
-            class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-slate-900 text-white"
+            class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-emerald-950 text-white lg:flex"
         >
 
-            <div class="border-b border-slate-800 px-6 py-5">
+            <div class="border-b border-emerald-900 px-6 py-5">
 
                 <h1 class="text-lg font-bold">
                     ICT Felcris Centrale
@@ -606,98 +830,60 @@ onMounted(() => {
 
                 <NuxtLink
                     to="/dashboard"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    :class="$route.path === '/dashboard' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
-                    <span>▦</span>
+                    <NavIcon name="dashboard" />
                     <span>Dashboard</span>
                 </NuxtLink>
 
                 <NuxtLink
                     v-if="currentUser?.role_name === 'superadmin'"
                     to="/organizations"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    :class="$route.path === '/organizations' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
-                    <span>▣</span>
+                    <NavIcon name="organizations" />
                     <span>Manage Organizations</span>
                 </NuxtLink>
 
                 <NuxtLink
                     v-if="currentUser?.role_name === 'superadmin'"
                     to="/users"
-                    class="flex items-center gap-3 rounded-lg bg-slate-800 px-4 py-3 text-sm font-medium text-white"
+                    :class="$route.path === '/users' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
-                    <span>♙</span>
+                    <NavIcon name="users" />
                     <span>Manage Users</span>
                 </NuxtLink>
 
                 <NuxtLink
                     to="/concerns"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    :class="$route.path === '/concerns' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
-                    <span>⚠</span>
+                    <NavIcon name="concerns" />
                     <span>Manage Concerns</span>
-                </NuxtLink>
-
-                <NuxtLink
-                    v-if="
-                        currentUser?.role_name === 'superadmin' ||
-                        currentUser?.role_name === 'admin'
-                    "
-                    to="/reports"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                >
-                    <span>▤</span>
-                    <span>Manage Reports</span>
                 </NuxtLink>
 
             </nav>
 
-            <div class="border-t border-slate-800 p-4">
-
-                <div class="mb-3 rounded-lg bg-slate-800 p-3">
-
-                    <p class="truncate text-sm font-semibold text-white">
-                        {{
-                            currentUser
-                                ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
-                                : '-'
-                        }}
-                    </p>
-
-                    <p class="mt-1 text-xs text-slate-400">
-                        {{ currentUser?.role_name || '-' }}
-                    </p>
-
-                    <p
-                        v-if="currentUser?.organization_name"
-                        class="mt-1 truncate text-xs text-slate-500"
-                        :title="currentUser.organization_name"
-                    >
-                        {{ currentUser.organization_name }}
-                    </p>
-
-                </div>
-
-                <button
-                    type="button"
-                    @click="logout"
-                    class="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-300"
-                >
-                    Logout
-                </button>
-
+            <div class="border-t border-emerald-900 p-4">
+                <UserProfileControl
+                    :current-user="currentUser"
+                    @logout="logout"
+                    @profile-updated="updateProfilePhoto"
+                />
             </div>
 
         </aside>
 
         <!-- Main Content -->
+        <main class="flex min-h-screen flex-col lg:ml-64">
 
-        <main class="ml-64 min-h-screen">
-
-            <div class="mx-auto w-full max-w-[1600px] px-6 py-8">
+            <div class="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8">
 
                 <!-- Header -->
-
                 <div
                     class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
                 >
@@ -717,7 +903,7 @@ onMounted(() => {
                     <button
                         type="button"
                         @click="openCreateModal"
-                        class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md active:scale-[0.99]"
+                        class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-800 hover:shadow-md active:scale-[0.99]"
                     >
 
                         <span class="text-lg leading-none">
@@ -731,7 +917,6 @@ onMounted(() => {
                 </div>
 
                 <!-- Error -->
-
                 <div
                     v-if="errorMessage"
                     class="mb-5 flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700"
@@ -751,35 +936,12 @@ onMounted(() => {
 
                 </div>
 
-                <!-- Success -->
-
-                <div
-                    v-if="successMessage"
-                    class="mb-5 flex items-start justify-between gap-4 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700"
-                >
-
-                    <p>
-                        {{ successMessage }}
-                    </p>
-
-                    <button
-                        type="button"
-                        @click="successMessage = ''"
-                        class="cursor-pointer text-xl leading-none text-green-400 transition hover:text-green-700"
-                    >
-                        ×
-                    </button>
-
-                </div>
-
                 <!-- Users Table -->
-
                 <div
-                    class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                    class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md"
                 >
 
                     <!-- Table Header -->
-
                     <div class="border-b border-slate-200 px-5 py-4">
 
                         <h3 class="text-base font-semibold text-slate-800">
@@ -815,7 +977,9 @@ onMounted(() => {
                             </template>
 
                             <template v-else>
+
                                 No users
+
                             </template>
 
                         </p>
@@ -823,7 +987,6 @@ onMounted(() => {
                     </div>
 
                     <!-- Table -->
-
                     <div class="overflow-x-auto">
 
                         <table class="min-w-[1000px] w-full text-left">
@@ -873,7 +1036,6 @@ onMounted(() => {
                             </thead>
 
                             <!-- Loading -->
-
                             <tbody
                                 v-if="loading"
                                 class="divide-y divide-slate-100"
@@ -914,7 +1076,6 @@ onMounted(() => {
                             </tbody>
 
                             <!-- Empty -->
-
                             <tbody
                                 v-else-if="users.length === 0"
                                 class="divide-y divide-slate-100"
@@ -942,7 +1103,6 @@ onMounted(() => {
                             </tbody>
 
                             <!-- Users -->
-
                             <tbody
                                 v-else
                                 class="divide-y divide-slate-100"
@@ -955,8 +1115,9 @@ onMounted(() => {
                                 >
 
                                     <!-- Username -->
-
-                                    <td class="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">
+                                    <td
+                                        class="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700"
+                                    >
 
                                         {{ user.username }}
 
@@ -970,13 +1131,17 @@ onMounted(() => {
                                     </td>
 
                                     <!-- Name -->
-
-                                    <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
-                                        {{ fullName(user) || '-' }}
+                                    <td class="px-5 py-4 text-sm text-slate-600">
+                                        <div class="flex min-w-0 items-center gap-3">
+                                            <UserAvatar
+                                                :name="fullName(user) || user.username"
+                                                :photo-url="user.profile_photo"
+                                            />
+                                            <span class="truncate">{{ fullName(user) || '-' }}</span>
+                                        </div>
                                     </td>
 
                                     <!-- Role -->
-
                                     <td class="whitespace-nowrap px-5 py-4">
 
                                         <span
@@ -988,36 +1153,36 @@ onMounted(() => {
                                     </td>
 
                                     <!-- Organization -->
-
-                                    <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
+                                    <td
+                                        class="whitespace-nowrap px-5 py-4 text-sm text-slate-600"
+                                    >
                                         {{ user.organization_name || '-' }}
                                     </td>
 
                                     <!-- Status -->
-
                                     <td class="whitespace-nowrap px-5 py-4">
 
                                         <span
                                             class="rounded-full px-3 py-1 text-xs font-medium"
                                             :class="statusClass(user.status)"
                                         >
+
                                             {{
                                                 user.status === 'active'
                                                     ? 'Active'
                                                     : 'Inactive'
                                             }}
+
                                         </span>
 
                                     </td>
 
                                     <!-- Actions -->
-
                                     <td class="whitespace-nowrap px-5 py-4">
 
                                         <div class="flex items-center gap-2">
 
                                             <!-- Edit is still available for your own account -->
-
                                             <button
                                                 type="button"
                                                 @click="openEditModal(user)"
@@ -1027,18 +1192,19 @@ onMounted(() => {
                                             </button>
 
                                             <!-- Activate/Deactivate is hidden for your own account -->
-
                                             <button
                                                 v-if="!isCurrentUser(user)"
                                                 type="button"
                                                 @click="toggleStatus(user)"
                                                 class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                                             >
+
                                                 {{
                                                     user.status === 'active'
                                                         ? 'Deactivate'
                                                         : 'Activate'
                                                 }}
+
                                             </button>
 
                                         </div>
@@ -1054,7 +1220,6 @@ onMounted(() => {
                     </div>
 
                     <!-- Pagination -->
-
                     <div
                         v-if="!loading && totalPages > 1"
                         class="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
@@ -1098,7 +1263,7 @@ onMounted(() => {
                                     @click="goToPage(page)"
                                     :class="
                                         page === currentPage
-                                            ? 'bg-slate-900 text-white'
+                                            ? 'bg-emerald-900 text-white'
                                             : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
                                     "
                                     class="min-w-9 cursor-pointer rounded-lg px-3 py-2 text-sm font-medium transition"
@@ -1128,10 +1293,10 @@ onMounted(() => {
 
             </div>
 
+            <AppFooter class="mt-auto" />
         </main>
 
         <!-- Create User Modal -->
-
         <CreateUserModal
             :show="showModal"
             :form="form"
@@ -1145,7 +1310,6 @@ onMounted(() => {
         />
 
         <!-- Edit User Modal -->
-
         <EditUserModal
             :show="showEditModal"
             :form="editForm"

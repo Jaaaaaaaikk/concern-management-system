@@ -145,8 +145,7 @@ export default defineEventHandler(async (event) => {
         'in_progress',
         'on_hold',
         'resolved',
-        'closed',
-        'cancelled'
+        'closed'
     ]
 
     if (!validStatuses.includes(newStatus)) {
@@ -266,20 +265,17 @@ export default defineEventHandler(async (event) => {
      */
     const allowedTransitions = {
         pending: [
-            'in_progress',
-            'cancelled'
+            'in_progress'
         ],
 
         in_progress: [
             'on_hold',
-            'resolved',
-            'cancelled'
+            'resolved'
         ],
 
         on_hold: [
             'in_progress',
-            'resolved',
-            'cancelled'
+            'resolved'
         ],
 
         resolved: [
@@ -288,7 +284,6 @@ export default defineEventHandler(async (event) => {
 
         closed: [],
 
-        cancelled: []
     }
 
     const allowedNextStatuses =
@@ -309,8 +304,7 @@ export default defineEventHandler(async (event) => {
     const recipientWorkStatuses = [
         'in_progress',
         'on_hold',
-        'resolved',
-        'cancelled'
+        'resolved'
     ]
 
     if (

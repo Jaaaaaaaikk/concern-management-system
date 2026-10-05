@@ -1,22 +1,27 @@
 <script setup>
 
 const props = defineProps({
+
     show: {
         type: Boolean,
         default: false
     },
+
     currentUser: {
         type: Object,
         default: null
     },
+
     concernTypes: {
         type: Array,
         default: () => []
     },
+
     organizations: {
         type: Array,
         default: () => []
     }
+
 })
 
 const emit = defineEmits([
@@ -29,54 +34,81 @@ const emit = defineEmits([
 const saving = ref(false)
 
 const selectedImages = ref([])
+
 const imagePreviews = ref([])
 
 const form = ref({
+
     title: '',
+
     description: '',
+
     concern_type_id: '',
+
     assigned_organization_id: '',
+
     priority: 'medium'
+
 })
 
 const availableOrganizations = computed(() => {
+
     if (!props.currentUser) {
         return []
     }
 
     if (props.currentUser.role_name === 'admin') {
+
         return props.organizations.filter(
             organization =>
                 Number(organization.id) !==
                 Number(props.currentUser.organization_id)
         )
+
     }
 
     return props.organizations
+
 })
 
 function resetForm() {
+
     form.value = {
+
         title: '',
+
         description: '',
+
         concern_type_id: '',
+
         assigned_organization_id: '',
+
         priority: 'medium'
+
     }
+
 }
 
 function resetOriginalImages() {
+
     for (const preview of imagePreviews.value) {
+
         if (preview?.url) {
+
             URL.revokeObjectURL(preview.url)
+
         }
+
     }
 
     selectedImages.value = []
+
     imagePreviews.value = []
+
 }
 
 function handleImageChange(event) {
+
     const files = Array.from(
         event.target.files || []
     )
@@ -86,27 +118,39 @@ function handleImageChange(event) {
     }
 
     const allowedTypes = [
+
         'image/jpeg',
+
         'image/png',
+
         'image/gif',
+
         'image/webp'
+
     ]
 
     for (const file of files) {
+
         if (!allowedTypes.includes(file.type)) {
+
             emit(
                 'error',
                 `${file.name} is not a supported image type. Please use JPEG, PNG, GIF, or WEBP.`
             )
+
             continue
+
         }
 
         if (file.size > 5 * 1024 * 1024) {
+
             emit(
                 'error',
                 `${file.name} is larger than 5MB.`
             )
+
             continue
+
         }
 
         selectedImages.value.push(file)
@@ -114,67 +158,93 @@ function handleImageChange(event) {
         const previewUrl = URL.createObjectURL(file)
 
         imagePreviews.value.push({
+
             file,
+
             url: previewUrl
+
         })
+
     }
 
     event.target.value = ''
+
 }
 
 function removeImage(index) {
+
     const preview = imagePreviews.value[index]
 
     if (preview?.url) {
+
         URL.revokeObjectURL(preview.url)
+
     }
 
     selectedImages.value.splice(index, 1)
+
     imagePreviews.value.splice(index, 1)
+
 }
 
 function closeModal() {
+
     if (saving.value) {
         return
     }
 
     resetOriginalImages()
+
     resetForm()
 
     emit('close')
+
 }
 
 async function createConcern() {
+
     if (!form.value.title.trim()) {
+
         emit(
             'error',
             'Please enter a concern title.'
         )
+
         return
+
     }
 
     if (!form.value.description.trim()) {
+
         emit(
             'error',
             'Please enter a concern description.'
         )
+
         return
+
     }
 
     if (!form.value.concern_type_id) {
+
         emit(
             'error',
             'Please select a concern type.'
         )
+
         return
+
     }
 
     if (!form.value.assigned_organization_id) {
+
         emit(
             'error',
             'Please select an organization.'
         )
+
         return
+
     }
 
     /*
@@ -182,25 +252,34 @@ async function createConcern() {
      * Admin cannot assign a concern to
      * their own organization.
      */
+
     if (
+
         props.currentUser?.role_name === 'admin' &&
+
         Number(
             form.value.assigned_organization_id
         ) ===
+
         Number(
             props.currentUser.organization_id
         )
+
     ) {
+
         emit(
             'error',
             'You cannot assign a concern to your own organization.'
         )
+
         return
+
     }
 
     saving.value = true
 
     try {
+
         const formData = new FormData()
 
         formData.append(
@@ -229,10 +308,12 @@ async function createConcern() {
         )
 
         for (const file of selectedImages.value) {
+
             formData.append(
                 'image',
                 file
             )
+
         }
 
         await $fetch(
@@ -244,38 +325,57 @@ async function createConcern() {
         )
 
         resetOriginalImages()
+
         resetForm()
 
         emit('created')
+
         emit(
             'success',
             'Concern submitted successfully.'
         )
+
         emit('close')
+
     } catch (error) {
+
         emit(
             'error',
             error?.data?.statusMessage ||
             error?.statusMessage ||
             'Failed to submit concern.'
         )
+
     } finally {
+
         saving.value = false
+
     }
+
 }
 
 watch(
+
     () => props.show,
+
     value => {
+
         if (value) {
+
             resetForm()
+
             resetOriginalImages()
+
         }
+
     }
+
 )
 
 onUnmounted(() => {
+
     resetOriginalImages()
+
 })
 
 </script>
@@ -284,17 +384,16 @@ onUnmounted(() => {
 
     <div
         v-if="show"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-[2px]"
+        class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6"
     >
 
         <div
-            class="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
         >
 
             <!-- Header -->
-
             <div
-                class="flex items-center justify-between border-b border-slate-200 px-6 py-5"
+                class="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"
             >
 
                 <div>
@@ -325,16 +424,16 @@ onUnmounted(() => {
                 class="flex-1 overflow-y-auto"
             >
 
-                <div class="space-y-5 p-6">
+                <div class="space-y-5 p-4 sm:p-6">
 
                     <!-- Concern Title -->
-
                     <div>
 
                         <label
                             class="mb-2 block text-sm font-medium text-slate-700"
                         >
                             Concern Title
+                            <span class="text-red-500">*</span>
                         </label>
 
                         <input
@@ -348,13 +447,13 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Description -->
-
                     <div>
 
                         <label
                             class="mb-2 block text-sm font-medium text-slate-700"
                         >
                             Description
+                            <span class="text-red-500">*</span>
                         </label>
 
                         <textarea
@@ -368,16 +467,17 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Multiple Original Images -->
-
                     <div>
 
                         <label
                             class="mb-2 block text-sm font-medium text-slate-700"
                         >
                             Attach Images
+
                             <span class="font-normal text-slate-400">
                                 (Optional)
                             </span>
+
                         </label>
 
                         <input
@@ -464,17 +564,16 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Concern Type / Assigned To -->
-
                     <div class="grid gap-5 sm:grid-cols-2">
 
                         <!-- Concern Type -->
-
                         <div>
 
                             <label
                                 class="mb-2 block text-sm font-medium text-slate-700"
                             >
                                 Concern Type
+                                <span class="text-red-500">*</span>
                             </label>
 
                             <select
@@ -503,13 +602,13 @@ onUnmounted(() => {
                         </div>
 
                         <!-- Assigned To -->
-
                         <div>
 
                             <label
                                 class="mb-2 block text-sm font-medium text-slate-700"
                             >
                                 Assigned To
+                                <span class="text-red-500">*</span>
                             </label>
 
                             <select
@@ -547,13 +646,13 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Priority -->
-
                     <div>
 
                         <label
                             class="mb-2 block text-sm font-medium text-slate-700"
                         >
                             Priority
+                            <span class="text-red-500">*</span>
                         </label>
 
                         <select
@@ -583,16 +682,15 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Buttons -->
-
                     <div
-                        class="flex justify-end gap-3 border-t border-slate-200 pt-5"
+                        class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end"
                     >
 
                         <button
                             type="button"
                             @click="closeModal"
                             :disabled="saving"
-                            class="cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="w-full cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                         >
                             Cancel
                         </button>
@@ -600,13 +698,15 @@ onUnmounted(() => {
                         <button
                             type="submit"
                             :disabled="saving"
-                            class="cursor-pointer rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                            class="w-full cursor-pointer rounded-lg bg-emerald-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-emerald-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                         >
+
                             {{
                                 saving
                                     ? 'Submitting...'
                                     : 'Submit Concern'
                             }}
+
                         </button>
 
                     </div>

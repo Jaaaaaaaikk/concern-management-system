@@ -4,6 +4,8 @@ import {
     Chart,
     registerables
 } from 'chart.js'
+import { watch } from 'vue'
+import { useToast } from '~/composables/useToast'
 
 Chart.register(...registerables)
 
@@ -11,13 +13,20 @@ definePageMeta({
     middleware: 'auth'
 })
 
-const currentUser = ref(null)
+const currentUser = useState('current-user', () => null)
 
 const dashboardData = ref(null)
 
 const loading = ref(true)
 
 const errorMessage = ref('')
+const { showToast } = useToast()
+
+watch(errorMessage, (message) => {
+    if (message) {
+        showToast(message, 'error')
+    }
+})
 
 const selectedRange = ref('30d')
 
@@ -122,32 +131,28 @@ async function loadDashboard() {
 |-------------------------------------------------------------------------- */
 
 async function loadData() {
-
     loading.value = true
-
     errorMessage.value = ''
 
     try {
-
         await loadCurrentUser()
-
         await loadDashboard()
-
-        await nextTick()
-
-        renderCharts()
-
     } catch (error) {
-
         errorMessage.value =
             error?.data?.statusMessage ||
             'Failed to load dashboard data.'
-
     } finally {
-
         loading.value = false
     }
+
+    if (!errorMessage.value) {
+        await nextTick()
+
+        destroyCharts()
+        renderCharts()
+    }
 }
+
 
 
 /* --------------------------------------------------------------------------
@@ -537,7 +542,7 @@ function renderStatusChart() {
                                 statuses.map(
                                     status =>
                                         statusColors[
-                                            status
+                                        status
                                         ]
                                 ),
 
@@ -672,7 +677,7 @@ function renderPriorityChart() {
                                 priorities.map(
                                     priority =>
                                         priorityColors[
-                                            priority
+                                        priority
                                         ]
                                 ),
 
@@ -1287,6 +1292,12 @@ onBeforeUnmount(() => {
 | Initial Load
 |-------------------------------------------------------------------------- */
 
+function updateProfilePhoto(profilePhoto) {
+    if (currentUser.value) {
+        currentUser.value.profile_photo = profilePhoto
+    }
+}
+
 onMounted(() => {
 
     loadData()
@@ -1299,43 +1310,19 @@ onMounted(() => {
 
     <div class="min-h-screen bg-slate-100">
 
-        <!-- Error Toast -->
-
-        <div
-            v-if="errorMessage"
-            class="fixed right-5 top-5 z-[100] flex max-w-lg items-start gap-3 rounded-xl border border-red-200 bg-white px-5 py-4 text-sm font-medium text-red-700 shadow-lg"
-        >
-
-            <span
-                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold text-red-700"
-            >
-                !
-            </span>
-
-            <span class="flex-1 leading-5">
-                {{ errorMessage }}
-            </span>
-
-            <button
-                type="button"
-                @click="errorMessage = ''"
-                class="cursor-pointer text-xl leading-none text-red-400 transition hover:text-red-700"
-            >
-                ×
-            </button>
-
-        </div>
-
+        <MobileNavigation
+            :current-user="currentUser"
+            @logout="logout"
+            @profile-updated="updateProfilePhoto"
+        />
 
         <!-- Sidebar -->
 
-        <aside
-            class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-slate-900 text-white"
-        >
+        <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-emerald-950 text-white lg:flex">
 
             <!-- Logo -->
 
-            <div class="border-b border-slate-800 px-6 py-5">
+            <div class="border-b border-emerald-900 px-6 py-5">
 
                 <h1 class="text-lg font-bold">
                     ICT Felcris Centrale
@@ -1352,113 +1339,49 @@ onMounted(() => {
 
             <nav class="flex-1 space-y-1 px-3 py-4">
 
-                <NuxtLink
-                    to="/dashboard"
-                    class="flex items-center gap-3 rounded-lg bg-slate-800 px-4 py-3 text-sm font-medium text-white"
-                >
-
-                    <span>▦</span>
-
+                <NuxtLink to="/dashboard"
+                    :class="$route.path === '/dashboard' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+                    <NavIcon name="dashboard" />
                     <span>Dashboard</span>
-
                 </NuxtLink>
 
 
-                <NuxtLink
-                    v-if="currentUser?.role_name === 'superadmin'"
-                    to="/organizations"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                >
-
-                    <span>▣</span>
-
+                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
+                    :class="$route.path === '/organizations' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+                    <NavIcon name="organizations" />
                     <span>Manage Organizations</span>
-
                 </NuxtLink>
 
 
-                <NuxtLink
-                    v-if="currentUser?.role_name === 'superadmin'"
-                    to="/users"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                >
-
-                    <span>♙</span>
-
+                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
+                    :class="$route.path === '/users' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+                    <NavIcon name="users" />
                     <span>Manage Users</span>
-
                 </NuxtLink>
 
 
-                <NuxtLink
-                    to="/concerns"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                >
-
-                    <span>⚠</span>
-
+                <NuxtLink to="/concerns"
+                    :class="$route.path === '/concerns' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+                    <NavIcon name="concerns" />
                     <span>Manage Concerns</span>
-
                 </NuxtLink>
 
-
-                <NuxtLink
-                    v-if="
-                        currentUser?.role_name === 'superadmin' ||
-                        currentUser?.role_name === 'admin'
-                    "
-                    to="/reports"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                >
-
-                    <span>▤</span>
-
-                    <span>Manage Reports</span>
-
-                </NuxtLink>
 
             </nav>
 
 
             <!-- Logged-in User -->
 
-            <div class="border-t border-slate-800 p-4">
-
-                <div class="mb-3 rounded-lg bg-slate-800 p-3">
-
-                    <p class="truncate text-sm font-semibold text-white">
-
-                        {{
-                            currentUser
-                                ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
-                                : '-'
-                        }}
-
-                    </p>
-
-                    <p class="mt-1 text-xs text-slate-400">
-                        {{ currentUser?.role_name || '-' }}
-                    </p>
-
-                    <p
-                        v-if="currentUser?.organization_name"
-                        class="mt-1 truncate text-xs text-slate-500"
-                        :title="currentUser.organization_name"
-                    >
-                        {{ currentUser.organization_name }}
-                    </p>
-
-                </div>
-
-
-                <button
-                    type="button"
-                    @click="logout"
-                    class="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-300"
-                >
-                    Logout
-                </button>
-
+            <div class="border-t border-emerald-900 p-4">
+                <UserProfileControl
+                    :current-user="currentUser"
+                    @logout="logout"
+                    @profile-updated="updateProfilePhoto"
+                />
             </div>
 
         </aside>
@@ -1466,13 +1389,12 @@ onMounted(() => {
 
         <!-- Main Content -->
 
-        <main class="ml-64 min-h-screen">
+        <main class="flex min-h-screen flex-col lg:ml-64">
 
             <!-- Header -->
 
             <header
-                class="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-slate-200 bg-white px-8 py-4"
-            >
+                class="sticky top-0 z-20 flex min-h-16 flex-col items-start justify-between gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:px-6 lg:px-8">
 
                 <div>
 
@@ -1489,28 +1411,19 @@ onMounted(() => {
 
                 <!-- Dashboard Filters -->
 
-                <div
-                    class="flex flex-wrap items-center justify-end gap-3"
-                >
+                <div class="flex flex-wrap items-center justify-end gap-3">
 
                     <!-- Date Range -->
 
                     <div class="flex items-center gap-3">
 
-                        <label
-                            for="dashboard-range"
-                            class="hidden text-sm font-medium text-slate-600 sm:block"
-                        >
+                        <label for="dashboard-range" class="hidden text-sm font-medium text-slate-600 sm:block">
                             Date Range
                         </label>
 
-                        <select
-                            id="dashboard-range"
-                            v-model="selectedRange"
-                            @change="changeDashboardFilter"
+                        <select id="dashboard-range" v-model="selectedRange" @change="changeDashboardFilter"
                             :disabled="loadingRange"
-                            class="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
+                            class="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60">
 
                             <option value="today">
                                 Today
@@ -1547,35 +1460,22 @@ onMounted(() => {
 
                     <!-- Organization -->
 
-                    <div
-                        v-if="currentUser?.role_name === 'superadmin'"
-                        class="flex items-center gap-3"
-                    >
+                    <div v-if="currentUser?.role_name === 'superadmin'" class="flex items-center gap-3">
 
-                        <label
-                            for="dashboard-organization"
-                            class="hidden text-sm font-medium text-slate-600 xl:block"
-                        >
+                        <label for="dashboard-organization" class="hidden text-sm font-medium text-slate-600 xl:block">
                             Organization
                         </label>
 
-                        <select
-                            id="dashboard-organization"
-                            v-model="selectedOrganization"
-                            @change="changeDashboardFilter"
-                            :disabled="loadingRange"
-                            class="max-w-[240px] cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
+                        <select id="dashboard-organization" v-model="selectedOrganization"
+                            @change="changeDashboardFilter" :disabled="loadingRange"
+                            class="max-w-[240px] cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60">
 
                             <option value="all">
                                 All Organizations
                             </option>
 
-                            <option
-                                v-for="organization in dashboardData?.organizationOptions || []"
-                                :key="organization.id"
-                                :value="String(organization.id)"
-                            >
+                            <option v-for="organization in dashboardData?.organizationOptions || []"
+                                :key="organization.id" :value="String(organization.id)">
                                 {{ organization.name }}
                             </option>
 
@@ -1594,20 +1494,15 @@ onMounted(() => {
 
                 <!-- Error -->
 
-                <div
-                    v-if="errorMessage"
-                    class="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-                >
+                <div v-if="errorMessage"
+                    class="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                     {{ errorMessage }}
                 </div>
 
 
                 <!-- Loading -->
 
-                <div
-                    v-if="loading"
-                    class="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm"
-                >
+                <div v-if="loading" class="rounded-xl border border-slate-300 bg-white p-10 text-center shadow-md">
 
                     <p class="text-sm text-slate-500">
                         Loading dashboard...
@@ -1622,9 +1517,7 @@ onMounted(() => {
 
                     <!-- Dashboard Filters Summary -->
 
-                    <div
-                        class="mb-6 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
-                    >
+                    <div class="mb-6 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
 
                         <div>
 
@@ -1637,9 +1530,7 @@ onMounted(() => {
                                 Showing data for
                                 {{ selectedRangeLabel.toLowerCase() }}
 
-                                <template
-                                    v-if="currentUser?.role_name === 'superadmin'"
-                                >
+                                <template v-if="currentUser?.role_name === 'superadmin'">
                                     · {{ selectedOrganizationLabel }}
                                 </template>
 
@@ -1650,10 +1541,7 @@ onMounted(() => {
                         </div>
 
 
-                        <div
-                            v-if="loadingRange"
-                            class="text-xs font-medium text-slate-500"
-                        >
+                        <div v-if="loadingRange" class="text-xs font-medium text-slate-500">
                             Updating dashboard...
                         </div>
 
@@ -1666,27 +1554,32 @@ onMounted(() => {
 
                         <!-- Total -->
 
-                        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
+                        <NuxtLink to="/concerns"
+                            class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300">
                             <p class="text-sm text-slate-500">
                                 Total Concerns
                             </p>
 
                             <p class="mt-2 text-3xl font-bold text-slate-900">
-
                                 {{
                                     dashboardData?.summary?.total ?? 0
                                 }}
-
                             </p>
 
-                        </div>
+                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-slate-600">
+                                View all concerns
+                            </p>
+                        </NuxtLink>
 
 
                         <!-- Pending -->
 
-                        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
+                        <NuxtLink :to="{
+                            path: '/concerns',
+                            query: {
+                                status: 'pending'
+                            }
+                        }" class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-yellow-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-200">
                             <p class="text-sm text-slate-500">
                                 Pending
                             </p>
@@ -1695,13 +1588,20 @@ onMounted(() => {
                                 {{ getStatusTotal('pending') }}
                             </p>
 
-                        </div>
+                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-yellow-600">
+                                View pending concerns
+                            </p>
+                        </NuxtLink>
 
 
                         <!-- In Progress -->
 
-                        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
+                        <NuxtLink :to="{
+                            path: '/concerns',
+                            query: {
+                                status: 'in_progress'
+                            }
+                        }" class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-200">
                             <p class="text-sm text-slate-500">
                                 In Progress
                             </p>
@@ -1710,13 +1610,20 @@ onMounted(() => {
                                 {{ getStatusTotal('in_progress') }}
                             </p>
 
-                        </div>
+                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-blue-600">
+                                View in-progress concerns
+                            </p>
+                        </NuxtLink>
 
 
                         <!-- Resolved -->
 
-                        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
+                        <NuxtLink :to="{
+                            path: '/concerns',
+                            query: {
+                                status: 'resolved'
+                            }
+                        }" class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-green-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-200">
                             <p class="text-sm text-slate-500">
                                 Resolved
                             </p>
@@ -1725,13 +1632,20 @@ onMounted(() => {
                                 {{ getStatusTotal('resolved') }}
                             </p>
 
-                        </div>
+                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-green-600">
+                                View resolved concerns
+                            </p>
+                        </NuxtLink>
 
 
                         <!-- Closed -->
 
-                        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
+                        <NuxtLink :to="{
+                            path: '/concerns',
+                            query: {
+                                status: 'closed'
+                            }
+                        }" class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300">
                             <p class="text-sm text-slate-500">
                                 Closed
                             </p>
@@ -1740,9 +1654,14 @@ onMounted(() => {
                                 {{ getStatusTotal('closed') }}
                             </p>
 
-                        </div>
+                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-slate-600">
+                                View closed concerns
+                            </p>
+                        </NuxtLink>
+                        
 
                     </div>
+
 
 
                     <!-- Status + Priority -->
@@ -1751,7 +1670,7 @@ onMounted(() => {
 
                         <!-- Status -->
 
-                        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                             <div class="flex flex-wrap items-start justify-between gap-4">
 
@@ -1787,20 +1706,14 @@ onMounted(() => {
                             </div>
 
 
-                            <div
-                                v-if="dashboardData?.summary?.total > 0"
-                                class="mt-6 h-[280px]"
-                            >
+                            <div v-if="dashboardData?.summary?.total > 0" class="mt-6 h-[280px]">
 
                                 <canvas ref="statusChartCanvas"></canvas>
 
                             </div>
 
 
-                            <div
-                                v-else
-                                class="mt-6 flex h-[280px] items-center justify-center rounded-lg bg-slate-50"
-                            >
+                            <div v-else class="mt-6 flex h-[280px] items-center justify-center rounded-lg bg-slate-50">
 
                                 <p class="text-sm text-slate-500">
                                     No concern data available for this period.
@@ -1909,7 +1822,7 @@ onMounted(() => {
 
                         <!-- Priority -->
 
-                        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                             <div>
 
@@ -1924,20 +1837,14 @@ onMounted(() => {
                             </div>
 
 
-                            <div
-                                v-if="dashboardData?.summary?.total > 0"
-                                class="mt-8 h-[360px]"
-                            >
+                            <div v-if="dashboardData?.summary?.total > 0" class="mt-8 h-[360px]">
 
                                 <canvas ref="priorityChartCanvas"></canvas>
 
                             </div>
 
 
-                            <div
-                                v-else
-                                class="mt-8 flex h-[360px] items-center justify-center rounded-lg bg-slate-50"
-                            >
+                            <div v-else class="mt-8 flex h-[360px] items-center justify-center rounded-lg bg-slate-50">
 
                                 <p class="text-sm text-slate-500">
                                     No priority data available for this period.
@@ -1952,7 +1859,7 @@ onMounted(() => {
 
                     <!-- Trend -->
 
-                    <div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div class="mt-6 rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 
@@ -1980,20 +1887,14 @@ onMounted(() => {
                         </div>
 
 
-                        <div
-                            v-if="dashboardData?.trend?.length"
-                            class="mt-6 h-[330px]"
-                        >
+                        <div v-if="dashboardData?.trend?.length" class="mt-6 h-[330px]">
 
                             <canvas ref="trendChartCanvas"></canvas>
 
                         </div>
 
 
-                        <div
-                            v-else
-                            class="mt-6 flex h-[330px] items-center justify-center rounded-lg bg-slate-50"
-                        >
+                        <div v-else class="mt-6 flex h-[330px] items-center justify-center rounded-lg bg-slate-50">
 
                             <p class="text-sm text-slate-500">
                                 No concern activity available for this period.
@@ -2010,7 +1911,7 @@ onMounted(() => {
 
                         <!-- Organization -->
 
-                        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                             <div>
 
@@ -2025,20 +1926,14 @@ onMounted(() => {
                             </div>
 
 
-                            <div
-                                v-if="dashboardData?.organizations?.length"
-                                class="mt-6 h-[360px]"
-                            >
+                            <div v-if="dashboardData?.organizations?.length" class="mt-6 h-[360px]">
 
                                 <canvas ref="organizationChartCanvas"></canvas>
 
                             </div>
 
 
-                            <div
-                                v-else
-                                class="mt-6 flex h-[360px] items-center justify-center rounded-lg bg-slate-50"
-                            >
+                            <div v-else class="mt-6 flex h-[360px] items-center justify-center rounded-lg bg-slate-50">
 
                                 <p class="text-sm text-slate-500">
                                     No organization data available.
@@ -2051,7 +1946,7 @@ onMounted(() => {
 
                         <!-- Top Creators -->
 
-                        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                             <div>
 
@@ -2066,20 +1961,14 @@ onMounted(() => {
                             </div>
 
 
-                            <div
-                                v-if="dashboardData?.topCreators?.length"
-                                class="mt-6 h-[360px]"
-                            >
+                            <div v-if="dashboardData?.topCreators?.length" class="mt-6 h-[360px]">
 
                                 <canvas ref="creatorChartCanvas"></canvas>
 
                             </div>
 
 
-                            <div
-                                v-else
-                                class="mt-6 flex h-[360px] items-center justify-center rounded-lg bg-slate-50"
-                            >
+                            <div v-else class="mt-6 flex h-[360px] items-center justify-center rounded-lg bg-slate-50">
 
                                 <p class="text-sm text-slate-500">
                                     No creator data available.
@@ -2092,40 +1981,11 @@ onMounted(() => {
                     </div>
 
 
-                    <!-- Dashboard Information -->
-
-                    <div class="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-
-                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-
-                            <div>
-
-                                <h3 class="text-lg font-semibold text-slate-900">
-                                    Concern Management Overview
-                                </h3>
-
-                                <p class="mt-1 text-sm text-slate-500">
-                                    Use the Concerns page to view individual concern records, search, filter, update statuses, and view concern details.
-                                </p>
-
-                            </div>
-
-
-                            <NuxtLink
-                                to="/concerns"
-                                class="inline-flex items-center justify-center rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
-                            >
-                                View Concerns
-                            </NuxtLink>
-
-                        </div>
-
-                    </div>
-
                 </template>
 
             </div>
 
+            <AppFooter class="mt-auto" />
         </main>
 
     </div>

@@ -1,72 +1,94 @@
 <script setup>
 
+import CreateOrganizationModal from '../components/organizations/CreateOrganizationModal.vue'
+import EditOrganizationModal from '../components/organizations/EditOrganizationModal.vue'
+import { useToast } from '~/composables/useToast'
+
 definePageMeta({
     middleware: 'auth'
 })
 
-const currentUser = ref(null)
+const currentUser = useState('current-user', () => null)
 const organizations = ref([])
-
 const loading = ref(true)
 const errorMessage = ref('')
-const successMessage = ref('')
-
-const showModal = ref(false)
+const { showToast } = useToast()
+const showCreateModal = ref(false)
+const showEditModal = ref(false)
 const saving = ref(false)
+const updating = ref(false)
 
-const form = ref({
+const createForm = ref({
     name: '',
     description: '',
     address: ''
 })
+
+const editForm = ref({
+    name: '',
+    description: '',
+    address: ''
+})
+
+const editingOrganization = ref(null)
 
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalOrganizations = ref(0)
 const totalPages = ref(0)
 
-async function loadCurrentUser() {
-    try {
-        const response = await $fetch('/api/auth/me', {
-            cache: 'no-store'
-        })
+// --------------------------------------------------
+// LOAD CURRENT USER
+// --------------------------------------------------
 
-        currentUser.value = response.user
-    } catch (error) {
-        errorMessage.value =
-            error?.data?.statusMessage ||
-            'Failed to load current user.'
-    }
+async function loadCurrentUser() {
+    const response = await $fetch(
+        '/api/auth/me',
+        {
+            cache: 'no-store'
+        }
+    )
+
+    currentUser.value = response.user
 }
+
+
+// --------------------------------------------------
+// LOAD ORGANIZATIONS
+// --------------------------------------------------
 
 async function loadOrganizations() {
-    const response = await $fetch('/api/organizations', {
-        cache: 'no-store',
-        query: {
-            page: currentPage.value,
-            limit: pageSize.value
+    const response = await $fetch(
+        '/api/organizations',
+        {
+            credentials: 'include',
+            query: {
+                page: currentPage.value,
+                limit: pageSize.value
+            }
         }
-    })
+    )
 
     organizations.value =
-        response.organizations || []
+        response?.organizations || []
+
+    const pagination =
+        response?.pagination || {}
 
     totalOrganizations.value =
-        Number(
-            response.pagination?.total || 0
-        )
+        Number(pagination.total || 0)
 
     totalPages.value =
-        Number(
-            response.pagination?.totalPages || 0
-        )
+        Number(pagination.totalPages || 0)
 
     currentPage.value =
-        Number(
-            response.pagination?.page ||
-            currentPage.value
-        )
+        Number(pagination.page || 1)
 }
+
+
+// --------------------------------------------------
+// LOAD ORGANIZATIONS WITH LOADING STATE
+// --------------------------------------------------
 
 async function loadOrganizationsWithLoading() {
     loading.value = true
@@ -77,12 +99,16 @@ async function loadOrganizationsWithLoading() {
     } catch (error) {
         errorMessage.value =
             error?.data?.statusMessage ||
-            error?.statusMessage ||
             'Failed to load organizations.'
     } finally {
         loading.value = false
     }
 }
+
+
+// --------------------------------------------------
+// LOAD PAGE DATA
+// --------------------------------------------------
 
 async function loadData() {
     loading.value = true
@@ -97,11 +123,16 @@ async function loadData() {
         errorMessage.value =
             error?.data?.statusMessage ||
             error?.statusMessage ||
-            'Failed to load organization data.'
+            'Failed to load organizations.'
     } finally {
         loading.value = false
     }
 }
+
+
+// --------------------------------------------------
+// PAGINATION
+// --------------------------------------------------
 
 const showingFrom = computed(() => {
     if (totalOrganizations.value === 0) {
@@ -115,10 +146,6 @@ const showingFrom = computed(() => {
 })
 
 const showingTo = computed(() => {
-    if (totalOrganizations.value === 0) {
-        return 0
-    }
-
     return Math.min(
         currentPage.value * pageSize.value,
         totalOrganizations.value
@@ -126,57 +153,64 @@ const showingTo = computed(() => {
 })
 
 const paginationPages = computed(() => {
+    const pages = []
     const total = totalPages.value
-    const current = currentPage.value
 
     if (total <= 7) {
-        return Array.from(
-            { length: total },
-            (_, index) => index + 1
-        )
+        for (
+            let page = 1;
+            page <= total;
+            page++
+        ) {
+            pages.push(page)
+        }
+
+        return pages
     }
 
-    if (current <= 4) {
-        return [
-            1,
-            2,
-            3,
-            4,
-            5,
-            '...',
-            total
-        ]
+    pages.push(1)
+
+    if (currentPage.value > 4) {
+        pages.push('...')
     }
 
-    if (current >= total - 3) {
-        return [
-            1,
-            '...',
-            total - 4,
-            total - 3,
-            total - 2,
-            total - 1,
-            total
-        ]
+    const start = Math.max(
+        2,
+        currentPage.value - 1
+    )
+
+    const end = Math.min(
+        total - 1,
+        currentPage.value + 1
+    )
+
+    for (
+        let page = start;
+        page <= end;
+        page++
+    ) {
+        if (!pages.includes(page)) {
+            pages.push(page)
+        }
     }
 
-    return [
-        1,
-        '...',
-        current - 1,
-        current,
-        current + 1,
-        '...',
-        total
-    ]
+    if (currentPage.value < total - 3) {
+        pages.push('...')
+    }
+
+    if (!pages.includes(total)) {
+        pages.push(total)
+    }
+
+    return pages
 })
 
 async function goToPage(page) {
     if (
         page === '...' ||
-        page === currentPage.value ||
         page < 1 ||
-        page > totalPages.value
+        page > totalPages.value ||
+        page === currentPage.value
     ) {
         return
     }
@@ -191,7 +225,7 @@ async function goToPreviousPage() {
         return
     }
 
-    currentPage.value -= 1
+    currentPage.value--
 
     await loadOrganizationsWithLoading()
 }
@@ -203,70 +237,166 @@ async function goToNextPage() {
         return
     }
 
-    currentPage.value += 1
+    currentPage.value++
 
     await loadOrganizationsWithLoading()
 }
 
+
+// --------------------------------------------------
+// CREATE ORGANIZATION
+// --------------------------------------------------
+
+function resetCreateForm() {
+    createForm.value = {
+        name: '',
+        description: '',
+        address: ''
+    }
+}
+
 function openAddModal() {
     errorMessage.value = ''
-    successMessage.value = ''
+    resetCreateForm()
+    showCreateModal.value = true
+}
 
-    form.value = {
+function closeCreateModal() {
+    if (saving.value) {
+        return
+    }
+
+    showCreateModal.value = false
+}
+
+async function createOrganization() {
+    if (saving.value) {
+        return
+    }
+
+    saving.value = true
+    errorMessage.value = ''
+
+    try {
+        await $fetch(
+            '/api/organizations',
+            {
+                method: 'POST',
+                credentials: 'include',
+                body: {
+                    name: createForm.value.name,
+                    description: createForm.value.description,
+                    address: createForm.value.address
+                }
+            }
+        )
+
+        showCreateModal.value = false
+        currentPage.value = 1
+        resetCreateForm()
+
+        await loadOrganizationsWithLoading()
+
+        showToast(
+            'Organization created successfully.'
+        )
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            'Failed to create organization.',
+            'error'
+        )
+    } finally {
+        saving.value = false
+    }
+}
+
+
+// --------------------------------------------------
+// EDIT ORGANIZATION
+// --------------------------------------------------
+
+function resetEditForm() {
+    editForm.value = {
         name: '',
         description: '',
         address: ''
     }
 
-    showModal.value = true
+    editingOrganization.value = null
 }
 
-function closeModal() {
-    if (saving.value) {
+function openEditModal(organization) {
+    errorMessage.value = ''
+
+    editingOrganization.value = organization
+
+    editForm.value = {
+        name: organization?.name || '',
+        description: organization?.description || '',
+        address: organization?.address || ''
+    }
+
+    showEditModal.value = true
+}
+
+function closeEditModal() {
+    if (updating.value) {
         return
     }
 
-    showModal.value = false
+    showEditModal.value = false
+    resetEditForm()
 }
 
-async function createOrganization() {
-    saving.value = true
+async function updateOrganization() {
+    if (
+        updating.value ||
+        !editingOrganization.value?.id
+    ) {
+        return
+    }
+
+    updating.value = true
     errorMessage.value = ''
-    successMessage.value = ''
 
     try {
-        await $fetch('/api/organizations', {
-            method: 'POST',
-            body: {
-                name: form.value.name,
-                description: form.value.description,
-                address: form.value.address
+        await $fetch(
+            `/api/organizations/${editingOrganization.value.id}`,
+            {
+                method: 'PUT',
+                credentials: 'include',
+                body: {
+                    name: editForm.value.name,
+                    description: editForm.value.description,
+                    address: editForm.value.address
+                }
             }
-        })
+        )
 
-        successMessage.value =
-            'Organization created successfully.'
-
-        showModal.value = false
-
-        currentPage.value = 1
-
-        form.value = {
-            name: '',
-            description: '',
-            address: ''
-        }
+        showEditModal.value = false
+        resetEditForm()
 
         await loadOrganizationsWithLoading()
+
+        showToast(
+            'Organization updated successfully.'
+        )
     } catch (error) {
-        errorMessage.value =
+        showToast(
             error?.data?.statusMessage ||
-            error?.statusMessage ||
-            'Failed to create organization.'
+            'Failed to update organization.',
+            'error'
+        )
     } finally {
-        saving.value = false
+        updating.value = false
     }
 }
+
+
+// --------------------------------------------------
+// STATUS
+// --------------------------------------------------
 
 function statusClass(status) {
     if (status === 'active') {
@@ -276,49 +406,87 @@ function statusClass(status) {
     return 'bg-red-100 text-red-700'
 }
 
-function formatDate(value) {
-    if (!value) {
+
+// --------------------------------------------------
+// DATE
+// --------------------------------------------------
+
+function formatDate(date) {
+    if (!date) {
         return '-'
     }
 
-    const date = new Date(value)
-
-    if (Number.isNaN(date.getTime())) {
-        return value
-    }
-
-    return date.toLocaleString('en-PH', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit'
-    })
+    return new Date(date).toLocaleString(
+        'en-PH',
+        {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        }
+    )
 }
+
+
+// --------------------------------------------------
+// LOGOUT
+// --------------------------------------------------
 
 async function logout() {
     try {
-        await $fetch('/api/auth/logout', {
-            method: 'POST'
-        })
-    } finally {
-        await navigateTo('/login')
+        await $fetch(
+            '/api/auth/logout',
+            {
+                method: 'POST',
+                credentials: 'include'
+            }
+        )
+    } catch (error) {
+        console.error(
+            'Logout error:',
+            error
+        )
+    }
+
+    await navigateTo('/login')
+}
+
+function updateProfilePhoto(profilePhoto) {
+    if (currentUser.value) {
+        currentUser.value.profile_photo = profilePhoto
     }
 }
+
+
+// --------------------------------------------------
+// MOUNT / UNMOUNT
+// --------------------------------------------------
 
 onMounted(() => {
     loadData()
 })
+
 </script>
 
 <template>
+
     <div class="min-h-screen bg-slate-100">
 
+        <MobileNavigation
+            :current-user="currentUser"
+            @logout="logout"
+            @profile-updated="updateProfilePhoto"
+        />
+
         <!-- Sidebar -->
+
         <aside
-            class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-slate-900 text-white"
+            class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-emerald-950 text-white lg:flex"
         >
-            <div class="border-b border-slate-800 px-6 py-5">
+
+            <div class="border-b border-emerald-900 px-6 py-5">
+
                 <h1 class="text-lg font-bold">
                     ICT Felcris Centrale
                 </h1>
@@ -326,361 +494,322 @@ onMounted(() => {
                 <p class="mt-1 text-xs text-slate-400">
                     Concern Management System
                 </p>
+
             </div>
 
+
             <nav class="flex-1 space-y-1 px-3 py-4">
+
                 <NuxtLink
                     to="/dashboard"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    :class="$route.path === '/dashboard' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
-                    <span>▦</span>
+                    <NavIcon name="dashboard" />
                     <span>Dashboard</span>
                 </NuxtLink>
 
+
                 <NuxtLink
-                    v-if="currentUser?.role_name === 'superadmin'"
                     to="/organizations"
-                    class="flex items-center gap-3 rounded-lg bg-slate-800 px-4 py-3 text-sm font-medium text-white"
+                    :class="$route.path === '/organizations' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
-                    <span>▣</span>
+                    <NavIcon name="organizations" />
                     <span>Manage Organizations</span>
                 </NuxtLink>
 
+
                 <NuxtLink
-                    v-if="currentUser?.role_name === 'superadmin'"
                     to="/users"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    :class="$route.path === '/users' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
-                    <span>♙</span>
+                    <NavIcon name="users" />
                     <span>Manage Users</span>
                 </NuxtLink>
 
+
                 <NuxtLink
                     to="/concerns"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
+                    :class="$route.path === '/concerns' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
-                    <span>⚠</span>
+                    <NavIcon name="concerns" />
                     <span>Manage Concerns</span>
                 </NuxtLink>
 
-                <NuxtLink
-                    v-if="
-                        currentUser?.role_name === 'superadmin' ||
-                        currentUser?.role_name === 'admin'
-                    "
-                    to="/reports"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white"
-                >
-                    <span>▤</span>
-                    <span>Manage Reports</span>
-                </NuxtLink>
+
             </nav>
 
-            <div class="border-t border-slate-800 p-4">
-                <div class="mb-3 rounded-lg bg-slate-800 p-3">
-                    <p class="truncate text-sm font-semibold text-white">
-                        {{
-                            currentUser
-                                ? `${currentUser.first_name || ''} ${currentUser.last_name || ''}`.trim()
-                                : '-'
-                        }}
-                    </p>
 
-                    <p class="mt-1 text-xs text-slate-400">
-                        {{ currentUser?.role_name || '-' }}
-                    </p>
-
-                    <p
-                        v-if="currentUser?.organization_name"
-                        class="mt-1 truncate text-xs text-slate-500"
-                        :title="currentUser.organization_name"
-                    >
-                        {{ currentUser.organization_name }}
-                    </p>
-                </div>
-
-                <button
-                    type="button"
-                    @click="logout"
-                    class="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-300"
-                >
-                    Logout
-                </button>
+            <div class="border-t border-emerald-900 p-4">
+                <UserProfileControl
+                    :current-user="currentUser"
+                    @logout="logout"
+                    @profile-updated="updateProfilePhoto"
+                />
             </div>
+
         </aside>
 
-        <!-- Main Content -->
-        <main class="ml-64 min-h-screen">
-            <div class="mx-auto w-full max-w-[1600px] px-6 py-8">
 
-                <!-- Header -->
-                <div
-                    class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-                >
+        <!-- Main -->
+
+        <main class="flex min-h-screen flex-col lg:ml-64">
+
+            <!-- Header -->
+
+            <header class="border-b border-slate-200 bg-white px-4 py-5 sm:px-6 lg:px-8">
+
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
                     <div>
-                        <h2 class="text-2xl font-bold text-slate-800">
-                            Organizations
+
+                        <h2 class="text-xl font-semibold text-slate-800">
+                            Manage Organizations
                         </h2>
 
                         <p class="mt-1 text-sm text-slate-500">
-                            Manage organizations in the system.
+                            Manage organizations registered in the system.
                         </p>
+
                     </div>
+
 
                     <button
                         type="button"
                         @click="openAddModal"
-                        class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md active:scale-[0.99]"
+                        class="w-full cursor-pointer rounded-lg bg-emerald-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-800 sm:w-auto"
                     >
-                        <span class="text-lg leading-none">
-                            +
-                        </span>
-
                         Add Organization
                     </button>
+
                 </div>
+
+            </header>
+
+
+            <!-- Content -->
+
+            <div class="p-4 sm:p-8">
 
                 <!-- Error -->
+
                 <div
                     v-if="errorMessage"
-                    class="mb-5 flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700"
+                    class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
                 >
-                    <p>
-                        {{ errorMessage }}
-                    </p>
-
-                    <button
-                        type="button"
-                        @click="errorMessage = ''"
-                        class="cursor-pointer text-xl leading-none text-red-400 transition hover:text-red-700"
-                    >
-                        ×
-                    </button>
+                    {{ errorMessage }}
                 </div>
 
-                <!-- Success -->
+
+                <!-- Loading -->
+
                 <div
-                    v-if="successMessage"
-                    class="mb-5 flex items-start justify-between gap-4 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700"
+                    v-if="loading"
+                    class="rounded-xl border border-slate-300 bg-white p-8 text-center shadow-md"
                 >
-                    <p>
-                        {{ successMessage }}
+
+                    <p class="text-sm text-slate-500">
+                        Loading organizations...
                     </p>
 
-                    <button
-                        type="button"
-                        @click="successMessage = ''"
-                        class="cursor-pointer text-xl leading-none text-green-400 transition hover:text-green-700"
-                    >
-                        ×
-                    </button>
                 </div>
 
-                <!-- Organizations Table -->
+
+                <!-- Table -->
+
                 <div
-                    class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                    v-else
+                    class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md"
                 >
-                    <!-- Table Header -->
-                    <div class="border-b border-slate-200 px-5 py-4">
-                        <h3 class="text-base font-semibold text-slate-800">
-                            Organization List
-                        </h3>
 
-                        <p
-                            v-if="loading"
-                            class="mt-1 flex items-center gap-2 text-xs text-slate-400"
-                        >
-                            <span
-                                class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-slate-300"
-                            ></span>
-
-                            Loading organizations...
-                        </p>
-
-                        <p
-                            v-else
-                            class="mt-1 text-xs text-slate-500"
-                        >
-                            <template v-if="totalOrganizations > 0">
-                                Showing
-                                {{ showingFrom }}–{{ showingTo }}
-                                of
-                                {{ totalOrganizations }}
-                                organization{{ totalOrganizations === 1 ? '' : 's' }}
-                            </template>
-
-                            <template v-else>
-                                No organizations
-                            </template>
-                        </p>
-                    </div>
-
-                    <!-- Table -->
                     <div class="overflow-x-auto">
-                        <table class="min-w-[900px] w-full text-left">
+
+                        <table class="min-w-full divide-y divide-slate-200">
+
                             <thead class="bg-slate-50">
-                                <tr class="border-b border-slate-200">
-                                    <th class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+
+                                <tr>
+
+                                    <th
+                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Name
                                     </th>
 
-                                    <th class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    <th
+                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Address
                                     </th>
 
-                                    <th class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    <th
+                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Description
                                     </th>
 
-                                    <th class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    <th
+                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Status
                                     </th>
 
-                                    <th class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    <th
+                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Created
                                     </th>
 
-                                    <th class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    <th
+                                        class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500"
+                                    >
                                         Actions
                                     </th>
+
                                 </tr>
+
                             </thead>
 
-                            <!-- Loading -->
-                            <tbody
-                                v-if="loading"
-                                class="divide-y divide-slate-100"
-                            >
-                                <tr
-                                    v-for="row in 5"
-                                    :key="row"
-                                    class="animate-pulse"
-                                >
-                                    <td class="px-5 py-5">
-                                        <div class="h-4 w-36 rounded bg-slate-200"></div>
-                                    </td>
 
-                                    <td class="px-5 py-5">
-                                        <div class="h-4 w-44 rounded bg-slate-200"></div>
-                                    </td>
+                            <tbody class="divide-y divide-slate-100">
 
-                                    <td class="px-5 py-5">
-                                        <div class="h-4 w-52 rounded bg-slate-200"></div>
-                                    </td>
+                                <tr v-if="organizations.length === 0">
 
-                                    <td class="px-5 py-5">
-                                        <div class="h-6 w-16 rounded-full bg-slate-200"></div>
-                                    </td>
-
-                                    <td class="px-5 py-5">
-                                        <div class="h-4 w-32 rounded bg-slate-200"></div>
-                                    </td>
-
-                                    <td class="px-5 py-5">
-                                        <div class="h-9 w-20 rounded bg-slate-200"></div>
-                                    </td>
-                                </tr>
-                            </tbody>
-
-                            <!-- Empty -->
-                            <tbody
-                                v-else-if="organizations.length === 0"
-                                class="divide-y divide-slate-100"
-                            >
-                                <tr>
                                     <td
                                         colspan="6"
-                                        class="px-5 py-12 text-center"
+                                        class="px-6 py-10 text-center text-sm text-slate-500"
                                     >
-                                        <p class="text-sm font-medium text-slate-600">
-                                            No organizations found.
-                                        </p>
-
-                                        <p class="mt-1 text-xs text-slate-400">
-                                            There are no organizations to display.
-                                        </p>
+                                        No organizations found.
                                     </td>
-                                </tr>
-                            </tbody>
 
-                            <!-- Organizations -->
-                            <tbody
-                                v-else
-                                class="divide-y divide-slate-100"
-                            >
+                                </tr>
+
+
                                 <tr
                                     v-for="organization in organizations"
                                     :key="organization.id"
                                     class="transition hover:bg-slate-50"
                                 >
-                                    <td class="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">
+
+                                    <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-800">
                                         {{ organization.name }}
                                     </td>
 
-                                    <td class="px-5 py-4 text-sm text-slate-600">
-                                        {{ organization.address || '-' }}
+
+                                    <td class="max-w-xs px-6 py-4 text-sm text-slate-600">
+
+                                        <div class="line-clamp-2">
+                                            {{
+                                                organization.address ||
+                                                '-'
+                                            }}
+                                        </div>
+
                                     </td>
 
-                                    <td class="px-5 py-4 text-sm text-slate-600">
-                                        {{ organization.description || '-' }}
+
+                                    <td class="max-w-xs px-6 py-4 text-sm text-slate-600">
+
+                                        <div class="line-clamp-2">
+                                            {{
+                                                organization.description ||
+                                                '-'
+                                            }}
+                                        </div>
+
                                     </td>
 
-                                    <td class="whitespace-nowrap px-5 py-4">
+
+                                    <td class="whitespace-nowrap px-6 py-4">
+
                                         <span
-                                            class="rounded-full px-3 py-1 text-xs font-medium"
+                                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
                                             :class="statusClass(organization.status)"
                                         >
-                                            {{
-                                                organization.status === 'active'
-                                                    ? 'Active'
-                                                    : 'Inactive'
-                                            }}
+                                            {{ organization.status }}
                                         </span>
+
                                     </td>
 
-                                    <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-500">
+
+                                    <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
                                         {{ formatDate(organization.created_at) }}
                                     </td>
 
-                                    <td class="whitespace-nowrap px-5 py-4">
+
+                                    <td class="whitespace-nowrap px-6 py-4 text-right">
+
                                         <button
                                             type="button"
+                                            @click="openEditModal(organization)"
                                             class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                                         >
                                             Edit
                                         </button>
+
                                     </td>
+
                                 </tr>
+
                             </tbody>
+
                         </table>
+
                     </div>
 
+
                     <!-- Pagination -->
+
                     <div
-                        v-if="!loading && totalPages > 1"
-                        class="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        v-if="totalOrganizations > 0"
+                        class="flex flex-col gap-4 border-t border-slate-200 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
                     >
-                        <p class="text-xs text-slate-500">
-                            Page
-                            {{ currentPage }}
+
+                        <p class="text-sm text-slate-500">
+
+                            Showing
+
+                            <span class="font-medium text-slate-700">
+                                {{ showingFrom }}
+                            </span>
+
+                            to
+
+                            <span class="font-medium text-slate-700">
+                                {{ showingTo }}
+                            </span>
+
                             of
-                            {{ totalPages }}
+
+                            <span class="font-medium text-slate-700">
+                                {{ totalOrganizations }}
+                            </span>
+
+                            organizations
+
                         </p>
 
+
                         <div class="flex items-center gap-1">
+
                             <button
                                 type="button"
                                 @click="goToPreviousPage"
                                 :disabled="currentPage === 1"
-                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 Previous
                             </button>
 
+
                             <template
-                                v-for="(page, index) in paginationPages"
-                                :key="`${page}-${index}`"
+                                v-for="page in paginationPages"
+                                :key="`page-${page}`"
                             >
+
                                 <span
                                     v-if="page === '...'"
                                     class="px-2 py-2 text-sm text-slate-400"
@@ -688,20 +817,23 @@ onMounted(() => {
                                     ...
                                 </span>
 
+
                                 <button
                                     v-else
                                     type="button"
                                     @click="goToPage(page)"
+                                    class="cursor-pointer rounded-lg px-3 py-2 text-sm transition"
                                     :class="
-                                        page === currentPage
-                                            ? 'bg-slate-900 text-white'
+                                        currentPage === page
+                                            ? 'bg-emerald-900 text-white'
                                             : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
                                     "
-                                    class="min-w-9 cursor-pointer rounded-lg px-3 py-2 text-sm font-medium transition"
                                 >
                                     {{ page }}
                                 </button>
+
                             </template>
+
 
                             <button
                                 type="button"
@@ -710,107 +842,44 @@ onMounted(() => {
                                     currentPage === totalPages ||
                                     totalPages === 0
                                 "
-                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 Next
                             </button>
+
                         </div>
+
                     </div>
+
                 </div>
+
             </div>
+
+            <AppFooter class="mt-auto" />
         </main>
 
-        <!-- Add Organization Modal -->
-        <div
-            v-if="showModal"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-        >
-            <div class="w-full max-w-lg rounded-xl bg-white shadow-xl">
-                <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-800">
-                            Add Organization
-                        </h3>
 
-                        <p class="mt-1 text-sm text-slate-500">
-                            Create a new organization.
-                        </p>
-                    </div>
+        <!-- Create Organization Modal -->
 
-                    <button
-                        type="button"
-                        @click="closeModal"
-                        class="cursor-pointer text-2xl leading-none text-slate-400 hover:text-slate-700"
-                    >
-                        ×
-                    </button>
-                </div>
+        <CreateOrganizationModal
+            :show="showCreateModal"
+            :form="createForm"
+            :saving="saving"
+            @close="closeCreateModal"
+            @submit="createOrganization"
+        />
 
-                <form
-                    @submit.prevent="createOrganization"
-                    class="space-y-5 px-6 py-6"
-                >
-                    <div>
-                        <label class="mb-2 block text-sm font-medium text-slate-700">
-                            Name
-                        </label>
 
-                        <input
-                            v-model="form.name"
-                            type="text"
-                            required
-                            class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                        />
-                    </div>
+        <!-- Edit Organization Modal -->
 
-                    <div>
-                        <label class="mb-2 block text-sm font-medium text-slate-700">
-                            Address
-                        </label>
+        <EditOrganizationModal
+            :show="showEditModal"
+            :form="editForm"
+            :updating="updating"
+            @close="closeEditModal"
+            @submit="updateOrganization"
+        />
 
-                        <textarea
-                            v-model="form.address"
-                            rows="3"
-                            class="w-full resize-none rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                        ></textarea>
-                    </div>
-
-                    <div>
-                        <label class="mb-2 block text-sm font-medium text-slate-700">
-                            Description
-                        </label>
-
-                        <textarea
-                            v-model="form.description"
-                            rows="4"
-                            class="w-full resize-none rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                        ></textarea>
-                    </div>
-
-                    <div class="flex justify-end gap-3 border-t border-slate-200 pt-5">
-                        <button
-                            type="button"
-                            @click="closeModal"
-                            :disabled="saving"
-                            class="cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            Cancel
-                        </button>
-
-                        <button
-                            type="submit"
-                            :disabled="saving"
-                            class="cursor-pointer rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            {{
-                                saving
-                                    ? 'Creating...'
-                                    : 'Create Organization'
-                            }}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
     </div>
+
 </template>

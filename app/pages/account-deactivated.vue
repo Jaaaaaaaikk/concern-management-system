@@ -11,9 +11,9 @@ async function goToLogin() {
 </script>
 
 <template>
-    <div class="flex min-h-screen items-center justify-center bg-gray-100 px-4">
-        <div class="w-full max-w-md">
-            <div class="rounded-2xl bg-white p-8 text-center shadow-lg">
+    <div class="flex min-h-screen flex-col items-center justify-center bg-[#eef3f1] px-4">
+        <div class="flex w-full max-w-md flex-1 content-center py-8">
+            <div class="rounded-2xl bg-white p-6 text-center shadow-lg sm:p-8">
 
                 <div
                     class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100"
@@ -56,12 +56,13 @@ async function goToLogin() {
                 <button
                     type="button"
                     @click="goToLogin"
-                    class="mt-7 w-full rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white transition hover:bg-blue-700"
+                    class="mt-7 w-full rounded-lg bg-emerald-900 px-4 py-3 font-medium text-white transition hover:bg-emerald-800"
                 >
                     Back to Login
                 </button>
 
             </div>
         </div>
+        <AppFooter class="w-full" />
     </div>
 </template>

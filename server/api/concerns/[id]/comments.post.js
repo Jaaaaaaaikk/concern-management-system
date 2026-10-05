@@ -67,8 +67,7 @@ export default defineEventHandler(async (event) => {
 
   if (
     concern.status === "resolved" ||
-    concern.status === "closed" ||
-    concern.status === "cancelled"
+    concern.status === "closed"
   ) {
     throw createError({
       statusCode: 403,

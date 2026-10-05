@@ -82,6 +82,7 @@ export default defineEventHandler(async (event) => {
             u.first_name,
             u.middle_name,
             u.last_name,
+            u.profile_photo,
             u.status,
             u.last_login_at,
             u.created_at,

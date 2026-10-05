@@ -67,8 +67,7 @@ function formatStatus(status) {
         in_progress: 'In Progress',
         on_hold: 'On Hold',
         resolved: 'Resolved',
-        closed: 'Closed',
-        cancelled: 'Cancelled'
+        closed: 'Closed'
     }
 
     return labels[status] || status || '-'
@@ -92,7 +91,6 @@ function statusClass(status) {
         on_hold: 'bg-orange-100 text-orange-700',
         resolved: 'bg-green-100 text-green-700',
         closed: 'bg-slate-200 text-slate-700',
-        cancelled: 'bg-red-100 text-red-700'
     }
 
     return classes[status] || 'bg-slate-100 text-slate-600'
@@ -240,8 +238,7 @@ function isConcernCompleted() {
 
     return (
         selectedConcern.value.status === 'resolved' ||
-        selectedConcern.value.status === 'closed' ||
-        selectedConcern.value.status === 'cancelled'
+        selectedConcern.value.status === 'closed'
     )
 }
 
@@ -348,20 +345,17 @@ function canChangeToStatus(newStatus) {
     ) {
         const transitions = {
             pending: [
-                'in_progress',
-                'cancelled'
+                'in_progress'
             ],
 
             in_progress: [
                 'on_hold',
-                'resolved',
-                'cancelled'
+                'resolved'
             ],
 
             on_hold: [
                 'in_progress',
-                'resolved',
-                'cancelled'
+                'resolved'
             ],
 
             resolved: [
@@ -369,8 +363,6 @@ function canChangeToStatus(newStatus) {
             ],
 
             closed: [],
-
-            cancelled: []
         }
 
         return (
@@ -474,10 +466,6 @@ const availableStatusOptions = computed(() => {
                 {
                     value: 'in_progress',
                     label: 'In Progress'
-                },
-                {
-                    value: 'cancelled',
-                    label: 'Cancelled'
                 }
             ],
 
@@ -489,10 +477,6 @@ const availableStatusOptions = computed(() => {
                 {
                     value: 'resolved',
                     label: 'Resolved'
-                },
-                {
-                    value: 'cancelled',
-                    label: 'Cancelled'
                 }
             ],
 
@@ -504,10 +488,6 @@ const availableStatusOptions = computed(() => {
                 {
                     value: 'resolved',
                     label: 'Resolved'
-                },
-                {
-                    value: 'cancelled',
-                    label: 'Cancelled'
                 }
             ],
 
@@ -519,8 +499,6 @@ const availableStatusOptions = computed(() => {
             ],
 
             closed: [],
-
-            cancelled: []
         }
 
         return transitions[currentStatus] || []
@@ -1585,16 +1563,16 @@ onUnmounted(() => {
 
     <div
         v-if="show"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-[2px]"
+        class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6"
     >
 
         <div
-            class="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
         >
 
             <!-- Header -->
             <div
-                class="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-4"
+                class="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-4 sm:px-6"
             >
 
                 <div>
@@ -1623,7 +1601,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Body -->
-            <div class="flex-1 overflow-y-auto bg-slate-50 px-6 py-5">
+            <div class="flex-1 overflow-y-auto bg-slate-50 px-3 py-4 sm:px-6 sm:py-5">
 
                 <!-- Loading -->
                 <div
@@ -1737,7 +1715,7 @@ onUnmounted(() => {
 
                     <!-- Main Information -->
                     <div
-                        class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                        class="rounded-xl border border-slate-300 bg-white p-5 shadow-md"
                     >
 
                         <div class="mb-5">
@@ -1925,7 +1903,7 @@ onUnmounted(() => {
                     <!-- Status Update -->
                     <div
                         v-if="canUpdateStatus()"
-                        class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                        class="rounded-xl border border-slate-300 bg-white p-5 shadow-md"
                     >
 
                         <div class="mb-4">
@@ -2170,7 +2148,7 @@ onUnmounted(() => {
                                     updatingStatus ||
                                     selectedStatus === selectedConcern.status
                                 "
-                                class="cursor-pointer rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                                class="cursor-pointer rounded-lg bg-emerald-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-emerald-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {{
                                     updatingStatus
@@ -2185,7 +2163,7 @@ onUnmounted(() => {
 
                     <!-- Attachments -->
                     <div
-                        class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                        class="rounded-xl border border-slate-300 bg-white p-5 shadow-md"
                     >
 
                         <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -2412,7 +2390,7 @@ onUnmounted(() => {
 
                     <!-- Status History -->
                     <div
-                        class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                        class="rounded-xl border border-slate-300 bg-white p-5 shadow-md"
                     >
 
                         <div class="mb-4">
@@ -2587,7 +2565,7 @@ onUnmounted(() => {
 
                     <!-- Comments -->
                     <div
-                        class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                        class="rounded-xl border border-slate-300 bg-white p-5 shadow-md"
                     >
 
                         <div class="mb-5">
@@ -2652,6 +2630,12 @@ onUnmounted(() => {
                                         "
                                     >
 
+                                        <UserAvatar
+                                            :name="comment.user_name || '-'"
+                                            :photo-url="comment.profile_photo"
+                                            size="h-7 w-7 text-[10px]"
+                                        />
+
                                         <p class="text-xs font-semibold text-slate-700">
                                             {{ comment.user_name || '-' }}
                                         </p>
@@ -2672,7 +2656,7 @@ onUnmounted(() => {
                                         :class="
                                             Number(comment.user_id) ===
                                             Number(currentUser?.id)
-                                                ? 'rounded-br-md bg-slate-900 text-white'
+                                                ? 'rounded-br-md bg-emerald-900 text-white'
                                                 : 'rounded-bl-md bg-slate-100 text-slate-800'
                                         "
                                     >
@@ -2884,7 +2868,7 @@ onUnmounted(() => {
                                             selectedCommentImages.length === 0
                                         )
                                     "
-                                    class="cursor-pointer rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                                    class="cursor-pointer rounded-lg bg-emerald-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-emerald-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {{
                                         savingComment

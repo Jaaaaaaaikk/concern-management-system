@@ -20,6 +20,13 @@ yarn install
 bun install
 ```
 
+### Existing database migration
+
+Before running this version against an existing database, apply
+[`database/migrations/20261005_add_user_profile_photo.sql`](./database/migrations/20261005_add_user_profile_photo.sql)
+to add the nullable `users.profile_photo` column. Fresh databases created from
+`concern_management.sql` already include this column.
+
 ## Development Server
 
 Start the development server on `http://localhost:3000`:

@@ -231,6 +231,8 @@ export default defineEventHandler(async (event) => {
                 u.last_name
             ) AS user_name,
 
+            u.profile_photo,
+
             r.name AS role_name,
 
             o.name AS organization_name

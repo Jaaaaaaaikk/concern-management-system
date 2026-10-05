@@ -65,6 +65,7 @@ export async function getSessionUser(event) {
       u.first_name,
       u.middle_name,
       u.last_name,
+      u.profile_photo,
       u.status,
       r.id AS role_id,
       r.name AS role_name,

@@ -1,4 +1,5 @@
 <script setup>
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 const props = defineProps({
     show: {
@@ -33,6 +34,59 @@ const emit = defineEmits([
     'role-change'
 ])
 
+const photoPreview = ref('')
+let photoPreviewUrl = null
+
+const profileInitials = computed(() => {
+    const initials = [
+        props.form.first_name,
+        props.form.last_name
+    ]
+        .filter(Boolean)
+        .map((name) => name.trim().charAt(0))
+        .join('')
+        .toUpperCase()
+
+    return initials || 'U'
+})
+
+function releasePhotoPreview() {
+    if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl)
+        photoPreviewUrl = null
+    }
+
+    photoPreview.value = ''
+}
+
+function handleProfilePhotoChange(event) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+        return
+    }
+
+    releasePhotoPreview()
+    props.form.profile_photo_file = file
+    props.form.profile_photo_remove = false
+    photoPreviewUrl = URL.createObjectURL(file)
+    photoPreview.value = photoPreviewUrl
+    event.target.value = ''
+}
+
+function removeProfilePhoto() {
+    releasePhotoPreview()
+    props.form.profile_photo_file = null
+    props.form.profile_photo_remove = true
+}
+
+watch(
+    () => props.form,
+    releasePhotoPreview
+)
+
+onBeforeUnmount(releasePhotoPreview)
+
 function roleLabel(role) {
     if (role === 'superadmin') {
         return 'Superadmin'
@@ -54,12 +108,12 @@ function roleLabel(role) {
 <template>
     <div
         v-if="props.show"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 p-2 backdrop-blur-[2px] sm:items-center sm:p-4"
     >
-        <div class="w-full max-w-2xl rounded-xl bg-white shadow-xl">
+        <div class="my-auto max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
 
             <div
-                class="flex items-center justify-between border-b border-slate-200 px-6 py-5"
+                class="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"
             >
                 <div>
                     <h3 class="text-lg font-semibold text-slate-800">
@@ -82,8 +136,51 @@ function roleLabel(role) {
 
             <form
                 @submit.prevent="emit('submit')"
-                class="space-y-5 px-6 py-6"
+                class="space-y-5 px-4 py-5 sm:px-6 sm:py-6"
             >
+
+                <div class="flex flex-col gap-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 sm:flex-row sm:items-center">
+                    <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-900 text-lg font-semibold text-white ring-4 ring-white">
+                        <img
+                            v-if="photoPreview || (!props.form.profile_photo_remove && props.form.profile_photo_url)"
+                            :src="photoPreview || props.form.profile_photo_url"
+                            alt="User profile photo"
+                            class="h-full w-full object-cover"
+                        />
+                        <span v-else>{{ profileInitials }}</span>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <label for="user-profile-photo" class="block text-sm font-semibold text-slate-800">
+                            Profile photo
+                        </label>
+                        <p class="mt-1 text-xs leading-5 text-slate-500">
+                            JPEG, PNG, GIF, or WEBP. Maximum size: 2 MB.
+                        </p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <label
+                                for="user-profile-photo"
+                                class="cursor-pointer rounded-lg border border-emerald-900/20 bg-white px-3 py-2 text-xs font-semibold text-emerald-950 transition hover:bg-emerald-50"
+                            >
+                                {{ photoPreview || props.form.profile_photo_url ? 'Choose another photo' : 'Choose photo' }}
+                            </label>
+                            <button
+                                v-if="props.form.profile_photo_url && !props.form.profile_photo_remove"
+                                type="button"
+                                class="rounded-lg px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                                @click="removeProfilePhoto"
+                            >
+                                Remove photo
+                            </button>
+                        </div>
+                        <input
+                            id="user-profile-photo"
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            class="sr-only"
+                            @change="handleProfilePhotoChange"
+                        />
+                    </div>
+                </div>
 
                 <div class="grid gap-4 md:grid-cols-2">
 
@@ -230,7 +327,7 @@ function roleLabel(role) {
                 </div>
 
                 <div
-                    class="flex justify-end gap-3 border-t border-slate-200 pt-5"
+                    class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end"
                 >
 
                     <button
@@ -245,7 +342,7 @@ function roleLabel(role) {
                     <button
                         type="submit"
                         :disabled="props.updating"
-                        class="cursor-pointer rounded-lg bg-slate-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="w-full cursor-pointer rounded-lg bg-emerald-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                     >
                         {{
                             props.updating

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 04, 2026 at 10:47 AM
+-- Generation Time: Oct 05, 2026 at 05:27 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -35,7 +35,7 @@ CREATE TABLE `concerns` (
   `concern_type_id` int(10) UNSIGNED DEFAULT NULL,
   `created_by` int(10) UNSIGNED NOT NULL,
   `assigned_organization_id` int(10) UNSIGNED DEFAULT NULL,
-  `status` enum('pending','in_progress','on_hold','resolved','closed','cancelled') NOT NULL DEFAULT 'pending',
+  `status` enum('pending','in_progress','on_hold','resolved','closed') NOT NULL DEFAULT 'pending',
   `priority` enum('low','medium','high','urgent') NOT NULL DEFAULT 'medium',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `acknowledged_at` datetime DEFAULT NULL,
@@ -60,7 +60,8 @@ INSERT INTO `concerns` (`id`, `concern_number`, `title`, `description`, `concern
 (9, 'CON-2026-00009', 'Faucet', 'The faucet on CR was broken.', 3, 2, 3, 'pending', 'urgent', '2026-10-04 11:53:34', NULL, '2026-10-04 11:53:34', NULL, NULL),
 (10, 'CON-2026-00010', 'dirty floor', 'need to fix the floor because its dirty', 3, 2, 3, 'pending', 'high', '2026-10-04 11:54:04', NULL, '2026-10-04 11:54:04', NULL, NULL),
 (11, 'CON-2026-00011', 'No electricity', 'No electricity on our office', 3, 2, 3, 'pending', 'urgent', '2026-10-04 11:54:30', NULL, '2026-10-04 11:54:30', NULL, NULL),
-(12, 'CON-2026-00012', 'wire loose', 'need assistance to fix the wire loosen here in our office.', 3, 2, 3, 'pending', 'urgent', '2026-10-04 11:54:55', NULL, '2026-10-04 11:54:55', NULL, NULL);
+(12, 'CON-2026-00012', 'wire loose', 'need assistance to fix the wire loosen here in our office.', 3, 2, 3, 'pending', 'urgent', '2026-10-04 11:54:55', NULL, '2026-10-04 11:54:55', NULL, NULL),
+(13, 'CON-2026-00013', 'ceiling water leaks', 'ceiling water at 3rd lobby', 3, 4, 3, 'closed', 'high', '2026-10-05 07:42:48', '2026-10-05 07:44:54', '2026-10-05 07:57:50', '2026-10-05 07:56:19', '2026-10-05 07:57:50');
 
 -- --------------------------------------------------------
 
@@ -104,7 +105,8 @@ INSERT INTO `concern_attachments` (`id`, `concern_id`, `comment_id`, `uploaded_b
 (19, 2, NULL, 2, 'tiles3.jpg', '/uploads/concerns/concern-2-b8a9319792ff65c6a09541b7db62abb6.jpg', 'image/jpeg', 16803, '2026-10-04 10:17:08', NULL, NULL),
 (20, 2, NULL, 2, 'tiles2.jpg', '/uploads/concerns/concern-2-a87dab88da4afb67ea2a40d1285f9008.jpg', 'image/jpeg', 16958, '2026-10-04 10:17:08', NULL, NULL),
 (21, 2, NULL, 2, 'tiles1.jpg', '/uploads/concerns/concern-2-5f28f7bbf5cae80718230943fccd3fdd.jpg', 'image/jpeg', 13907, '2026-10-04 10:17:08', NULL, NULL),
-(22, 3, NULL, 5, 'tiles1.jpg', '/uploads/concerns/concern-3-5d351a1a2e59af550ff662b56ead594f.jpg', 'image/jpeg', 13907, '2026-10-04 11:01:55', NULL, NULL);
+(22, 3, NULL, 5, 'tiles1.jpg', '/uploads/concerns/concern-3-5d351a1a2e59af550ff662b56ead594f.jpg', 'image/jpeg', 13907, '2026-10-04 11:01:55', NULL, NULL),
+(23, 13, 12, 1, '123.jpg', '/uploads/concerns/comment-12-1791158044734-b7d945002bea2.jpg', 'image/jpeg', 485806, '2026-10-05 07:54:04', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -135,7 +137,8 @@ INSERT INTO `concern_comments` (`id`, `concern_id`, `user_id`, `comment`, `creat
 (8, 1, 2, 'test', '2026-10-04 00:27:28', '2026-10-04 00:27:28'),
 (9, 1, 5, 'still working', '2026-10-04 01:20:14', '2026-10-04 01:20:14'),
 (10, 2, 5, 'working na po', '2026-10-04 10:18:35', '2026-10-04 10:18:35'),
-(11, 2, 2, 'ok mam', '2026-10-04 10:19:19', '2026-10-04 10:19:19');
+(11, 2, 2, 'ok mam', '2026-10-04 10:19:19', '2026-10-04 10:19:19'),
+(12, 13, 1, '', '2026-10-05 07:54:04', '2026-10-05 07:54:04');
 
 -- --------------------------------------------------------
 
@@ -161,7 +164,8 @@ CREATE TABLE `concern_status_attachments` (
 
 INSERT INTO `concern_status_attachments` (`id`, `status_history_id`, `concern_id`, `uploaded_by`, `file_name`, `file_path`, `file_type`, `file_size`, `created_at`) VALUES
 (1, 2, 1, 5, 'Capture001.png', '/uploads/concerns/status-1-aea2484ca0d650ce65afe6c9261f0de5.png', 'image/png', 1818520, '2026-10-04 08:16:00'),
-(2, 5, 2, 5, 'tiles3.jpg', '/uploads/concerns/status-2-e4083bccc2addd2d9178213b6dd2efc7.jpg', 'image/jpeg', 16803, '2026-10-04 11:34:40');
+(2, 5, 2, 5, 'tiles3.jpg', '/uploads/concerns/status-2-e4083bccc2addd2d9178213b6dd2efc7.jpg', 'image/jpeg', 16803, '2026-10-04 11:34:40'),
+(3, 8, 13, 5, 'images-removebg-preview.png', '/uploads/concerns/status-13-84164eb47d213d589fbc7d7830e051b8.png', 'image/png', 128296, '2026-10-05 07:56:19');
 
 -- --------------------------------------------------------
 
@@ -189,7 +193,10 @@ INSERT INTO `concern_status_history` (`id`, `concern_id`, `changed_by`, `old_sta
 (3, 1, 2, 'resolved', 'closed', NULL, '2026-10-04 08:16:47'),
 (4, 2, 5, 'pending', 'in_progress', 'acknowledged.', '2026-10-04 10:18:03'),
 (5, 2, 5, 'in_progress', 'resolved', 'Done resolve this', '2026-10-04 11:34:40'),
-(6, 2, 2, 'resolved', 'closed', NULL, '2026-10-04 11:35:23');
+(6, 2, 2, 'resolved', 'closed', NULL, '2026-10-04 11:35:23'),
+(7, 13, 5, 'pending', 'in_progress', 'ok we already acknowledge', '2026-10-05 07:44:54'),
+(8, 13, 5, 'in_progress', 'resolved', 'already resolved this concern please verify..thank you', '2026-10-05 07:56:19'),
+(9, 13, 4, 'resolved', 'closed', NULL, '2026-10-05 07:57:50');
 
 -- --------------------------------------------------------
 
@@ -241,9 +248,9 @@ CREATE TABLE `organizations` (
 --
 
 INSERT INTO `organizations` (`id`, `name`, `description`, `contact_email`, `contact_number`, `address`, `status`, `created_at`, `updated_at`, `deleted_at`) VALUES
-(1, 'IT Department', 'Information Technology Department', NULL, NULL, NULL, 'active', '2026-10-01 21:22:29', '2026-10-01 21:22:29', NULL),
+(1, 'IT Department', 'Information Technology Department', NULL, NULL, 'UG Alfresco Building A', 'active', '2026-10-01 21:22:29', '2026-10-04 22:36:35', NULL),
 (2, 'VXI', 'BPO Company', NULL, NULL, 'Felcris Centrale Building A', 'active', '2026-10-02 11:44:39', '2026-10-02 11:44:39', NULL),
-(3, 'Engineering Department', 'Felcris Centrale Engineering Team', NULL, NULL, 'Felcris Centrale UG Parking', 'active', '2026-10-02 14:09:36', '2026-10-02 14:09:36', NULL);
+(3, 'Engineering Department', 'Felcris Centrale Engineering Team', NULL, NULL, 'Felcris Centrale UG Parking', 'active', '2026-10-02 14:09:36', '2026-10-04 22:37:00', NULL);
 
 -- --------------------------------------------------------
 
@@ -283,6 +290,7 @@ CREATE TABLE `users` (
   `last_name` varchar(100) NOT NULL,
   `role_id` int(10) UNSIGNED NOT NULL,
   `organization_id` int(10) UNSIGNED DEFAULT NULL,
+  `profile_photo` varchar(255) DEFAULT NULL,
   `status` enum('active','inactive','suspended') NOT NULL DEFAULT 'active',
   `last_login_at` datetime DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
@@ -295,11 +303,12 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password_hash`, `first_name`, `middle_name`, `last_name`, `role_id`, `organization_id`, `status`, `last_login_at`, `created_at`, `updated_at`, `deleted_at`) VALUES
-(1, 'superadmin', '$2b$12$7Q2BZNGJ8VG8/aX288L7zextU/UWOthz0MWQarPSPUik6UwaYlnXK', 'System', NULL, 'Administrator', 1, NULL, 'active', '2026-10-04 16:34:34', '2026-10-01 21:22:29', '2026-10-04 16:34:34', NULL),
-(2, 'anna', '$2b$12$WoKBHfx6YUm5VGwaKVn5V./JI6sx8Iv6czZ/qi8x0ww82a3tfirNy', 'Anna', 'Dela', 'Fuente', 2, 1, 'active', '2026-10-04 11:58:30', '2026-10-02 11:04:52', '2026-10-04 15:17:01', NULL),
+(1, 'superadmin', '$2b$12$7Q2BZNGJ8VG8/aX288L7zextU/UWOthz0MWQarPSPUik6UwaYlnXK', 'System', NULL, 'Administrator', 1, NULL, 'active', '2026-10-05 10:01:48', '2026-10-01 21:22:29', '2026-10-05 10:01:48', NULL),
+(2, 'anna', '$2b$12$WoKBHfx6YUm5VGwaKVn5V./JI6sx8Iv6czZ/qi8x0ww82a3tfirNy', 'Anna', 'Dela', 'Fuente', 2, 1, 'active', '2026-10-04 22:18:00', '2026-10-02 11:04:52', '2026-10-04 22:18:00', NULL),
 (3, 'juan123', '$2b$12$g6jwacvi2I/Mjuxznjqmi.b56UDzfZp3skg6/O6BZtydNNIGeelJq', 'juan', 'dela', 'cruz', 2, 3, 'active', '2026-10-03 23:38:13', '2026-10-03 21:36:12', '2026-10-03 23:38:13', NULL),
-(4, 'john', '$2b$12$Sm6WMLnnsr3J.0vG8rWFv.kC71V5KawFXzQ7L11GILFFxDeBuTzNm', 'john', 'doe', 'doe', 2, 2, 'active', '2026-10-04 16:34:28', '2026-10-03 21:46:59', '2026-10-04 16:34:28', NULL),
-(5, 'rose', '$2b$12$848WcWXTx.bI9TPSuqDizevBId4ZBemi3u7ASO//MKsAmNyGPolw2', 'rosemarie', NULL, 'dimagiba', 2, 3, 'active', '2026-10-04 11:33:54', '2026-10-03 21:48:33', '2026-10-04 11:33:54', NULL);
+(4, 'john', '$2b$12$Sm6WMLnnsr3J.0vG8rWFv.kC71V5KawFXzQ7L11GILFFxDeBuTzNm', 'john', 'doe', 'doe', 2, 2, 'active', '2026-10-05 07:57:20', '2026-10-03 21:46:59', '2026-10-05 07:57:20', NULL),
+(5, 'rose', '$2b$12$848WcWXTx.bI9TPSuqDizevBId4ZBemi3u7ASO//MKsAmNyGPolw2', 'rosemarie', NULL, 'dimagiba', 2, 3, 'active', '2026-10-05 07:54:54', '2026-10-03 21:48:33', '2026-10-05 07:54:54', NULL),
+(6, 'sample', '$2b$12$p7PWE8B6Awwdjx5zob.sRuv/xW6Yly/ErTIouWyUoZKO/rK131LaC', 'sample', NULL, 'user', 3, 1, 'active', NULL, '2026-10-04 22:13:40', '2026-10-04 22:13:40', NULL);
 
 -- --------------------------------------------------------
 
@@ -410,7 +419,32 @@ INSERT INTO `user_sessions` (`id`, `user_id`, `session_token_hash`, `expires_at`
 (87, 1, '61b5426d9306b00086acbeba5e1befa8fdfb64e782918d12fbaa9c47420f24ce', '2026-10-05 00:21:36', '2026-10-04 16:21:36', '2026-10-04 16:34:04'),
 (88, 1, 'b9bf98486e282fa347032feea125acde1c5a5ba7ee149cc1d48681a539226e03', '2026-10-05 00:34:19', '2026-10-04 16:34:19', '2026-10-04 16:34:25'),
 (89, 4, '7963dd1a77eafa84ef6fd46bbf1004531c9a8d7be3583f6b0f9a8a439fca89c1', '2026-10-05 00:34:28', '2026-10-04 16:34:28', '2026-10-04 16:34:30'),
-(90, 1, 'a4d932fec0608e6d4ea0847597b74c57aa099eede090ce9054adfee94fd23c94', '2026-10-05 00:34:34', '2026-10-04 16:34:34', '2026-10-04 16:46:03');
+(90, 1, 'a4d932fec0608e6d4ea0847597b74c57aa099eede090ce9054adfee94fd23c94', '2026-10-05 00:34:34', '2026-10-04 16:34:34', '2026-10-04 16:46:03'),
+(91, 1, '57a79ef4f7f842ca40cf0375fbfe77da4a874be30059ef9db6dbad778218f727', '2026-10-05 05:25:19', '2026-10-04 21:25:19', NULL),
+(92, 1, '8dc1b887e1998a6c369819780a820f36e1058cd5ca8348c1a35a51b161960791', '2026-10-05 05:27:33', '2026-10-04 21:27:33', '2026-10-04 22:17:47'),
+(93, 2, '23865d0d129dcabdd7d21eaeec3d5bc538433021465ca2b216b291d9dfac7e24', '2026-10-05 06:18:00', '2026-10-04 22:18:00', '2026-10-04 22:26:35'),
+(94, 1, '96d1fd7e270eecea8e8d4f10e418ded1c3cbd5ce13580c11b59ee0e0a63a31d2', '2026-10-05 06:26:39', '2026-10-04 22:26:39', '2026-10-04 23:49:42'),
+(95, 1, 'acd5a71865b0c7687e2140afc209c3a3c96ce03954f707ea869c1f32c859532e', '2026-10-05 15:37:55', '2026-10-05 07:37:55', NULL),
+(96, 4, '7b78b79ae2a4381111ba5c02b0ea0dbcc89628a81b4427ccbeafee7dfb22b776', '2026-10-05 15:40:12', '2026-10-05 07:40:12', NULL),
+(97, 5, 'b138910ca4d474dfab9c95edb5bdf48d09cc3c48e54ba5c4fce33d2bb8cf7db8', '2026-10-05 15:43:45', '2026-10-05 07:43:45', NULL),
+(98, 5, '5aae9692dcef2e77d72d9500fc0ee97c40558205f4474de3f7d2b9bc148d36c2', '2026-10-05 15:54:54', '2026-10-05 07:54:54', '2026-10-05 08:19:27'),
+(99, 4, 'dd9a33b759336b355c72e4986a708e7587a6c601026063404322c3980b4bf524', '2026-10-05 15:57:20', '2026-10-05 07:57:20', NULL),
+(100, 1, '4f948468b7d73fc623cfc0f1f8ce66807dd454e90da63408db986d1048d204a2', '2026-10-05 16:09:17', '2026-10-05 08:09:17', '2026-10-05 09:13:43'),
+(101, 1, 'eac1147ef0b1fc8e9af18411f56ce102d223211b419179666559dac53ca34456', '2026-10-05 16:15:19', '2026-10-05 08:15:19', '2026-10-05 09:14:19'),
+(102, 1, '65178ea53e51c42155af32b95804de2bf8ecc90f41785b0f140d36f955c4ec4b', '2026-10-05 16:17:55', '2026-10-05 08:17:55', '2026-10-05 09:16:27'),
+(103, 1, 'b5e53e477712dedbabf450511e29bebec77575c42d3dcc4f23b56fe98e70f579', '2026-10-05 17:15:42', '2026-10-05 09:15:42', '2026-10-05 09:15:43'),
+(104, 1, 'ec8b4fe8f5bd92130f1c18128a2c2281e5a77687857e776c0902303d99a35072', '2026-10-05 17:16:09', '2026-10-05 09:16:09', '2026-10-05 09:26:01'),
+(105, 1, '71df46b3e4479c2673c4884695e2f037b03e095a9eb571e764860e4f72f5e462', '2026-10-05 17:16:39', '2026-10-05 09:16:39', '2026-10-05 09:17:32'),
+(106, 1, '71b74d8410303c5941069adb09b289d38a683066ed37f0d1eacf9091f4c049b8', '2026-10-05 17:17:46', '2026-10-05 09:17:46', '2026-10-05 09:18:03'),
+(107, 1, '29d67185ae5baceb5580eecd5ed7af4308b36f6c281f0ac18b0ebebf9bfc4bb6', '2026-10-05 17:27:30', '2026-10-05 09:27:30', '2026-10-05 09:28:03'),
+(108, 1, 'ffe052222e27ddddacb2b830fac3edcfabdee884c83a1bfbbdf8e720eea39e8e', '2026-10-05 17:31:37', '2026-10-05 09:31:37', '2026-10-05 09:32:03'),
+(109, 1, '725747d4c51c6e823de169bde8cdf7eee62f38a9f335210be051a40785db61e4', '2026-10-05 17:34:23', '2026-10-05 09:34:23', '2026-10-05 09:34:37'),
+(110, 1, '277853424600b14bcf09a7f9aab2ca9300fb2ceb073969afb03c9c429cd6ed2a', '2026-10-05 17:34:42', '2026-10-05 09:34:42', '2026-10-05 09:37:27'),
+(111, 1, '652fd9a37710a174a05f1436cd278ee0a924c8964880241ad20d490d7f81e9ce', '2026-10-05 17:36:32', '2026-10-05 09:36:32', '2026-10-05 09:37:20'),
+(112, 1, 'fae630ea8e65ba962102f8141fbc5bded77a52d89a60e60c1b11582849fd0a6c', '2026-10-05 17:44:12', '2026-10-05 09:44:12', '2026-10-05 09:47:23'),
+(113, 1, 'cc6422b83ce02561bad473a1ef428dc806e7383216593a6cb2129fd118ec7841', '2026-10-05 17:56:36', '2026-10-05 09:56:36', NULL),
+(114, 1, 'c1f9fb77ef96e2ffae868456f3cb051dac94bba4fae18218abfb64254d163f40', '2026-10-05 17:59:04', '2026-10-05 09:59:04', NULL),
+(115, 1, '217daeb29b8d3e9eab1374e6c26e1b8aa4fb8faca15ff3867122b786c43ec99c', '2026-10-05 18:01:48', '2026-10-05 10:01:48', NULL);
 
 --
 -- Indexes for dumped tables
@@ -516,31 +550,31 @@ ALTER TABLE `user_sessions`
 -- AUTO_INCREMENT for table `concerns`
 --
 ALTER TABLE `concerns`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `concern_attachments`
 --
 ALTER TABLE `concern_attachments`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- AUTO_INCREMENT for table `concern_comments`
 --
 ALTER TABLE `concern_comments`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `concern_status_attachments`
 --
 ALTER TABLE `concern_status_attachments`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `concern_status_history`
 --
 ALTER TABLE `concern_status_history`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `concern_types`
@@ -564,13 +598,13 @@ ALTER TABLE `roles`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `user_sessions`
 --
 ALTER TABLE `user_sessions`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=91;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=116;
 
 --
 -- Constraints for dumped tables
