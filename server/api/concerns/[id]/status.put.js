@@ -113,6 +113,7 @@ export default defineEventHandler(async (event) => {
         c.created_by,
         c.assigned_organization_id,
         c.status,
+        c.deleted_at,
         c.target_commitment_at,
         c.resolved_at,
         c.closed_at,
@@ -134,6 +135,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const concern = concernRows[0];
+
+  if (concern.deleted_at) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "A trashed concern cannot be updated.",
+    });
+  }
 
   /*
    * ---------------------------------------------------------
@@ -595,7 +603,7 @@ export default defineEventHandler(async (event) => {
 
     const [lockedRows] = await connection.query(
       `
-        SELECT id, status
+        SELECT id, status, deleted_at
         FROM concerns
         WHERE id = ?
         LIMIT 1
@@ -612,6 +620,13 @@ export default defineEventHandler(async (event) => {
     }
 
     const lockedConcern = lockedRows[0];
+
+    if (lockedConcern.deleted_at) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: "A trashed concern cannot be updated.",
+      });
+    }
 
     if (lockedConcern.status !== concern.status) {
       throw createError({
@@ -653,6 +668,7 @@ export default defineEventHandler(async (event) => {
 
         WHERE id = ?
           AND status = ?
+          AND deleted_at IS NULL
       `,
       [
         newStatus,

@@ -50,7 +50,12 @@ export default defineEventHandler(async (event) => {
             c.target_commitment_at,
             c.updated_at,
             c.resolved_at,
-            c.closed_at
+            c.closed_at,
+            c.deleted_at,
+            c.deleted_by,
+            CONCAT(deleted_user.first_name, ' ', deleted_user.last_name) AS deleted_by_name,
+            creator_org.deleted_at AS creator_organization_deleted_at,
+            assigned_org.deleted_at AS assigned_organization_deleted_at
 
         FROM concerns c
 
@@ -65,6 +70,9 @@ export default defineEventHandler(async (event) => {
 
         LEFT JOIN organizations assigned_org
             ON assigned_org.id = c.assigned_organization_id
+
+        LEFT JOIN users deleted_user
+          ON deleted_user.id = c.deleted_by
 
         WHERE c.id = ?
 
@@ -81,6 +89,24 @@ export default defineEventHandler(async (event) => {
   }
 
   const concern = concernRows[0];
+
+  if (concern.deleted_at && currentUser.role_name !== "superadmin") {
+    const isAuthorizedAdmin =
+      currentUser.role_name === "admin" &&
+      currentUser.organization_id != null &&
+      Number(currentUser.organization_id) === Number(concern.creator_organization_id);
+
+    const isAuthorizedUser =
+      currentUser.role_name === "user" &&
+      Number(currentUser.id) === Number(concern.created_by);
+
+    if (!isAuthorizedAdmin && !isAuthorizedUser) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Concern not found.",
+      });
+    }
+  }
 
   /*
    * Check whether the current user is allowed
@@ -172,6 +198,21 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 403,
       statusMessage: "Invalid user role.",
+    });
+  }
+
+  if (
+    currentUser.role_name !== "superadmin" &&
+    (
+      (concern.creator_organization_id != null &&
+        concern.creator_organization_deleted_at != null) ||
+      (concern.assigned_organization_id != null &&
+        concern.assigned_organization_deleted_at != null)
+    )
+  ) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: "Concern not found.",
     });
   }
 

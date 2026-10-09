@@ -21,7 +21,8 @@ export default defineEventHandler(async (event) => {
     SELECT
         id,
         created_by,
-        status
+        status,
+        deleted_at
     FROM concerns
         WHERE id = ?
         LIMIT 1
@@ -37,6 +38,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const concern = concerns[0];
+
+  if (concern.deleted_at) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Attachments cannot be added to a trashed concern.",
+    });
+  }
 
   if (
     concern.status === "resolved" ||

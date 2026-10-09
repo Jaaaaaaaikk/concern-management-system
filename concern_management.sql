@@ -41,7 +41,9 @@ CREATE TABLE `concerns` (
   `target_commitment_at` datetime DEFAULT NULL,
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `resolved_at` datetime DEFAULT NULL,
-  `closed_at` datetime DEFAULT NULL
+  `closed_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `deleted_by` int(10) UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -590,7 +592,8 @@ ALTER TABLE `concerns`
   ADD KEY `idx_concerns_status` (`status`),
   ADD KEY `idx_concerns_priority` (`priority`),
   ADD KEY `idx_concerns_type` (`concern_type_id`),
-  ADD KEY `idx_concerns_created_at` (`created_at`);
+  ADD KEY `idx_concerns_created_at` (`created_at`),
+  ADD KEY `idx_concerns_deleted_at` (`deleted_at`);
 
 --
 -- Indexes for table `concern_attachments`
@@ -744,6 +747,7 @@ ALTER TABLE `user_sessions`
 --
 ALTER TABLE `concerns`
   ADD CONSTRAINT `fk_concerns_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_concerns_deleted_by` FOREIGN KEY (`deleted_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_concerns_organization` FOREIGN KEY (`assigned_organization_id`) REFERENCES `organizations` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_concerns_type` FOREIGN KEY (`concern_type_id`) REFERENCES `concern_types` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 

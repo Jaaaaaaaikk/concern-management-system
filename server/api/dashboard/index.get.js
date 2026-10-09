@@ -226,8 +226,7 @@ export default defineEventHandler(async (event) => {
                 o.id,
                 o.name
             FROM organizations o
-            WHERE o.status = 'active'
-              AND o.deleted_at IS NULL
+            WHERE o.deleted_at IS NULL
             ORDER BY o.name ASC
             `,
   );
@@ -272,7 +271,6 @@ export default defineEventHandler(async (event) => {
                     )
                     ${dateCondition ? `AND ${dateCondition}` : ""}
                 WHERE o.id = ?
-                  AND o.status = 'active'
                   AND o.deleted_at IS NULL
                 GROUP BY
                     o.id,
@@ -301,8 +299,7 @@ export default defineEventHandler(async (event) => {
                         )
                     )
                     ${dateCondition ? `AND ${dateCondition}` : ""}
-                WHERE o.status = 'active'
-                  AND o.deleted_at IS NULL
+                WHERE o.deleted_at IS NULL
                 GROUP BY
                     o.id,
                     o.name
@@ -330,7 +327,6 @@ export default defineEventHandler(async (event) => {
                 )
                 ${dateCondition ? `AND ${dateCondition}` : ""}
             WHERE o.id = ?
-              AND o.status = 'active'
               AND o.deleted_at IS NULL
             GROUP BY
                 o.id,

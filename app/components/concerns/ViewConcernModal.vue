@@ -35,6 +35,8 @@ const concernStatusHistory = ref([])
 const loadingConcernDetails = ref(false)
 const savingComment = ref(false)
 const updatingStatus = ref(false)
+const updatingTrash = ref(false)
+const trashConfirmation = ref('')
 
 const newComment = ref('')
 const selectedStatus = ref('')
@@ -622,6 +624,10 @@ function canEditOriginalAttachments() {
         return false
     }
 
+    if (selectedConcern.value.deleted_at) {
+        return false
+    }
+
     return (
         props.currentUser.role_name === 'superadmin' ||
         Number(selectedConcern.value.created_by) ===
@@ -641,6 +647,10 @@ function canComment() {
         return false
     }
 
+    if (selectedConcern.value.deleted_at) {
+        return false
+    }
+
     if (props.currentUser.role_name === 'superadmin') {
         return true
     }
@@ -649,6 +659,165 @@ function canComment() {
         isCreatorOrganizationMember() ||
         isAssignedOrganizationMember()
     )
+}
+
+function canTrashConcern() {
+    if (
+        !props.currentUser ||
+        !selectedConcern.value ||
+        selectedConcern.value.status !== 'pending' ||
+        selectedConcern.value.deleted_at
+    ) {
+        return false
+    }
+
+    if (props.currentUser.role_name === 'user') {
+        return Number(selectedConcern.value.created_by) === Number(props.currentUser.id)
+    }
+
+    return isCreatorOrganizationAdmin()
+}
+
+function isTrashedConcern() {
+    return Boolean(selectedConcern.value?.deleted_at)
+}
+
+function canRestoreTrashedConcern() {
+    if (
+        !selectedConcern.value ||
+        !isTrashedConcern()
+    ) {
+        return false
+    }
+
+    if (props.currentUser?.role_name === 'superadmin') {
+        return true
+    }
+
+    if (selectedConcern.value.status !== 'pending') {
+        return false
+    }
+
+    if (props.currentUser?.role_name === 'admin') {
+        return Number(props.currentUser.organization_id) ===
+            Number(selectedConcern.value.creator_organization_id)
+    }
+
+    return props.currentUser?.role_name === 'user' &&
+        Number(props.currentUser.id) === Number(selectedConcern.value.created_by)
+}
+
+function requestTrashConfirmation(action) {
+    trashConfirmation.value = action
+}
+
+function cancelTrashConfirmation() {
+    if (!updatingTrash.value) {
+        trashConfirmation.value = ''
+    }
+}
+
+async function confirmTrashAction() {
+    const action = trashConfirmation.value
+
+    if (!action || updatingTrash.value) {
+        return
+    }
+
+    if (action === 'trash') {
+        await trashConcern()
+    } else if (action === 'restore') {
+        await restoreConcern()
+    } else if (action === 'purge') {
+        await permanentlyDeleteConcern()
+    }
+
+    trashConfirmation.value = ''
+}
+
+async function trashConcern() {
+    if (!canTrashConcern() || updatingTrash.value) {
+        return
+    }
+
+    updatingTrash.value = true
+
+    try {
+        await $fetch(`/api/concerns/${selectedConcern.value.id}/trash`, {
+            method: 'PATCH'
+        })
+
+        showToast('Concern moved to trash.', 'success')
+        emit('refresh')
+        emit('close')
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            'Failed to move concern to trash.',
+            'error'
+        )
+    } finally {
+        updatingTrash.value = false
+    }
+}
+
+async function restoreConcern() {
+    if (
+        !canRestoreTrashedConcern() ||
+        updatingTrash.value
+    ) {
+        return
+    }
+
+    updatingTrash.value = true
+
+    try {
+        await $fetch(`/api/concerns/${selectedConcern.value.id}/restore`, {
+            method: 'PATCH'
+        })
+
+        showToast('Concern restored successfully.', 'success')
+        emit('refresh')
+        emit('close')
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            'Failed to restore concern.',
+            'error'
+        )
+    } finally {
+        updatingTrash.value = false
+    }
+}
+
+async function permanentlyDeleteConcern() {
+    if (
+        props.currentUser?.role_name !== 'superadmin' ||
+        !isTrashedConcern() ||
+        updatingTrash.value
+    ) {
+        return
+    }
+
+    updatingTrash.value = true
+
+    try {
+        await $fetch(`/api/concerns/${selectedConcern.value.id}/purge`, {
+            method: 'DELETE'
+        })
+
+        showToast('Concern permanently deleted.', 'success')
+        emit('refresh')
+        emit('close')
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            'Failed to permanently delete concern.',
+            'error'
+        )
+    } finally {
+        updatingTrash.value = false
+    }
 }
 
 /*
@@ -970,6 +1139,7 @@ function closeViewModal() {
     if (
         savingComment.value ||
         updatingStatus.value ||
+        updatingTrash.value ||
         addingAttachments.value ||
         replacingAttachmentId.value
     ) {
@@ -992,6 +1162,7 @@ function closeViewModal() {
     statusRemarks.value = ''
     targetCommitmentAt.value = null
     newComment.value = ''
+    trashConfirmation.value = ''
 
     editingAttachmentId.value = null
 
@@ -1999,6 +2170,7 @@ onUnmounted(() => {
 
                 <button type="button" @click="closeViewModal" :disabled="savingComment ||
                     updatingStatus ||
+                    updatingTrash ||
                     addingAttachments ||
                     replacingAttachmentId
                     "
@@ -2128,18 +2300,87 @@ onUnmounted(() => {
 
                     </div>
 
+                    <!-- Trashed Concern Controls -->
+                    <div v-if="isTrashedConcern() && (currentUser?.role_name === 'superadmin' || canRestoreTrashedConcern())"
+                        class="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-red-900">This concern is in trash</p>
+                            <p class="mt-1 text-xs text-red-700">
+                                Trashed {{ formatDate(selectedConcern.deleted_at) }}
+                                <span v-if="selectedConcern.deleted_by_name">by {{ selectedConcern.deleted_by_name }}</span>.
+                                Restore this pending concern before its 30-day retention period ends. Expired trash is permanently deleted automatically; superadmins can delete it sooner.
+                            </p>
+                        </div>
+                        <div class="flex shrink-0 gap-2">
+                            <button v-if="canRestoreTrashedConcern()" type="button" @click="requestTrashConfirmation('restore')" :disabled="updatingTrash"
+                                class="cursor-pointer rounded-lg border border-green-300 bg-white px-3 py-2 text-xs font-semibold text-green-800 transition hover:bg-green-50 disabled:opacity-50">
+                                Restore
+                            </button>
+                            <button v-if="currentUser?.role_name === 'superadmin'" type="button" @click="requestTrashConfirmation('purge')" :disabled="updatingTrash"
+                                class="cursor-pointer rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-800 disabled:opacity-50">
+                                Permanently Delete
+                            </button>
+                        </div>
+
+                        <div v-if="trashConfirmation" class="w-full rounded-lg border border-red-200 bg-white p-4 sm:col-span-2">
+                            <p class="text-sm font-semibold text-slate-800">
+                                {{ trashConfirmation === 'restore'
+                                    ? 'Restore this pending concern?'
+                                    : 'Permanently delete this concern and its attachments, comments, and history? This cannot be undone.' }}
+                            </p>
+                            <div class="mt-3 flex justify-end gap-2">
+                                <button type="button" @click="cancelTrashConfirmation" :disabled="updatingTrash"
+                                    class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                                    Cancel
+                                </button>
+                                <button type="button" @click="confirmTrashAction" :disabled="updatingTrash"
+                                    class="cursor-pointer rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                                    {{ updatingTrash ? 'Working...' : 'Confirm' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="trashConfirmation === 'trash'" class="rounded-xl border border-red-200 bg-red-50 p-4">
+                        <p class="text-sm font-semibold text-red-900">
+                            Move this pending concern to trash?
+                        </p>
+                        <p class="mt-1 text-xs leading-5 text-red-700">
+                            Authorized organization members can restore it while it remains pending.
+                        </p>
+                        <div class="mt-3 flex justify-end gap-2">
+                            <button type="button" @click="cancelTrashConfirmation" :disabled="updatingTrash"
+                                class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                                Cancel
+                            </button>
+                            <button type="button" @click="confirmTrashAction" :disabled="updatingTrash"
+                                class="cursor-pointer rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                                {{ updatingTrash ? 'Moving...' : 'Move to Trash' }}
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Main Information -->
                     <div class="rounded-xl border border-slate-300 bg-white p-5 shadow-md">
 
-                        <div class="mb-5">
+                        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 
-                            <h4 class="text-base font-semibold text-slate-800">
-                                Main Information
-                            </h4>
+                            <div>
+                                <h4 class="text-base font-semibold text-slate-800">
+                                    Main Information
+                                </h4>
 
-                            <p class="mt-1 text-sm text-slate-500">
-                                Details of this concern.
-                            </p>
+                                <p class="mt-1 text-sm text-slate-500">
+                                    Details of this concern.
+                                </p>
+                            </div>
+
+                            <button v-if="canTrashConcern()" type="button" @click="requestTrashConfirmation('trash')"
+                                :disabled="updatingTrash"
+                                class="inline-flex cursor-pointer items-center justify-center gap-2 self-start rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
+                                <span aria-hidden="true">♲</span>
+                                {{ updatingTrash ? 'Moving...' : 'Move to Trash' }}
+                            </button>
 
                         </div>
 
@@ -3382,6 +3623,7 @@ onUnmounted(() => {
 
                 <button type="button" @click="closeViewModal" :disabled="savingComment ||
                     updatingStatus ||
+                    updatingTrash ||
                     addingAttachments ||
                     replacingAttachmentId
                     "

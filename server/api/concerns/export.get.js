@@ -17,6 +17,8 @@ export default defineEventHandler(async (event) => {
 
   const priority = String(queryParams.priority || "").trim();
 
+  const department = Number(queryParams.department || 0);
+
   const date = String(queryParams.date || "").trim();
 
   /*
@@ -87,6 +89,18 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  conditions.push("c.deleted_at IS NULL");
+  conditions.push(`
+    (
+      u.organization_id IS NULL
+      OR (creator_org.id IS NOT NULL AND creator_org.deleted_at IS NULL)
+    )
+    AND (
+      c.assigned_organization_id IS NULL
+      OR (assigned_org.id IS NOT NULL AND assigned_org.deleted_at IS NULL)
+    )
+  `);
+
   /*
    * SEARCH FILTER
    */
@@ -127,6 +141,11 @@ export default defineEventHandler(async (event) => {
         `);
 
     params.push(priority);
+  }
+
+  if (Number.isInteger(department) && department > 0) {
+    conditions.push("c.assigned_organization_id = ?");
+    params.push(department);
   }
 
   /*

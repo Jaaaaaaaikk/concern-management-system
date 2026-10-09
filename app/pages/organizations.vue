@@ -395,19 +395,6 @@ async function updateOrganization() {
 
 
 // --------------------------------------------------
-// STATUS
-// --------------------------------------------------
-
-function statusClass(status) {
-    if (status === 'active') {
-        return 'bg-green-100 text-green-700'
-    }
-
-    return 'bg-red-100 text-red-700'
-}
-
-
-// --------------------------------------------------
 // DATE
 // --------------------------------------------------
 
@@ -627,11 +614,6 @@ onMounted(() => {
 
                                     <th
                                         class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Status
-                                    </th>
-
-                                    <th
-                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                                         Created
                                     </th>
 
@@ -649,7 +631,7 @@ onMounted(() => {
 
                                 <tr v-if="organizations.length === 0">
 
-                                    <td colspan="6" class="px-6 py-10 text-center text-sm text-slate-500">
+                                    <td colspan="5" class="px-6 py-10 text-center text-sm text-slate-500">
                                         No organizations found.
                                     </td>
 
@@ -685,16 +667,6 @@ onMounted(() => {
                                                 '-'
                                             }}
                                         </div>
-
-                                    </td>
-
-
-                                    <td class="whitespace-nowrap px-6 py-4">
-
-                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-                                            :class="statusClass(organization.status)">
-                                            {{ organization.status }}
-                                        </span>
 
                                     </td>
 

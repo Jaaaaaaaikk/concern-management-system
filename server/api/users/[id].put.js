@@ -234,7 +234,6 @@ export default defineEventHandler(async (event) => {
       SELECT id
       FROM organizations
       WHERE id = ?
-        AND status = 'active'
         AND deleted_at IS NULL
       LIMIT 1
       `,
@@ -245,7 +244,7 @@ export default defineEventHandler(async (event) => {
       throw createError({
         statusCode: 400,
         statusMessage:
-          'Invalid or inactive organization.'
+          'Invalid organization.'
       })
     }
   }

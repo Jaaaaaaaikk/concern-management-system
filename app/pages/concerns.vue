@@ -40,11 +40,14 @@ const statusFilter = ref(
 
 const priorityFilter = ref('')
 
+const departmentFilter = ref('')
+
 const exportDateFilter = ref('')
 
 const showViewModal = ref(false)
 
 const selectedConcernId = ref(null)
+const trashView = ref(false)
 
 /*
  * PAGINATION
@@ -613,8 +616,14 @@ async function loadConcerns() {
                     priority:
                         priorityFilter.value,
 
+                    department:
+                        departmentFilter.value,
+
                     date:
                         exportDateFilter.value,
+
+                    view:
+                        trashView.value ? 'trash' : 'active',
 
                     sortBy:
                         sortBy.value,
@@ -645,6 +654,12 @@ async function loadConcerns() {
             response.pagination?.page ||
             currentPage.value
         )
+}
+
+async function toggleTrashView() {
+    trashView.value = !trashView.value
+    currentPage.value = 1
+    await loadConcernsWithLoading()
 }
 
 async function changeSort(column) {
@@ -748,6 +763,16 @@ async function confirmExport() {
             query.set(
                 'priority',
                 priorityFilter.value
+            )
+        }
+
+        if (
+            departmentFilter.value
+        ) {
+
+            query.set(
+                'department',
+                departmentFilter.value
             )
         }
 
@@ -950,6 +975,13 @@ async function handleExportDateChange() {
 }
 
 async function handlePriorityChange() {
+
+    currentPage.value = 1
+
+    await loadConcernsWithLoading()
+}
+
+async function handleDepartmentChange() {
 
     currentPage.value = 1
 
@@ -1345,25 +1377,21 @@ onUnmounted(() => {
 
                     </div>
 
-                    <button
-                        v-if="
-                            currentUser?.role_name ===
-                                'admin' ||
-                            currentUser?.role_name ===
-                                'user'
-                        "
-                        type="button"
-                        @click="openCreateModal"
-                        class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 hover:shadow-md active:scale-[0.99]"
-                    >
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        <button v-if="['superadmin', 'admin', 'user'].includes(currentUser?.role_name)" type="button"
+                            @click="toggleTrashView"
+                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                            <span aria-hidden="true">{{ trashView ? '←' : '▱' }}</span>
+                            {{ trashView ? 'Back to Concerns' : 'View Trash' }}
+                        </button>
 
-                        <span class="text-lg leading-none">
-                            +
-                        </span>
-
-                        Create Concern
-
-                    </button>
+                        <button v-if="!trashView && ['admin', 'user'].includes(currentUser?.role_name)"
+                            type="button" @click="openCreateModal"
+                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 hover:shadow-md active:scale-[0.99]">
+                            <span class="text-lg leading-none">+</span>
+                            Create Concern
+                        </button>
+                    </div>
 
                 </div>
 
@@ -1394,7 +1422,7 @@ onUnmounted(() => {
                     class="mb-6 rounded-xl border border-slate-300 bg-white p-5 shadow-md"
                 >
 
-                    <div class="grid gap-4 md:grid-cols-4">
+                    <div class="grid gap-4 md:grid-cols-5">
 
                         <!-- Search -->
 
@@ -1498,6 +1526,38 @@ onUnmounted(() => {
 
                                 <option value="urgent">
                                     Urgent
+                                </option>
+
+                            </select>
+
+                        </div>
+
+                        <!-- Department -->
+
+                        <div>
+
+                            <label
+                                class="mb-2 block text-sm font-medium text-slate-700"
+                            >
+                                Department
+                            </label>
+
+                            <select
+                                v-model="departmentFilter"
+                                @change="handleDepartmentChange"
+                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
+                            >
+
+                                <option value="">
+                                    All Departments
+                                </option>
+
+                                <option
+                                    v-for="organization in organizations"
+                                    :key="organization.id"
+                                    :value="String(organization.id)"
+                                >
+                                    {{ organization.name }}
                                 </option>
 
                             </select>
@@ -1630,7 +1690,7 @@ onUnmounted(() => {
                         <h3
                             class="text-base font-semibold text-slate-800"
                         >
-                            Concern List
+                            {{ trashView ? 'Trashed Concerns' : 'Concern List' }}
                         </h3>
 
                         <p
@@ -1779,7 +1839,7 @@ onUnmounted(() => {
                         <p
                             class="mt-1 text-xs text-slate-400"
                         >
-                            Try changing your search or filters.
+                            {{ trashView ? 'There are no concerns in trash.' : 'Try changing your search or filters.' }}
                         </p>
 
                     </div>
@@ -2634,7 +2694,7 @@ onUnmounted(() => {
                                             class="mt-1 text-xs leading-5 text-blue-700"
                                         >
                                             The export is not limited to the current table page.
-                                            Your search, status, priority, and selected date will be applied.
+                                            Your search, status, priority, department, and selected date will be applied.
                                         </p>
 
                                     </div>

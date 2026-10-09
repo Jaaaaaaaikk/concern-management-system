@@ -4,7 +4,7 @@ import { requireAuth } from '../../utils/require-auth.js'
 
 export default defineEventHandler(async (event) => {
 
-    await requireAuth(event)
+    const currentUser = await requireAuth(event)
 
     const queryParams = getQuery(event)
 
@@ -24,6 +24,8 @@ export default defineEventHandler(async (event) => {
     const hasPagination =
         queryParams.page !== undefined ||
         queryParams.limit !== undefined
+
+    const organizationWhere = 'deleted_at IS NULL'
 
     let page = Number(queryParams.page) || 1
 
@@ -61,9 +63,8 @@ export default defineEventHandler(async (event) => {
                 address,
                 status,
                 created_at
-            FROM organizations
-            WHERE status = 'active'
-              AND deleted_at IS NULL
+                        FROM organizations
+                        WHERE deleted_at IS NULL
             ORDER BY name ASC
         `)
 
@@ -74,14 +75,13 @@ export default defineEventHandler(async (event) => {
     }
 
     /*
-     * GET TOTAL ACTIVE ORGANIZATIONS
+    * GET TOTAL ORGANIZATIONS IN THE SELECTED STATUS SCOPE
      */
 
     const [countRows] = await db.query(`
         SELECT COUNT(*) AS total
         FROM organizations
-        WHERE status = 'active'
-          AND deleted_at IS NULL
+        WHERE ${organizationWhere}
     `)
 
     const total = Number(
@@ -128,8 +128,7 @@ export default defineEventHandler(async (event) => {
             status,
             created_at
         FROM organizations
-        WHERE status = 'active'
-          AND deleted_at IS NULL
+        WHERE ${organizationWhere}
         ORDER BY name ASC
         LIMIT ? OFFSET ?
     `, [

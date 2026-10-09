@@ -42,9 +42,17 @@ export default defineEventHandler(async (event) => {
         queryParams.priority || ''
     ).trim()
 
+    const department = Number(
+        queryParams.department || 0
+    )
+
     const date = String(
         queryParams.date || ''
     ).trim()
+
+    const trashView = String(
+        queryParams.view || ''
+    ).trim() === 'trash'
 
     const sortColumns = {
         title: 'c.title',
@@ -168,6 +176,43 @@ export default defineEventHandler(async (event) => {
         })
     }
 
+    if (trashView) {
+        if (currentUser.role_name === 'admin') {
+            conditions.push('u.organization_id = ?')
+            params.push(currentUser.organization_id)
+            conditions.push("c.status = 'pending'")
+        } else if (currentUser.role_name === 'user') {
+            conditions.push('c.created_by = ?')
+            params.push(currentUser.id)
+            conditions.push("c.status = 'pending'")
+        }
+    }
+
+    conditions.push(
+        trashView
+            ? 'c.deleted_at IS NOT NULL'
+            : 'c.deleted_at IS NULL'
+    )
+
+    if (!trashView) {
+        conditions.push(`
+            (
+                u.organization_id IS NULL
+                OR (
+                    creator_org.id IS NOT NULL
+                    AND creator_org.deleted_at IS NULL
+                )
+            )
+            AND (
+                c.assigned_organization_id IS NULL
+                OR (
+                    assigned_org.id IS NOT NULL
+                    AND assigned_org.deleted_at IS NULL
+                )
+            )
+        `)
+    }
+
     /*
      * SEARCH
      *
@@ -217,6 +262,11 @@ export default defineEventHandler(async (event) => {
         `)
 
         params.push(priority)
+    }
+
+    if (Number.isInteger(department) && department > 0) {
+        conditions.push('c.assigned_organization_id = ?')
+        params.push(department)
     }
 
     /*
@@ -311,6 +361,10 @@ export default defineEventHandler(async (event) => {
         FROM concerns c
         INNER JOIN users u
             ON u.id = c.created_by
+        LEFT JOIN organizations creator_org
+            ON creator_org.id = u.organization_id
+        LEFT JOIN organizations assigned_org
+            ON assigned_org.id = c.assigned_organization_id
         ${whereClause}
     `
 
@@ -372,7 +426,10 @@ export default defineEventHandler(async (event) => {
             c.target_commitment_at,
             c.updated_at,
             c.resolved_at,
-            c.closed_at
+            c.closed_at,
+            c.deleted_at,
+            c.deleted_by,
+            CONCAT(deleted_user.first_name, ' ', deleted_user.last_name) AS deleted_by_name
 
         FROM concerns c
 
@@ -387,6 +444,9 @@ export default defineEventHandler(async (event) => {
 
         LEFT JOIN organizations assigned_org
             ON assigned_org.id = c.assigned_organization_id
+
+        LEFT JOIN users deleted_user
+            ON deleted_user.id = c.deleted_by
 
         ${whereClause}
 

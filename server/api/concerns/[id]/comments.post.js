@@ -50,6 +50,7 @@ export default defineEventHandler(async (event) => {
           c.created_by,
           c.assigned_organization_id,
           c.status,
+          c.deleted_at,
           creator.organization_id AS creator_organization_id
       FROM concerns c
       LEFT JOIN users creator
@@ -68,6 +69,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const concern = concernRows[0];
+
+  if (concern.deleted_at) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Comments cannot be added to a trashed concern.",
+    });
+  }
 
   /*
    * A concern is only completed for commenting when:

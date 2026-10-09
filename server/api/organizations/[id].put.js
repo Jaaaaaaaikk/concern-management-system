@@ -45,7 +45,6 @@ export default defineEventHandler(async (event) => {
             SELECT id
             FROM organizations
             WHERE id = ?
-              AND status = 'active'
               AND deleted_at IS NULL
             LIMIT 1
             `,
@@ -71,7 +70,6 @@ export default defineEventHandler(async (event) => {
                 description = ?,
                 address = ?
             WHERE id = ?
-              AND status = 'active'
               AND deleted_at IS NULL
             `,
             [
