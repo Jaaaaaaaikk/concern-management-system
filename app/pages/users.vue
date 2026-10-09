@@ -831,9 +831,9 @@ onMounted(() => {
         <MobileNavigation :current-user="currentUser" @logout="logout" @profile-updated="updateProfilePhoto" />
 
         <!-- Sidebar -->
-        <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-emerald-950 text-white lg:flex">
+        <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-blue-950 text-white lg:flex">
 
-            <div class="border-b border-emerald-900 px-6 py-5">
+            <div class="border-b border-blue-900 px-6 py-5">
 
                 <h1 class="text-lg font-bold">
                     Felcris Centrale
@@ -848,35 +848,35 @@ onMounted(() => {
             <nav class="flex-1 space-y-1 px-3 py-4">
 
                 <NuxtLink to="/dashboard"
-                    :class="$route.path === '/dashboard' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="dashboard" />
                     <span>Dashboard</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
-                    :class="$route.path === '/organizations' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="organizations" />
                     <span>Manage Organizations</span>
                 </NuxtLink>
 
                 <NuxtLink to="/concerns"
-                    :class="$route.path === '/concerns' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/concerns' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="concerns" />
                     <span>Manage Concerns</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
-                    :class="$route.path === '/users' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="users" />
                     <span>Manage Users</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/login-history"
-                    :class="$route.path === '/login-history' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/login-history' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="history" />
                     <span>Login History</span>
@@ -884,7 +884,7 @@ onMounted(() => {
 
             </nav>
 
-            <div class="border-t border-emerald-900 p-4">
+            <div class="border-t border-blue-900 p-4">
                 <UserProfileControl :current-user="currentUser" @logout="logout"
                     @profile-updated="updateProfilePhoto" />
             </div>
@@ -912,7 +912,7 @@ onMounted(() => {
                     </div>
 
                     <button type="button" @click="openCreateModal"
-                        class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-800 hover:shadow-md active:scale-[0.99]">
+                        class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 hover:shadow-md active:scale-[0.99]">
 
                         <span class="text-lg leading-none">
                             +
@@ -1198,7 +1198,7 @@ onMounted(() => {
                                 </span>
 
                                 <button v-else type="button" @click="goToPage(page)" :class="page === currentPage
-                                    ? 'bg-emerald-900 text-white'
+                                    ? 'bg-blue-900 text-white'
                                     : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
                                     "
                                     class="min-w-9 cursor-pointer rounded-lg px-3 py-2 text-sm font-medium transition">
@@ -1252,7 +1252,7 @@ onMounted(() => {
                 <div class="flex items-start gap-4">
                     <div
                         class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                        :class="statusConfirmation.newStatus === 'inactive' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'"
+                        :class="statusConfirmation.newStatus === 'inactive' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'"
                     >
                         <svg v-if="statusConfirmation.newStatus === 'inactive'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-6 w-6" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12v-.008z" />
@@ -1287,7 +1287,7 @@ onMounted(() => {
                         type="button"
                         :disabled="statusConfirmationLoading"
                         class="cursor-pointer rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                        :class="statusConfirmation.newStatus === 'inactive' ? 'bg-red-700 hover:bg-red-800' : 'bg-emerald-800 hover:bg-emerald-900'"
+                        :class="statusConfirmation.newStatus === 'inactive' ? 'bg-red-700 hover:bg-red-800' : 'bg-blue-800 hover:bg-blue-900'"
                         @click="confirmStatusChange"
                     >
                         {{ statusConfirmationLoading

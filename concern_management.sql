@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 05, 2026 at 08:43 AM
+-- Generation Time: Oct 09, 2026 at 07:11 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -38,7 +38,7 @@ CREATE TABLE `concerns` (
   `status` enum('pending','in_progress','on_hold','resolved','closed') NOT NULL DEFAULT 'pending',
   `priority` enum('low','medium','high','urgent') NOT NULL DEFAULT 'medium',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
-  `acknowledged_at` datetime DEFAULT NULL,
+  `target_commitment_at` datetime DEFAULT NULL,
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `resolved_at` datetime DEFAULT NULL,
   `closed_at` datetime DEFAULT NULL
@@ -48,20 +48,18 @@ CREATE TABLE `concerns` (
 -- Dumping data for table `concerns`
 --
 
-INSERT INTO `concerns` (`id`, `concern_number`, `title`, `description`, `concern_type_id`, `created_by`, `assigned_organization_id`, `status`, `priority`, `created_at`, `acknowledged_at`, `updated_at`, `resolved_at`, `closed_at`) VALUES
-(1, 'CON-2026-00001', 'pipe', 'the pipe was leaking at UG alfresco restroom', 3, 2, 3, 'closed', 'high', '2026-10-03 21:37:36', '2026-10-03 21:49:10', '2026-10-04 09:33:38', '2026-10-04 08:16:00', '2026-10-04 08:16:47'),
-(2, 'CON-2026-00002', 'tiles', 'the tiles cracked', 3, 2, 3, 'closed', 'urgent', '2026-10-04 10:17:08', '2026-10-04 10:18:03', '2026-10-04 11:35:23', '2026-10-04 11:34:40', '2026-10-04 11:35:23'),
-(3, 'CON-2026-00003', 'dasd', 'asdasdas', 2, 5, 2, 'pending', 'urgent', '2026-10-04 11:01:55', NULL, '2026-10-04 11:01:55', NULL, NULL),
-(4, 'CON-2026-00004', 'pipe', 'pipe leak', 3, 2, 3, 'pending', 'high', '2026-10-04 11:51:18', NULL, '2026-10-04 11:51:18', NULL, NULL),
-(5, 'CON-2026-00005', 'tiles', 'unmatched on tiles.', 3, 2, 3, 'pending', 'high', '2026-10-04 11:51:41', NULL, '2026-10-04 11:51:41', NULL, NULL),
-(6, 'CON-2026-00006', 'tiles', 'tiles has slight crack', 3, 2, 3, 'pending', 'high', '2026-10-04 11:51:59', NULL, '2026-10-04 11:51:59', NULL, NULL),
-(7, 'CON-2026-00007', 'tiles', 'tiles has cracked', 3, 2, 3, 'pending', 'high', '2026-10-04 11:52:24', NULL, '2026-10-04 11:52:24', NULL, NULL),
-(8, 'CON-2026-00008', 'wall cracked', 'wall has cracked need to fix.', 3, 2, 3, 'pending', 'urgent', '2026-10-04 11:52:56', NULL, '2026-10-04 11:52:56', NULL, NULL),
-(9, 'CON-2026-00009', 'Faucet', 'The faucet on CR was broken.', 3, 2, 3, 'pending', 'urgent', '2026-10-04 11:53:34', NULL, '2026-10-04 11:53:34', NULL, NULL),
-(10, 'CON-2026-00010', 'dirty floor', 'need to fix the floor because its dirty', 3, 2, 3, 'pending', 'high', '2026-10-04 11:54:04', NULL, '2026-10-04 11:54:04', NULL, NULL),
-(11, 'CON-2026-00011', 'No electricity', 'No electricity on our office', 3, 2, 3, 'pending', 'urgent', '2026-10-04 11:54:30', NULL, '2026-10-04 11:54:30', NULL, NULL),
-(12, 'CON-2026-00012', 'wire loose', 'need assistance to fix the wire loosen here in our office.', 3, 2, 3, 'pending', 'urgent', '2026-10-04 11:54:55', NULL, '2026-10-04 11:54:55', NULL, NULL),
-(13, 'CON-2026-00013', 'ceiling water leaks', 'ceiling water at 3rd lobby', 3, 4, 3, 'closed', 'high', '2026-10-05 07:42:48', '2026-10-05 07:44:54', '2026-10-05 07:57:50', '2026-10-05 07:56:19', '2026-10-05 07:57:50');
+INSERT INTO `concerns` (`id`, `concern_number`, `title`, `description`, `concern_type_id`, `created_by`, `assigned_organization_id`, `status`, `priority`, `created_at`, `target_commitment_at`, `updated_at`, `resolved_at`, `closed_at`) VALUES
+(1, 'CON-2026-00001', 'waterleaks', 'waterleaks at UG alfresco', 3, 4, 3, 'in_progress', 'high', '2026-10-07 08:21:51', '2026-10-07 09:01:00', '2026-10-07 08:59:49', NULL, NULL),
+(2, 'CON-2026-00002', 'leaks', 'water leaks at cr male 3rd floor', 2, 4, 3, 'in_progress', 'high', '2026-10-07 09:33:02', '2026-10-07 09:36:00', '2026-10-07 09:35:14', NULL, NULL),
+(3, 'CON-2026-00003', 'wall cracks', 'wall cracks at our hallway', 3, 4, 3, 'resolved', 'high', '2026-10-07 09:53:14', '2026-10-09 17:43:00', '2026-10-09 12:44:59', '2026-10-09 12:44:59', NULL),
+(4, 'CON-2026-00004', 'test', 'testing', 3, 6, 2, 'resolved', 'urgent', '2026-10-07 14:13:27', '2026-10-07 14:50:00', '2026-10-07 14:30:11', '2026-10-07 14:30:11', NULL),
+(5, 'CON-2026-00005', 'test', 'test1', 3, 6, 2, 'closed', 'urgent', '2026-10-08 10:24:59', '2026-10-08 00:00:00', '2026-10-08 10:29:20', '2026-10-08 10:28:09', '2026-10-08 10:29:20'),
+(6, 'CON-2026-00006', 'test2', 'test2', 3, 5, 2, 'closed', 'high', '2026-10-08 16:46:34', '2026-10-08 00:00:00', '2026-10-08 16:51:55', '2026-10-08 16:49:12', '2026-10-08 16:51:55'),
+(7, 'CON-2026-00007', 'test3', 'test3', 3, 5, 1, 'pending', 'urgent', '2026-10-08 16:52:08', NULL, '2026-10-08 16:52:08', NULL, NULL),
+(8, 'CON-2026-00008', 'test4', 'test4', 3, 4, 3, 'in_progress', 'high', '2026-10-08 16:52:50', '2026-10-09 12:46:00', '2026-10-09 11:46:16', NULL, NULL),
+(9, 'CON-2026-00009', 'test5', 'test5', 3, 6, 2, 'closed', 'urgent', '2026-10-08 16:53:13', '2026-10-09 00:00:00', '2026-10-09 09:25:56', '2026-10-09 09:24:10', '2026-10-09 09:25:56'),
+(10, 'CON-2026-00010', 'test6', 'test6', 3, 5, 2, 'closed', 'urgent', '2026-10-09 09:27:54', '2026-10-09 12:00:00', '2026-10-09 13:05:09', '2026-10-09 11:42:53', '2026-10-09 13:05:09'),
+(11, 'CON-2026-00011', 'test7', 'test7', 3, 6, 2, 'in_progress', 'urgent', '2026-10-09 13:05:49', '2026-10-11 08:00:00', '2026-10-09 13:08:03', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -88,25 +86,19 @@ CREATE TABLE `concern_attachments` (
 --
 
 INSERT INTO `concern_attachments` (`id`, `concern_id`, `comment_id`, `uploaded_by`, `file_name`, `file_path`, `file_type`, `file_size`, `created_at`, `edited_at`, `deleted_at`) VALUES
-(3, 1, NULL, 2, 'images.jpg', '/uploads/concerns/concern-1-8386bcdaab4cc2c7eaf8a6870f8b6b06.jpg', 'image/jpeg', 10224, '2026-10-03 21:37:36', NULL, '2026-10-04 00:47:39'),
-(6, 1, 4, 2, 'tiles-damage-png.jpg', '/uploads/concerns/comment-4-1791041232928-bdbb57de298188.jpg', 'image/jpeg', 16240, '2026-10-03 23:27:12', NULL, NULL),
-(7, 1, 4, 2, 'images.jpg', '/uploads/concerns/comment-4-1791041232929-3302863c9eb4e8.jpg', 'image/jpeg', 10224, '2026-10-03 23:27:12', NULL, NULL),
-(8, 1, 5, 2, 'images.jpg', '/uploads/concerns/comment-5-1791041327390-bb46b06bfe4db.jpg', 'image/jpeg', 10224, '2026-10-03 23:28:47', NULL, NULL),
-(9, 1, 7, 2, 'tiles-damage-png.jpg', '/uploads/concerns/comment-7-1791041873314-858bce1b9f788.jpg', 'image/jpeg', 16240, '2026-10-03 23:37:53', NULL, NULL),
-(10, 1, 8, 2, 'tiles-damage-png.jpg', '/uploads/concerns/comment-8-1791044848201-6a0e6f763de308.jpg', 'image/jpeg', 16240, '2026-10-04 00:27:28', NULL, NULL),
-(11, 1, 8, 2, 'tiles3.jpg', '/uploads/concerns/comment-8-1791044848204-a5dd2b4fc1ab9.jpg', 'image/jpeg', 16803, '2026-10-04 00:27:28', NULL, NULL),
-(12, 1, 8, 2, 'tiles2.jpg', '/uploads/concerns/comment-8-1791044848205-82d05c9a06fec.jpg', 'image/jpeg', 16958, '2026-10-04 00:27:28', NULL, NULL),
-(13, 1, 8, 2, 'tiles1.jpg', '/uploads/concerns/comment-8-1791044848207-fa6c99bac3fb9.jpg', 'image/jpeg', 13907, '2026-10-04 00:27:28', NULL, NULL),
-(14, 1, 8, 2, 'images.jpg', '/uploads/concerns/comment-8-1791044848209-125eb8d5c48328.jpg', 'image/jpeg', 10224, '2026-10-04 00:27:28', NULL, NULL),
-(15, 1, NULL, 2, 'concern-1-1791047940568-f8n0l8lm.jpg', '/uploads/concerns/concern-1-1791047940568-f8n0l8lm.jpg', 'image/jpeg', 10224, '2026-10-04 01:05:35', '2026-10-04 01:19:00', NULL),
-(16, 1, NULL, 2, 'concern-1-1791047135804-ecz7fni7.jpg', '/uploads/concerns/concern-1-1791047135804-ecz7fni7.jpg', 'image/jpeg', 16803, '2026-10-04 01:05:35', NULL, NULL),
-(17, 1, NULL, 2, 'concern-1-1791047135805-mfp26wx8.jpg', '/uploads/concerns/concern-1-1791047135805-mfp26wx8.jpg', 'image/jpeg', 16958, '2026-10-04 01:05:35', NULL, NULL),
-(18, 1, NULL, 2, 'concern-1-1791047167204-7oiajqvy.jpg', '/uploads/concerns/concern-1-1791047167204-7oiajqvy.jpg', 'image/jpeg', 10224, '2026-10-04 01:05:35', '2026-10-04 01:06:07', NULL),
-(19, 2, NULL, 2, 'tiles3.jpg', '/uploads/concerns/concern-2-b8a9319792ff65c6a09541b7db62abb6.jpg', 'image/jpeg', 16803, '2026-10-04 10:17:08', NULL, NULL),
-(20, 2, NULL, 2, 'tiles2.jpg', '/uploads/concerns/concern-2-a87dab88da4afb67ea2a40d1285f9008.jpg', 'image/jpeg', 16958, '2026-10-04 10:17:08', NULL, NULL),
-(21, 2, NULL, 2, 'tiles1.jpg', '/uploads/concerns/concern-2-5f28f7bbf5cae80718230943fccd3fdd.jpg', 'image/jpeg', 13907, '2026-10-04 10:17:08', NULL, NULL),
-(22, 3, NULL, 5, 'tiles1.jpg', '/uploads/concerns/concern-3-5d351a1a2e59af550ff662b56ead594f.jpg', 'image/jpeg', 13907, '2026-10-04 11:01:55', NULL, NULL),
-(23, 13, 12, 1, '123.jpg', '/uploads/concerns/comment-12-1791158044734-b7d945002bea2.jpg', 'image/jpeg', 485806, '2026-10-05 07:54:04', NULL, NULL);
+(1, 3, NULL, 4, 'concern-3-1791338041884-nrkg6rxe.jpeg', '/uploads/concerns/concern-3-1791338041884-nrkg6rxe.jpeg', 'image/jpeg', 39574, '2026-10-07 09:54:01', NULL, NULL),
+(2, 3, NULL, 4, 'concern-3-1791340139997-483msyq5.jpg', '/uploads/concerns/concern-3-1791340139997-483msyq5.jpg', 'image/jpeg', 22673, '2026-10-07 10:22:25', '2026-10-07 10:29:00', NULL),
+(3, 2, 2, 6, 'wall-crack.jpeg', '/uploads/concerns/comment-2-1791353293707-bb8e85abe13c9.jpeg', 'image/jpeg', 39574, '2026-10-07 14:08:13', NULL, NULL),
+(4, 4, NULL, 6, 'thread-connection-pipe-valve-with-seal-tape-for-protection-of-leak-photo.jpg', '/uploads/concerns/concern-4-134a7b8f659c30dfa8fe1917f555488a.jpg', 'image/jpeg', 29037, '2026-10-07 14:13:27', NULL, NULL),
+(5, 5, 5, 6, 'thread-connection-pipe-valve-with-seal-tape-for-protection-of-leak-photo.jpg', '/uploads/concerns/comment-5-1791426326967-296d0da7785938.jpg', 'image/jpeg', 29037, '2026-10-08 10:25:26', NULL, NULL),
+(6, 5, 7, 4, 'wall-crack-2.jpeg', '/uploads/concerns/comment-7-1791426413096-6b17b68f91981.jpeg', 'image/jpeg', 22673, '2026-10-08 10:26:53', NULL, NULL),
+(7, 9, 13, 4, 'thread-connection-pipe-valve-with-seal-tape-for-protection-of-leak-photo.jpg', '/uploads/concerns/comment-13-1791509066585-fadc59b263dcc.jpg', 'image/jpeg', 29037, '2026-10-09 09:24:26', NULL, NULL),
+(8, 9, 15, 6, 'thread-connection-pipe-valve-with-seal-tape-for-protection-of-leak-photo.jpg', '/uploads/concerns/comment-15-1791509098105-0c48db9fbd9288.jpg', 'image/jpeg', 29037, '2026-10-09 09:24:58', NULL, NULL),
+(9, 9, 17, 5, 'thread-connection-pipe-valve-with-seal-tape-for-protection-of-leak-photo.jpg', '/uploads/concerns/comment-17-1791509140381-f99edc1e144af.jpg', 'image/jpeg', 29037, '2026-10-09 09:25:40', NULL, NULL),
+(10, 10, 19, 5, 'wall-crack-2.jpeg', '/uploads/concerns/comment-19-1791509285581-1e0d5fd7b645.jpeg', 'image/jpeg', 22673, '2026-10-09 09:28:05', NULL, NULL),
+(11, 10, 22, 4, 'thread-connection-pipe-valve-with-seal-tape-for-protection-of-leak-photo.jpg', '/uploads/concerns/comment-22-1791509374786-1ede5df29b5be8.jpg', 'image/jpeg', 29037, '2026-10-09 09:29:34', NULL, NULL),
+(12, 11, NULL, 6, 'IMG_20260510_130017.jpg', '/uploads/concerns/concern-11-b7876d0f18e0286573c5f0210806100a.jpg', 'image/jpeg', 2728270, '2026-10-09 13:05:49', NULL, NULL),
+(13, 11, 27, 6, '123.png', '/uploads/concerns/comment-27-1791522362782-6c576443f88c1.png', 'image/png', 252978, '2026-10-09 13:06:02', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -128,17 +120,32 @@ CREATE TABLE `concern_comments` (
 --
 
 INSERT INTO `concern_comments` (`id`, `concern_id`, `user_id`, `comment`, `created_at`, `updated_at`) VALUES
-(2, 1, 2, 'lets see', '2026-10-03 22:11:55', '2026-10-03 22:11:55'),
-(3, 1, 5, 'just wait sir', '2026-10-03 22:12:21', '2026-10-03 22:12:21'),
-(4, 1, 2, 'Attached Images:', '2026-10-03 23:27:12', '2026-10-03 23:27:12'),
-(5, 1, 2, 'image', '2026-10-03 23:28:47', '2026-10-03 23:28:47'),
-(6, 1, 2, 'yeah', '2026-10-03 23:37:37', '2026-10-03 23:37:37'),
-(7, 1, 2, 'images:', '2026-10-03 23:37:53', '2026-10-03 23:37:53'),
-(8, 1, 2, 'test', '2026-10-04 00:27:28', '2026-10-04 00:27:28'),
-(9, 1, 5, 'still working', '2026-10-04 01:20:14', '2026-10-04 01:20:14'),
-(10, 2, 5, 'working na po', '2026-10-04 10:18:35', '2026-10-04 10:18:35'),
-(11, 2, 2, 'ok mam', '2026-10-04 10:19:19', '2026-10-04 10:19:19'),
-(12, 13, 1, '', '2026-10-05 07:54:04', '2026-10-05 07:54:04');
+(1, 2, 5, 'ok', '2026-10-07 09:37:39', '2026-10-07 09:37:39'),
+(2, 2, 6, 'try', '2026-10-07 14:08:13', '2026-10-07 14:08:13'),
+(4, 5, 6, 'i want a perfect work ok.', '2026-10-08 10:25:18', '2026-10-08 10:25:18'),
+(5, 5, 6, '', '2026-10-08 10:25:26', '2026-10-08 10:25:26'),
+(6, 5, 4, 'test', '2026-10-08 10:26:46', '2026-10-08 10:26:46'),
+(7, 5, 4, 'test1', '2026-10-08 10:26:53', '2026-10-08 10:26:53'),
+(8, 6, 4, 'yeah', '2026-10-08 16:46:47', '2026-10-08 16:46:47'),
+(9, 9, 6, 'try', '2026-10-08 16:53:18', '2026-10-08 16:53:18'),
+(10, 9, 4, 'try2', '2026-10-08 16:53:36', '2026-10-08 16:53:36'),
+(11, 9, 6, 'try3', '2026-10-09 09:09:18', '2026-10-09 09:09:18'),
+(12, 9, 4, 'try4', '2026-10-09 09:24:18', '2026-10-09 09:24:18'),
+(13, 9, 4, 'try5', '2026-10-09 09:24:26', '2026-10-09 09:24:26'),
+(14, 9, 6, 'try6', '2026-10-09 09:24:50', '2026-10-09 09:24:50'),
+(15, 9, 6, 'try7', '2026-10-09 09:24:58', '2026-10-09 09:24:58'),
+(16, 9, 5, 'try8', '2026-10-09 09:25:15', '2026-10-09 09:25:15'),
+(17, 9, 5, 'try91234', '2026-10-09 09:25:40', '2026-10-09 09:25:40'),
+(18, 10, 5, 'test', '2026-10-09 09:27:59', '2026-10-09 09:27:59'),
+(19, 10, 5, 'test1', '2026-10-09 09:28:05', '2026-10-09 09:28:05'),
+(20, 10, 6, 'test', '2026-10-09 09:29:05', '2026-10-09 09:29:05'),
+(21, 10, 6, 'test3', '2026-10-09 09:29:08', '2026-10-09 09:29:08'),
+(22, 10, 4, 'test4', '2026-10-09 09:29:34', '2026-10-09 09:29:34'),
+(23, 10, 4, 'test', '2026-10-09 11:43:00', '2026-10-09 11:43:00'),
+(24, 3, 5, 'test', '2026-10-09 12:44:47', '2026-10-09 12:44:47'),
+(25, 10, 5, 'test', '2026-10-09 13:03:08', '2026-10-09 13:03:08'),
+(26, 11, 6, 'test123', '2026-10-09 13:05:55', '2026-10-09 13:05:55'),
+(27, 11, 6, 'test1234', '2026-10-09 13:06:02', '2026-10-09 13:06:02');
 
 -- --------------------------------------------------------
 
@@ -163,9 +170,12 @@ CREATE TABLE `concern_status_attachments` (
 --
 
 INSERT INTO `concern_status_attachments` (`id`, `status_history_id`, `concern_id`, `uploaded_by`, `file_name`, `file_path`, `file_type`, `file_size`, `created_at`) VALUES
-(1, 2, 1, 5, 'Capture001.png', '/uploads/concerns/status-1-aea2484ca0d650ce65afe6c9261f0de5.png', 'image/png', 1818520, '2026-10-04 08:16:00'),
-(2, 5, 2, 5, 'tiles3.jpg', '/uploads/concerns/status-2-e4083bccc2addd2d9178213b6dd2efc7.jpg', 'image/jpeg', 16803, '2026-10-04 11:34:40'),
-(3, 8, 13, 5, 'images-removebg-preview.png', '/uploads/concerns/status-13-84164eb47d213d589fbc7d7830e051b8.png', 'image/png', 128296, '2026-10-05 07:56:19');
+(1, 5, 4, 4, '442a3666-40d7-4e25-af8e-cc861764989f.jpeg', '/uploads/concerns/status-4-630a798367458e048e45a5d03c097a76.jpeg', 'image/jpeg', 260777, '2026-10-07 14:30:11'),
+(2, 9, 5, 4, 'thread-connection-pipe-valve-with-seal-tape-for-protection-of-leak-photo.jpg', '/uploads/concerns/status-5-5194266506052c9f5fd0513becc20bcc.jpg', 'image/jpeg', 29037, '2026-10-08 10:28:09'),
+(3, 13, 6, 4, 'wall-crack.jpeg', '/uploads/concerns/status-6-92109fb133e50cd4b52f70ddbc2041f8.jpeg', 'image/jpeg', 39574, '2026-10-08 16:49:12'),
+(4, 17, 9, 4, 'wall-crack.jpeg', '/uploads/concerns/status-9-d22b9ff71bb581df6c7cc30bfea8195a.jpeg', 'image/jpeg', 39574, '2026-10-09 09:24:10'),
+(5, 21, 10, 4, 'update-before.png', '/uploads/concerns/status-10-59c278a11be1573371bb02b9a30702b3.png', 'image/png', 51841, '2026-10-09 11:42:53'),
+(6, 24, 3, 5, 'update-before.png', '/uploads/concerns/status-3-6f91b05497e43b5d3a5e2c8732494f69.png', 'image/png', 51841, '2026-10-09 12:44:59');
 
 -- --------------------------------------------------------
 
@@ -188,15 +198,31 @@ CREATE TABLE `concern_status_history` (
 --
 
 INSERT INTO `concern_status_history` (`id`, `concern_id`, `changed_by`, `old_status`, `new_status`, `remarks`, `created_at`) VALUES
-(1, 1, 5, 'pending', 'in_progress', 'ok we start to do it', '2026-10-03 21:49:10'),
-(2, 1, 5, 'in_progress', 'resolved', 'yes done.', '2026-10-04 08:16:00'),
-(3, 1, 2, 'resolved', 'closed', NULL, '2026-10-04 08:16:47'),
-(4, 2, 5, 'pending', 'in_progress', 'acknowledged.', '2026-10-04 10:18:03'),
-(5, 2, 5, 'in_progress', 'resolved', 'Done resolve this', '2026-10-04 11:34:40'),
-(6, 2, 2, 'resolved', 'closed', NULL, '2026-10-04 11:35:23'),
-(7, 13, 5, 'pending', 'in_progress', 'ok we already acknowledge', '2026-10-05 07:44:54'),
-(8, 13, 5, 'in_progress', 'resolved', 'already resolved this concern please verify..thank you', '2026-10-05 07:56:19'),
-(9, 13, 4, 'resolved', 'closed', NULL, '2026-10-05 07:57:50');
+(1, 1, 5, 'pending', 'in_progress', 'We\'re working on it.', '2026-10-07 08:59:49'),
+(2, 2, 5, 'pending', 'in_progress', 'waiting for materials', '2026-10-07 09:35:14'),
+(3, 3, 5, 'pending', 'on_hold', 'We work it later', '2026-10-07 09:55:15'),
+(4, 4, 4, 'pending', 'in_progress', 'in progress', '2026-10-07 14:28:47'),
+(5, 4, 4, 'in_progress', 'resolved', 'done', '2026-10-07 14:30:11'),
+(7, 5, 4, 'pending', 'on_hold', 'dasdasdasd', '2026-10-08 10:26:30'),
+(8, 5, 4, 'on_hold', 'in_progress', 'test123', '2026-10-08 10:27:32'),
+(9, 5, 4, 'in_progress', 'resolved', 'done', '2026-10-08 10:28:09'),
+(10, 5, 5, 'resolved', 'closed', NULL, '2026-10-08 10:29:20'),
+(11, 6, 4, 'pending', 'on_hold', 'test', '2026-10-08 16:46:56'),
+(12, 6, 4, 'on_hold', 'in_progress', 'test', '2026-10-08 16:47:11'),
+(13, 6, 4, 'in_progress', 'resolved', 'test1', '2026-10-08 16:49:12'),
+(14, 6, 5, 'resolved', 'closed', NULL, '2026-10-08 16:51:55'),
+(15, 9, 4, 'pending', 'on_hold', 'test1', '2026-10-09 09:23:40'),
+(16, 9, 4, 'on_hold', 'in_progress', 'test3', '2026-10-09 09:23:57'),
+(17, 9, 4, 'in_progress', 'resolved', 'test4', '2026-10-09 09:24:10'),
+(18, 9, 5, 'resolved', 'closed', NULL, '2026-10-09 09:25:56'),
+(19, 10, 4, 'pending', 'on_hold', 'test', '2026-10-09 09:30:02'),
+(20, 10, 4, 'on_hold', 'in_progress', 'test123', '2026-10-09 11:42:09'),
+(21, 10, 4, 'in_progress', 'resolved', 'test', '2026-10-09 11:42:53'),
+(22, 8, 5, 'pending', 'in_progress', 'test123', '2026-10-09 11:46:16'),
+(23, 3, 5, 'on_hold', 'in_progress', 'test', '2026-10-09 12:43:21'),
+(24, 3, 5, 'in_progress', 'resolved', 'test', '2026-10-09 12:44:59'),
+(25, 10, 5, 'resolved', 'closed', 'test123', '2026-10-09 13:05:10'),
+(26, 11, 4, 'pending', 'in_progress', 'test123\nTarget resolution date: 2026-10-11 08:00:00', '2026-10-09 13:08:03');
 
 -- --------------------------------------------------------
 
@@ -303,12 +329,12 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password_hash`, `first_name`, `middle_name`, `last_name`, `role_id`, `organization_id`, `profile_photo`, `status`, `last_login_at`, `created_at`, `updated_at`, `deleted_at`) VALUES
-(1, 'superadmin', '$2b$12$7Q2BZNGJ8VG8/aX288L7zextU/UWOthz0MWQarPSPUik6UwaYlnXK', 'System', NULL, 'Administrator', 1, NULL, NULL, 'active', '2026-10-05 14:31:52', '2026-10-01 21:22:29', '2026-10-05 14:31:52', NULL),
+(1, 'superadmin', '$2b$12$7Q2BZNGJ8VG8/aX288L7zextU/UWOthz0MWQarPSPUik6UwaYlnXK', 'System', NULL, 'Administrator', 1, NULL, '/uploads/users/0f5206e8-6c0d-46cc-9b3f-a59d4ee8e31c.png', 'active', '2026-10-09 13:08:18', '2026-10-01 21:22:29', '2026-10-09 13:08:18', NULL),
 (2, 'anna', '$2b$12$WoKBHfx6YUm5VGwaKVn5V./JI6sx8Iv6czZ/qi8x0ww82a3tfirNy', 'Anna', 'Dela', 'Fuente', 2, 1, NULL, 'active', '2026-10-04 22:18:00', '2026-10-02 11:04:52', '2026-10-04 22:18:00', NULL),
-(3, 'juan123', '$2b$12$g6jwacvi2I/Mjuxznjqmi.b56UDzfZp3skg6/O6BZtydNNIGeelJq', 'juan', 'dela', 'cruz', 2, 3, NULL, 'active', '2026-10-03 23:38:13', '2026-10-03 21:36:12', '2026-10-03 23:38:13', NULL),
-(4, 'john', '$2b$12$Sm6WMLnnsr3J.0vG8rWFv.kC71V5KawFXzQ7L11GILFFxDeBuTzNm', 'john', 'doe', 'doe', 2, 2, NULL, 'active', '2026-10-05 07:57:20', '2026-10-03 21:46:59', '2026-10-05 07:57:20', NULL),
-(5, 'rose', '$2b$12$848WcWXTx.bI9TPSuqDizevBId4ZBemi3u7ASO//MKsAmNyGPolw2', 'rosemarie', NULL, 'dimagiba', 2, 3, NULL, 'active', '2026-10-05 12:46:27', '2026-10-03 21:48:33', '2026-10-05 14:32:00', NULL),
-(6, 'sample', '$2b$12$p7PWE8B6Awwdjx5zob.sRuv/xW6Yly/ErTIouWyUoZKO/rK131LaC', 'sample', NULL, 'user', 3, 1, NULL, 'active', NULL, '2026-10-04 22:13:40', '2026-10-04 22:13:40', NULL);
+(3, 'juan123', '$2b$12$g6jwacvi2I/Mjuxznjqmi.b56UDzfZp3skg6/O6BZtydNNIGeelJq', 'juan', 'dela', 'cruz', 2, 3, NULL, 'active', '2026-10-05 16:18:53', '2026-10-03 21:36:12', '2026-10-05 16:18:53', NULL),
+(4, 'john', '$2b$12$Sm6WMLnnsr3J.0vG8rWFv.kC71V5KawFXzQ7L11GILFFxDeBuTzNm', 'john', 'doe', 'doe', 2, 2, NULL, 'active', '2026-10-09 13:06:36', '2026-10-03 21:46:59', '2026-10-09 13:06:36', NULL),
+(5, 'rose', '$2b$12$848WcWXTx.bI9TPSuqDizevBId4ZBemi3u7ASO//MKsAmNyGPolw2', 'rosemarie', NULL, 'dimagiba', 2, 3, NULL, 'active', '2026-10-09 13:09:08', '2026-10-03 21:48:33', '2026-10-09 13:09:08', NULL),
+(6, 'sample', '$2b$12$p7PWE8B6Awwdjx5zob.sRuv/xW6Yly/ErTIouWyUoZKO/rK131LaC', 'sample', NULL, 'user', 3, 3, NULL, 'active', '2026-10-09 13:05:28', '2026-10-04 22:13:40', '2026-10-09 13:05:28', NULL);
 
 -- --------------------------------------------------------
 
@@ -460,7 +486,94 @@ INSERT INTO `user_sessions` (`id`, `user_id`, `session_token_hash`, `expires_at`
 (128, 1, '58c3f8dec58473ace8d783d960e8dc5f7acd29a1a9589f513f4e2332e4edf9d0', '2026-10-05 21:46:50', '2026-10-05 13:46:50', '2026-10-05 13:58:49'),
 (129, 1, 'e61c561f26f9c3dd980af137ca4bce6cf93ed107fb28fb8e3ca63117eec29d94', '2026-10-05 22:09:01', '2026-10-05 14:09:01', '2026-10-05 14:09:20'),
 (130, 1, '6d0b7072778c5d13f11f3542d9bdb02f8e085da7516ddab95675ada06eadcb5b', '2026-10-05 22:23:40', '2026-10-05 14:23:40', '2026-10-05 14:31:26'),
-(131, 1, '0d87ae3f1adf58475ceadbef1138578e7b0a7b62a6a10440e5c5397e960f1b5f', '2026-10-05 22:31:52', '2026-10-05 14:31:52', NULL);
+(131, 1, '0d87ae3f1adf58475ceadbef1138578e7b0a7b62a6a10440e5c5397e960f1b5f', '2026-10-05 22:31:52', '2026-10-05 14:31:52', '2026-10-05 15:12:44'),
+(132, 1, '7f3ff634268aa49e2265fa4749947cb3080d6df34f856a3612af0c2f35040cd1', '2026-10-05 23:09:26', '2026-10-05 15:09:26', '2026-10-05 16:17:59'),
+(133, 1, '48952e962e6ad0393a47799b04624f24444ff8b51251a21df01af7002ab88967', '2026-10-05 23:13:09', '2026-10-05 15:13:09', '2026-10-05 16:01:10'),
+(134, 1, '935d0d5455c078474b51c193167e57414c762b80db2637cf1d0cc0aedc60e0de', '2026-10-05 23:40:11', '2026-10-05 15:40:11', '2026-10-05 15:41:14'),
+(135, 5, 'aef8f43f2620d29214f4639739e4eb32f83025e7381dad7d9c952fb308ff83ea', '2026-10-05 23:41:31', '2026-10-05 15:41:31', NULL),
+(136, 1, 'eed221538680a25dfa68c9d7860fef363eb700d6f120f592f2fb80150fd7319f', '2026-10-05 23:46:26', '2026-10-05 15:46:26', '2026-10-05 15:47:01'),
+(137, 4, '5f4a648de7496aa317d11d47fad9e36ac027904f93417f35f2529da939de006e', '2026-10-05 23:47:12', '2026-10-05 15:47:12', '2026-10-05 15:55:50'),
+(138, 1, 'b391de8a534da46287663a82299b0dc3af8d7b53280fe4f9396572a4f0dff70a', '2026-10-05 23:56:04', '2026-10-05 15:56:04', NULL),
+(139, 1, '8b96da5c43660d1250677728eb703c8d2901cd5a8b2351359fa04832a58eb73c', '2026-10-06 00:01:02', '2026-10-05 16:01:02', '2026-10-05 16:03:42'),
+(140, 1, '02c9ee8f73b808dc9bd3e6d8990284902d9f14170467e31b9580384ee97a4b10', '2026-10-06 00:18:07', '2026-10-05 16:18:07', '2026-10-05 16:18:38'),
+(141, 3, 'af3e41c6204308550b4ca246794983ea9b5c95a0ecb7de6eea07dc6f8a434cbd', '2026-10-06 00:18:53', '2026-10-05 16:18:53', '2026-10-05 16:22:47'),
+(142, 1, '3b81e41fa551ef4894a98b114db45b6db95559ba441ed626c48a59c65f041cb8', '2026-10-06 00:24:59', '2026-10-05 16:24:59', '2026-10-05 16:29:07'),
+(143, 1, '50650355e4e67a137dbfbad085bc11fb07a0f3a9917fb5f9a860691b51ab39c4', '2026-10-06 00:44:10', '2026-10-05 16:44:10', '2026-10-05 16:44:14'),
+(144, 1, '58ac2a8f18c483012844be8be0520552e4df3af2163475d4a32a31333ec6f6a7', '2026-10-06 00:44:21', '2026-10-05 16:44:21', '2026-10-05 16:47:10'),
+(145, 1, 'ab8b46fc9d3ccb2fca7269319f53ca5fe6f3dab8ef4966e11eef6bd4437cd17c', '2026-10-06 00:47:22', '2026-10-05 16:47:22', NULL),
+(146, 1, 'a252add6aff99bfc585cdf015fcdddf6f2abd869099fdafafae096bd5554c883', '2026-10-07 14:12:43', '2026-10-07 06:12:43', '2026-10-07 06:12:57'),
+(147, 1, '75be61585faef5aeb6c5915a2a389e1656998c5332b944eff0641f0eb11bc46a', '2026-10-07 14:18:29', '2026-10-07 06:18:29', '2026-10-07 06:50:58'),
+(148, 5, 'e266c26a2d4f6ed1ac214ff8dc8bd28426e93ee29ad05c8d188e4ead262d3904', '2026-10-07 14:51:06', '2026-10-07 06:51:06', '2026-10-07 07:31:25'),
+(149, 1, '74800fdeb91a0ee754f412f0b299a27e9938119ec01df219ca12ddb17653795d', '2026-10-07 15:31:43', '2026-10-07 07:31:43', '2026-10-07 07:38:23'),
+(150, 1, 'd81461d2449417e59468c3c5b7b5f2f783454456e4998ea49f399f1465b8d7db', '2026-10-07 15:38:33', '2026-10-07 07:38:33', '2026-10-07 07:40:43'),
+(151, 1, 'd3a073201c4870a43e6f7cefb3b028e95fd705030859de05c9fa68dbc6351979', '2026-10-07 15:40:54', '2026-10-07 07:40:54', '2026-10-07 07:45:29'),
+(152, 5, 'a7e9a246876c9975c3fa922e280c671a1ce6495491abd432b7f99f0499a87d51', '2026-10-07 15:45:34', '2026-10-07 07:45:34', '2026-10-07 07:47:54'),
+(153, 4, 'b929a52e031ef0c487dd1acea21f7fb0608a656fbd12e1dd2d22c8181230c1c9', '2026-10-07 15:47:59', '2026-10-07 07:47:59', '2026-10-07 08:25:39'),
+(154, 1, 'f68b619783d79477d3c93db8e643015805ae08bcbae66f75b646b833beb85956', '2026-10-07 15:58:44', '2026-10-07 07:58:44', '2026-10-07 07:59:42'),
+(155, 4, '5fe0225b807095efdd83686fddab5bfbcc472a086d7fc5e8b6b070fe74f18161', '2026-10-07 15:59:47', '2026-10-07 07:59:47', '2026-10-07 09:33:17'),
+(156, 5, '8b8992b08cf09aea90487e9e46a38f1ea1250974c7a67f65fe5ede9b8b72c59d', '2026-10-07 16:25:47', '2026-10-07 08:25:47', '2026-10-07 09:52:45'),
+(157, 5, 'b4d04ce466b70ea47b22c497d50602f38cdb40498bc8495a4fe049eb1d026ac4', '2026-10-07 17:33:26', '2026-10-07 09:33:26', '2026-10-07 13:10:20'),
+(158, 4, '4685e4305daecd8843bd18b83e0d7fd51fd811755733d3a399fa21d60edc2aa3', '2026-10-07 17:52:49', '2026-10-07 09:52:49', '2026-10-07 09:54:50'),
+(159, 5, '2bd62142fbea436c1af2743abf91f74662931e16f63e5d00ab55e6c1500025b0', '2026-10-07 17:54:54', '2026-10-07 09:54:54', '2026-10-07 10:20:48'),
+(160, 4, '808adc97f7bbadb2d00cf72934214d90e51bcf205cacfbfcf5e892d0098795bd', '2026-10-07 18:20:52', '2026-10-07 10:20:52', '2026-10-07 10:29:15'),
+(161, 1, '04ddf214440259fc3db2c6a9467d40165d637c34a0c9622dc925646ae5b027a7', '2026-10-07 18:32:48', '2026-10-07 10:32:48', '2026-10-07 10:32:53'),
+(162, 6, 'f9b281c98e19725aaff85ca03a7cc4011481997f348bfb9d8366d5f755663536', '2026-10-07 18:32:58', '2026-10-07 10:32:58', '2026-10-07 10:33:07'),
+(163, 1, 'b0ddc7b4a7ea124a9bf71fce3c3e378731e87ad2593e999d910fa2a11e47def0', '2026-10-07 18:33:13', '2026-10-07 10:33:13', '2026-10-07 10:33:30'),
+(164, 6, 'ae75bcff647025dd8576e2570f83f5a2c5dc588e6e5a232305959bbb52871091', '2026-10-07 18:33:35', '2026-10-07 10:33:35', '2026-10-07 11:13:28'),
+(165, 5, '1b1bbc0aea8f9fde30695993b9c4e5696c91d354935b483f8acdd917a1705dbc', '2026-10-07 19:13:39', '2026-10-07 11:13:39', '2026-10-07 11:13:47'),
+(166, 6, '8085bf3b75a2a2725ccf720f7a39e577c920be0affe868e5d82d994b255a1450', '2026-10-07 19:14:08', '2026-10-07 11:14:08', '2026-10-07 11:19:50'),
+(167, 5, '24a4726c42d8153bd8193f6109db2c0b1dcc3a5231152782232998a85ca3de53', '2026-10-07 19:19:55', '2026-10-07 11:19:55', '2026-10-07 11:20:17'),
+(168, 4, '6842290993637f3a80ee1288aab4bc3c826dad338435ff81192b8b782fa45584', '2026-10-07 19:20:21', '2026-10-07 11:20:21', '2026-10-07 11:20:44'),
+(169, 6, '1117369c343cf24e8ec367d3100a85e5a72e9af2f18a3127d4b624bcd0ee437e', '2026-10-07 19:20:50', '2026-10-07 11:20:50', '2026-10-07 14:08:21'),
+(170, 1, '5620d304b69c2a67890e8e77cca69490642e941234a0fd357a6e8676f84c0079', '2026-10-07 21:10:24', '2026-10-07 13:10:24', '2026-10-07 13:11:36'),
+(171, 4, '813b202c5b3b5e16d789bfef5d23957471a5171422b496733fc081381f3ddbf6', '2026-10-07 21:11:42', '2026-10-07 13:11:42', '2026-10-07 13:12:23'),
+(172, 1, 'df3404b8fc0b9b3c5471830f10715892b14d22e13bbdb0631cc93574febf643d', '2026-10-07 21:12:26', '2026-10-07 13:12:26', NULL),
+(173, 4, '54ddd4bd8158eebf82656a1bef17ce53fd67b95de5a5a8483bc64732061197d3', '2026-10-07 22:08:26', '2026-10-07 14:08:26', '2026-10-07 14:10:29'),
+(174, 5, '3019f7d349c8ec0496a67fbc4cfe033a0d7274453001664ed98e3642b72399b1', '2026-10-07 22:10:40', '2026-10-07 14:10:40', '2026-10-07 14:12:24'),
+(175, 6, '72d445793c47943f0ede1fab8d64835310736493a957d7490ad8d3fa535c4219', '2026-10-07 22:12:29', '2026-10-07 14:12:29', '2026-10-07 14:13:29'),
+(176, 4, '6a9f26b0f612df626ace5e8b77f26132a068aff315bbbe58a226fbfea0c4e41e', '2026-10-07 22:13:33', '2026-10-07 14:13:33', '2026-10-07 14:13:45'),
+(177, 6, '740805db17df5a09e33d2c5aca6a021dd4030de889eea342988a3b92a7ae112b', '2026-10-07 22:13:49', '2026-10-07 14:13:49', '2026-10-07 14:14:03'),
+(178, 5, '57c0cb9b6e33d76fe3152f747e65fdaf44bdbbd4b75de5e1412a228d4e4d9857', '2026-10-07 22:14:07', '2026-10-07 14:14:07', '2026-10-07 14:28:18'),
+(179, 4, 'c63a42773cfbfa3c34ef234a63c55a4ce2a9200e6218f78f3f5d97676f554e0c', '2026-10-07 22:28:22', '2026-10-07 14:28:22', '2026-10-07 14:28:55'),
+(180, 5, '8ce1bbc1448b476c2b2ed821246a9eb6279a4a57af77871cb34335e654cd8a8c', '2026-10-07 22:28:59', '2026-10-07 14:28:59', '2026-10-07 14:29:20'),
+(181, 4, 'e2291ca97beba2005741484a0f1cf3eb61ccb82ea6ff49a1f3d073fe7c7f41aa', '2026-10-07 22:29:30', '2026-10-07 14:29:30', '2026-10-07 14:30:19'),
+(182, 5, '901747510c3004a3f9c7c1e6c20d7ab4f5784a27e1153548a1269a88d6596587', '2026-10-07 22:30:23', '2026-10-07 14:30:23', '2026-10-07 15:06:27'),
+(183, 5, '942fcc29ec817601bc5a53c3b76e0379f34ccd861a21c7ca9c08afa5f457b302', '2026-10-07 23:06:32', '2026-10-07 15:06:32', '2026-10-07 15:14:39'),
+(184, 6, '0bef8e5b22f4187148df1fc71d2c4c200693f65a827ac9baf7acf68487f18483', '2026-10-07 23:14:43', '2026-10-07 15:14:43', '2026-10-07 15:15:35'),
+(185, 4, '58401f0694a28742945fbb9efe773c3842b0aa65ad627be7c76c284bc21109f4', '2026-10-07 23:15:39', '2026-10-07 15:15:39', '2026-10-07 15:15:54'),
+(186, 6, 'a43e915d5ab504e8af21393ac8aa0c5b29d0fae68939051c74329f8d73cd9baf', '2026-10-07 23:15:59', '2026-10-07 15:15:59', '2026-10-07 15:16:05'),
+(187, 5, '44ac4cc56ab0f9d54fcbd22ac031e09c7d493ebe93ff8119a5b1d4a7c1bce6f9', '2026-10-07 23:16:09', '2026-10-07 15:16:09', '2026-10-07 15:18:14'),
+(188, 6, 'c84d13f7f9eae90fdf291839f8f562653f79a5153c79eeb7de73b8c6d9578c47', '2026-10-08 16:13:33', '2026-10-08 08:13:33', '2026-10-08 08:14:19'),
+(189, 5, '6ce85fdd71db0995e48db356569b4d4a40cf1b3cd18f3980f769f1605856fb0b', '2026-10-08 16:14:23', '2026-10-08 08:14:23', '2026-10-08 08:14:35'),
+(190, 4, '43cf41751837481f84b7a72f234c7bd49821986254c99ecabb8c2c696b811b56', '2026-10-08 16:14:39', '2026-10-08 08:14:39', '2026-10-08 10:24:23'),
+(191, 5, 'b0f8b3a3dc2f556635f646f7b0cae0989b6ee1370b7efc386b18bc6884b67683', '2026-10-08 18:24:27', '2026-10-08 10:24:27', '2026-10-08 10:24:36'),
+(192, 6, '8474c182d8403e4a7664f885f520c7a0e7d5c18d968a59a14ecc8b4a9c90197c', '2026-10-08 18:24:41', '2026-10-08 10:24:41', '2026-10-08 10:25:31'),
+(193, 5, '4712b88af69a3be26760b502976b8c2e8ddbb5cf21da148889389374558ed03a', '2026-10-08 18:25:37', '2026-10-08 10:25:37', '2026-10-08 10:26:13'),
+(194, 4, 'd9ba59848a4258236dc5974a91ee53ef587575a9b1f6c7d2a38a55098dfd3698', '2026-10-08 18:26:18', '2026-10-08 10:26:18', '2026-10-08 10:28:16'),
+(195, 6, 'c1891d92e5be511a3da1484ddd8e1265872117ed327e136e23b4ed70f565a991', '2026-10-08 18:28:22', '2026-10-08 10:28:22', '2026-10-08 10:29:08'),
+(196, 5, 'e2a0b3cd7b0dd715ec6ab2e22f0b9ca489c8d86171b2e1e6c99c60acc248a929', '2026-10-08 18:29:17', '2026-10-08 10:29:17', '2026-10-08 16:46:37'),
+(197, 4, '309b44fa0ec12ff04de5c5014691ee9ec7e4479ef251f7f4eae3a33a0336f87b', '2026-10-09 00:46:41', '2026-10-08 16:46:41', '2026-10-08 16:49:19'),
+(198, 5, 'f5cdcfb7930ded207c98715267cb5dfa8d9a173207c5d0623b8be3e43ac319af', '2026-10-09 00:49:29', '2026-10-08 16:49:29', '2026-10-08 16:52:11'),
+(199, 1, '284fa463006b6372da29cee792982a6c2d8c8b65ed865e454379063dbde4f50f', '2026-10-09 00:52:19', '2026-10-08 16:52:19', '2026-10-08 16:52:34'),
+(200, 4, '24406c3d1779660ccedbd69638d359c27bb3611e2647d705e81e64c3f3daafa9', '2026-10-09 00:52:40', '2026-10-08 16:52:40', '2026-10-08 16:52:51'),
+(201, 6, '4400e8d7f7545894e13e9b76582dd3280df9eab5b8c119b2729edf5649a163a3', '2026-10-09 00:53:02', '2026-10-08 16:53:02', '2026-10-08 16:53:21'),
+(202, 4, 'bca1ac834550e8a683c5800d8e4c8510de8fdd1297701d8a2b1a1a1e88ec64c8', '2026-10-09 00:53:27', '2026-10-08 16:53:27', '2026-10-08 16:54:06'),
+(203, 5, '85e21ffa6a7384da49c9f2e76e96314d7360fc87654734f6c0b51af4bcacdb69', '2026-10-09 00:54:11', '2026-10-08 16:54:11', NULL),
+(204, 6, '82102fa7d234354dbb07488d5f26bd806d06904200a7865f9f3ff3678267f9dd', '2026-10-09 17:08:56', '2026-10-09 09:08:56', '2026-10-09 09:23:27'),
+(205, 4, '2cb531fb402bf6af68536ccbcb33ffd749cbea280e48e3cf25cf5eadab9af258', '2026-10-09 17:23:32', '2026-10-09 09:23:32', '2026-10-09 09:24:32'),
+(206, 6, '6d80ba5d24f15bf68c1055bb2b7899d3ad7e25b41a43a9f68cc916ffd727b717', '2026-10-09 17:24:39', '2026-10-09 09:24:39', '2026-10-09 09:25:03'),
+(207, 5, '4bf4da7c1f1f5d71e6531a62542b75049cf16905fa459f795d1ac048fce2addf', '2026-10-09 17:25:08', '2026-10-09 09:25:08', '2026-10-09 09:27:33'),
+(208, 6, 'f82c6a2a03967e8d94bafcc0dcd1a15ae5e91de5743bcaa1d55af3668aece9b2', '2026-10-09 17:27:37', '2026-10-09 09:27:37', '2026-10-09 09:27:39'),
+(209, 5, '0f951327831bb2175428ab7d9cf71cad767458f4ef5723029a89b1574db2d84c', '2026-10-09 17:27:43', '2026-10-09 09:27:43', '2026-10-09 09:28:47'),
+(210, 6, '2f835216d0e63be327de99eb2a4a8f979bfbde1f0d01e0efdbfb240d1ec6695a', '2026-10-09 17:28:54', '2026-10-09 09:28:54', '2026-10-09 09:29:17'),
+(211, 4, '3b7fecf9bdc7fa3a672dbeff689be8e1826733d2864f00703a39c1ed49fd07d8', '2026-10-09 17:29:21', '2026-10-09 09:29:21', '2026-10-09 11:45:30'),
+(212, 5, 'ef9d23173614f2da656520b0e6e91199bc506c8395360ee1375606a762778b63', '2026-10-09 19:45:44', '2026-10-09 11:45:44', '2026-10-09 12:40:33'),
+(213, 5, '79f1e0c110ec16a553f3bb33ccc39c0b2ccf94458e9dfaa08e92948ef78a3f86', '2026-10-09 20:40:39', '2026-10-09 12:40:39', '2026-10-09 13:05:23'),
+(214, 6, '6ce54eddb62c7a1b78b916af82c9f2e72381b91fe9bf80e5777c2c54c6f8c74f', '2026-10-09 21:05:28', '2026-10-09 13:05:28', '2026-10-09 13:06:08'),
+(215, 5, 'be2d2814fbd27f7af993751f9fe1aed0d75f3011c99cf561e36c7068ba50b0c3', '2026-10-09 21:06:14', '2026-10-09 13:06:14', '2026-10-09 13:06:31'),
+(216, 4, 'e27f75dd09264b4467cce61b35bf6aad895c806c97c2841a7f395ae866a79413', '2026-10-09 21:06:36', '2026-10-09 13:06:36', '2026-10-09 13:08:13'),
+(217, 1, 'fca1e60218b52b6f0931d78a4022b9972ca7db333921b7404bc5465289c1ddea', '2026-10-09 21:08:18', '2026-10-09 13:08:18', '2026-10-09 13:08:59'),
+(218, 5, 'b31103680b66a52169e5a9c821dc41a282ea9e12221464e16c217553c47d2e88', '2026-10-09 21:09:08', '2026-10-09 13:09:08', NULL);
 
 --
 -- Indexes for dumped tables
@@ -566,31 +679,31 @@ ALTER TABLE `user_sessions`
 -- AUTO_INCREMENT for table `concerns`
 --
 ALTER TABLE `concerns`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `concern_attachments`
 --
 ALTER TABLE `concern_attachments`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `concern_comments`
 --
 ALTER TABLE `concern_comments`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
 
 --
 -- AUTO_INCREMENT for table `concern_status_attachments`
 --
 ALTER TABLE `concern_status_attachments`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `concern_status_history`
 --
 ALTER TABLE `concern_status_history`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
 
 --
 -- AUTO_INCREMENT for table `concern_types`
@@ -620,7 +733,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `user_sessions`
 --
 ALTER TABLE `user_sessions`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=132;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=219;
 
 --
 -- Constraints for dumped tables

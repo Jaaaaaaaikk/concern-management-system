@@ -25,15 +25,15 @@ const links = computed(() => [
 </script>
 
 <template>
-    <header class="sticky top-0 z-40 border-b border-emerald-900/10 bg-white/95 shadow-sm backdrop-blur lg:hidden">
+    <header class="sticky top-0 z-40 border-b border-blue-900/10 bg-white/95 shadow-sm backdrop-blur lg:hidden">
         <div class="flex items-center gap-3 px-4 py-3">
             <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-bold tracking-wide text-emerald-950">Felcris Centrale</p>
+                <p class="truncate text-sm font-bold tracking-wide text-blue-950">Felcris Centrale</p>
                 <p class="text-xs text-slate-500">Concern Management System</p>
             </div>
             <button
                 type="button"
-                class="shrink-0 cursor-pointer rounded-lg border border-emerald-900/20 px-3 py-2 text-xs font-semibold text-emerald-950 transition hover:bg-emerald-50"
+                class="shrink-0 cursor-pointer rounded-lg border border-blue-900/20 px-3 py-2 text-xs font-semibold text-blue-950 transition hover:bg-blue-50"
                 @click="emit('logout')"
             >
                 Logout
@@ -56,8 +56,8 @@ const links = computed(() => [
                 :aria-current="route.path === link.to ? 'page' : undefined"
                 class="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition"
                 :class="route.path === link.to
-                    ? 'bg-emerald-900 text-white'
-                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-950'"
+                    ? 'bg-blue-900 text-white'
+                    : 'text-slate-600 hover:bg-blue-50 hover:text-blue-950'"
             >
                 <NavIcon :name="link.icon" />
                 <span>{{ link.label }}</span>

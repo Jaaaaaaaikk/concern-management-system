@@ -136,7 +136,7 @@ function formatDate(value) {
 
 function sessionStatusClass(status) {
     const classes = {
-        active: 'bg-emerald-100 text-emerald-700',
+        active: 'bg-blue-100 text-blue-700',
         revoked: 'bg-red-100 text-red-700',
         expired: 'bg-slate-200 text-slate-700'
     }
@@ -221,38 +221,38 @@ onMounted(() => {
 
 <template>
     <div class="min-h-screen bg-slate-100">
-        <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-emerald-950 text-white lg:flex">
-            <div class="flex h-20 items-center border-b border-emerald-900/60 px-5">
+        <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-blue-950 text-white lg:flex">
+            <div class="flex h-20 items-center border-b border-blue-900/60 px-5">
                 <div>
                     <h1 class="text-lg font-bold text-white">Felcris Centrale</h1>
-                    <p class="mt-1 text-xs text-emerald-100/80">Concern Management System</p>
+                    <p class="mt-1 text-xs text-blue-100/80">Concern Management System</p>
                 </div>
             </div>
 
             <nav class="flex-1 space-y-1 px-3 py-4">
                 <NuxtLink to="/dashboard"
-                    :class="$route.path === '/dashboard' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="dashboard" />
                     <span>Dashboard</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
-                    :class="$route.path === '/organizations' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="organizations" />
                     <span>Manage Organizations</span>
                 </NuxtLink>
 
                 <NuxtLink to="/concerns"
-                    :class="$route.path === '/concerns' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/concerns' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="concerns" />
                     <span>Manage Concerns</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
-                    :class="$route.path === '/users' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="users" />
                     <span>Manage Users</span>
@@ -260,14 +260,14 @@ onMounted(() => {
 
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/login-history"
-                    :class="$route.path === '/login-history' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/login-history' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="history" />
                     <span>Login History</span>
                 </NuxtLink>
             </nav>
 
-            <div class="border-t border-emerald-900 p-4">
+            <div class="border-t border-blue-900 p-4">
                 <UserProfileControl :current-user="currentUser" />
             </div>
         </aside>
@@ -327,7 +327,7 @@ onMounted(() => {
                             <tbody v-else class="divide-y divide-slate-200">
                                 <tr v-for="(session, index) in sessions" :key="session.id"
                                     :class="index % 2 === 0 ? 'bg-white' : 'bg-slate-50'"
-                                    class="transition hover:bg-emerald-50/60">
+                                    class="transition hover:bg-blue-50/60">
                                     <td class="px-5 py-4">
                                         <p class="text-sm font-semibold text-slate-800">{{ session.full_name }}</p>
                                         <p class="mt-1 text-xs text-slate-500">{{ session.username }}</p>
@@ -379,7 +379,7 @@ onMounted(() => {
                                 <span v-if="page === '...'" class="px-2 py-2 text-sm text-slate-400">...</span>
 
                                 <button v-else type="button" @click="goToPage(page)"
-                                    :class="page === currentPage ? 'bg-emerald-900 text-white' : 'border border-slate-300 text-slate-600 hover:bg-slate-50'"
+                                    :class="page === currentPage ? 'bg-blue-900 text-white' : 'border border-slate-300 text-slate-600 hover:bg-slate-50'"
                                     class="min-w-9 cursor-pointer rounded-lg px-3 py-2 text-sm font-medium transition">
                                     {{ page }}
                                 </button>

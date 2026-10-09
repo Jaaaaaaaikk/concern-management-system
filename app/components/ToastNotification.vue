@@ -44,13 +44,13 @@ onBeforeUnmount(() => {
             <div
                 v-if="toast.message"
                 class="pointer-events-auto flex w-full max-w-md items-start gap-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-[0_18px_50px_-18px_rgba(15,23,42,0.45)]"
-                :class="toast.type === 'error' ? 'border-red-200' : 'border-emerald-200'"
+                :class="toast.type === 'error' ? 'border-red-200' : 'border-blue-200'"
                 :role="toast.type === 'error' ? 'alert' : 'status'"
                 :aria-live="toast.type === 'error' ? 'assertive' : 'polite'"
             >
                 <span
                     class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-                    :class="toast.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'"
+                    :class="toast.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700'"
                     aria-hidden="true"
                 >
                     <svg v-if="toast.type === 'error'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
@@ -73,7 +73,7 @@ onBeforeUnmount(() => {
 
                 <button
                     type="button"
-                    class="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/30"
+                    class="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-700/30"
                     aria-label="Dismiss notification"
                     @click="dismissToast(toast.id)"
                 >

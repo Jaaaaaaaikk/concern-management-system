@@ -477,9 +477,9 @@ onMounted(() => {
 
         <!-- Sidebar -->
 
-        <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-emerald-950 text-white lg:flex">
+        <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-blue-950 text-white lg:flex">
 
-            <div class="border-b border-emerald-900 px-6 py-5">
+            <div class="border-b border-blue-900 px-6 py-5">
 
                 <h1 class="text-lg font-bold">
                     Felcris Centrale
@@ -495,7 +495,7 @@ onMounted(() => {
             <nav class="flex-1 space-y-1 px-3 py-4">
 
                 <NuxtLink to="/dashboard"
-                    :class="$route.path === '/dashboard' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="dashboard" />
                     <span>Dashboard</span>
@@ -503,28 +503,28 @@ onMounted(() => {
 
 
                 <NuxtLink to="/organizations"
-                    :class="$route.path === '/organizations' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="organizations" />
                     <span>Manage Organizations</span>
                 </NuxtLink>
 
                 <NuxtLink to="/concerns"
-                    :class="$route.path === '/concerns' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/concerns' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="concerns" />
                     <span>Manage Concerns</span>
                 </NuxtLink>
 
                 <NuxtLink to="/users"
-                    :class="$route.path === '/users' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="users" />
                     <span>Manage Users</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/login-history"
-                    :class="$route.path === '/login-history' ? 'bg-emerald-800 text-white' : 'text-emerald-100/80 transition hover:bg-emerald-900 hover:text-white'"
+                    :class="$route.path === '/login-history' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="history" />
                     <span>Login History</span>
@@ -534,7 +534,7 @@ onMounted(() => {
             </nav>
 
 
-            <div class="border-t border-emerald-900 p-4">
+            <div class="border-t border-blue-900 p-4">
                 <UserProfileControl :current-user="currentUser" @logout="logout"
                     @profile-updated="updateProfilePhoto" />
             </div>
@@ -566,7 +566,7 @@ onMounted(() => {
 
 
                     <button type="button" @click="openAddModal"
-                        class="w-full cursor-pointer rounded-lg bg-emerald-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-800 sm:w-auto">
+                        class="w-full cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-800 sm:w-auto">
                         + Add Organization
                     </button>
 
@@ -769,7 +769,7 @@ onMounted(() => {
 
                                 <button v-else type="button" @click="goToPage(page)"
                                     class="cursor-pointer rounded-lg px-3 py-2 text-sm transition" :class="currentPage === page
-                                        ? 'bg-emerald-900 text-white'
+                                        ? 'bg-blue-900 text-white'
                                         : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
                                         ">
                                     {{ page }}

@@ -139,8 +139,8 @@ function roleLabel(role) {
                 class="space-y-5 px-4 py-5 sm:px-6 sm:py-6"
             >
 
-                <div class="flex flex-col gap-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 sm:flex-row sm:items-center">
-                    <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-900 text-lg font-semibold text-white ring-4 ring-white">
+                <div class="flex flex-col gap-4 rounded-xl border border-blue-100 bg-blue-50/60 p-4 sm:flex-row sm:items-center">
+                    <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-900 text-lg font-semibold text-white ring-4 ring-white">
                         <img
                             v-if="photoPreview || (!props.form.profile_photo_remove && props.form.profile_photo_url)"
                             :src="photoPreview || props.form.profile_photo_url"
@@ -159,7 +159,7 @@ function roleLabel(role) {
                         <div class="mt-3 flex flex-wrap gap-2">
                             <label
                                 for="user-profile-photo"
-                                class="cursor-pointer rounded-lg border border-emerald-900/20 bg-white px-3 py-2 text-xs font-semibold text-emerald-950 transition hover:bg-emerald-50"
+                                class="cursor-pointer rounded-lg border border-blue-900/20 bg-white px-3 py-2 text-xs font-semibold text-blue-950 transition hover:bg-blue-50"
                             >
                                 {{ photoPreview || props.form.profile_photo_url ? 'Choose another photo' : 'Choose photo' }}
                             </label>
@@ -342,7 +342,7 @@ function roleLabel(role) {
                     <button
                         type="submit"
                         :disabled="props.updating"
-                        class="w-full cursor-pointer rounded-lg bg-emerald-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                        class="w-full cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                     >
                         {{
                             props.updating

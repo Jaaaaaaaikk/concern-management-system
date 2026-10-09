@@ -26,10 +26,10 @@ const props = defineProps({
 
 const emit = defineEmits([
     'close',
-    'success',
-    'error',
     'created'
 ])
+
+const { showToast } = useToast()
 
 const saving = ref(false)
 
@@ -57,17 +57,17 @@ const availableOrganizations = computed(() => {
         return []
     }
 
-    if (props.currentUser.role_name === 'admin') {
-
-        return props.organizations.filter(
-            organization =>
-                Number(organization.id) !==
-                Number(props.currentUser.organization_id)
-        )
-
+    if (
+        props.currentUser.role_name === 'superadmin'
+    ) {
+        return props.organizations
     }
 
-    return props.organizations
+    return props.organizations.filter(
+        organization =>
+            Number(organization.id) !==
+            Number(props.currentUser.organization_id)
+    )
 
 })
 
@@ -133,9 +133,9 @@ function handleImageChange(event) {
 
         if (!allowedTypes.includes(file.type)) {
 
-            emit(
-                'error',
-                `${file.name} is not a supported image type. Please use JPEG, PNG, GIF, or WEBP.`
+            showToast(
+                `${file.name} is not a supported image type. Please use JPEG, PNG, GIF, or WEBP.`,
+                'error'
             )
 
             continue
@@ -144,9 +144,9 @@ function handleImageChange(event) {
 
         if (file.size > 5 * 1024 * 1024) {
 
-            emit(
-                'error',
-                `${file.name} is larger than 5MB.`
+            showToast(
+                `${file.name} is larger than 5MB.`,
+                'error'
             )
 
             continue
@@ -205,9 +205,9 @@ async function createConcern() {
 
     if (!form.value.title.trim()) {
 
-        emit(
-            'error',
-            'Please enter a concern title.'
+        showToast(
+            'Please enter a concern title.',
+            'error'
         )
 
         return
@@ -216,9 +216,9 @@ async function createConcern() {
 
     if (!form.value.description.trim()) {
 
-        emit(
-            'error',
-            'Please enter a concern description.'
+        showToast(
+            'Please enter a concern description.',
+            'error'
         )
 
         return
@@ -227,9 +227,9 @@ async function createConcern() {
 
     if (!form.value.concern_type_id) {
 
-        emit(
-            'error',
-            'Please select a concern type.'
+        showToast(
+            'Please select a concern type.',
+            'error'
         )
 
         return
@@ -238,9 +238,9 @@ async function createConcern() {
 
     if (!form.value.assigned_organization_id) {
 
-        emit(
-            'error',
-            'Please select an organization.'
+        showToast(
+            'Please select an organization.',
+            'error'
         )
 
         return
@@ -255,7 +255,7 @@ async function createConcern() {
 
     if (
 
-        props.currentUser?.role_name === 'admin' &&
+        props.currentUser?.role_name !== 'superadmin' &&
 
         Number(
             form.value.assigned_organization_id
@@ -267,9 +267,9 @@ async function createConcern() {
 
     ) {
 
-        emit(
-            'error',
-            'You cannot assign a concern to your own organization.'
+        showToast(
+            'You cannot assign a concern to your own organization.',
+            'error'
         )
 
         return
@@ -330,20 +330,20 @@ async function createConcern() {
 
         emit('created')
 
-        emit(
-            'success',
-            'Concern submitted successfully.'
+        showToast(
+            'Concern submitted successfully.',
+            'success'
         )
 
         emit('close')
 
     } catch (error) {
 
-        emit(
-            'error',
+        showToast(
             error?.data?.statusMessage ||
             error?.statusMessage ||
-            'Failed to submit concern.'
+            'Failed to submit concern.',
+            'error'
         )
 
     } finally {
@@ -382,19 +382,14 @@ onUnmounted(() => {
 
 <template>
 
-    <div
-        v-if="show"
-        class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6"
-    >
+    <div v-if="show"
+        class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6">
 
         <div
-            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]"
-        >
+            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
 
             <!-- Header -->
-            <div
-                class="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"
-            >
+            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
 
                 <div>
 
@@ -408,70 +403,47 @@ onUnmounted(() => {
 
                 </div>
 
-                <button
-                    type="button"
-                    @click="closeModal"
-                    :disabled="saving"
-                    class="cursor-pointer rounded-lg p-2 text-2xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
+                <button type="button" @click="closeModal" :disabled="saving"
+                    class="cursor-pointer rounded-lg p-2 text-2xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
                     ×
                 </button>
 
             </div>
 
-            <form
-                @submit.prevent="createConcern"
-                class="flex-1 overflow-y-auto"
-            >
+            <form @submit.prevent="createConcern" class="flex-1 overflow-y-auto">
 
                 <div class="space-y-5 p-4 sm:p-6">
 
                     <!-- Concern Title -->
                     <div>
 
-                        <label
-                            class="mb-2 block text-sm font-medium text-slate-700"
-                        >
+                        <label class="mb-2 block text-sm font-medium text-slate-700">
                             Concern Title
                             <span class="text-red-500">*</span>
                         </label>
 
-                        <input
-                            v-model="form.title"
-                            type="text"
-                            required
-                            placeholder="Enter concern title"
-                            class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                        />
+                        <input v-model="form.title" type="text" required placeholder="Enter concern title"
+                            class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100" />
 
                     </div>
 
                     <!-- Description -->
                     <div>
 
-                        <label
-                            class="mb-2 block text-sm font-medium text-slate-700"
-                        >
+                        <label class="mb-2 block text-sm font-medium text-slate-700">
                             Description
                             <span class="text-red-500">*</span>
                         </label>
 
-                        <textarea
-                            v-model="form.description"
-                            required
-                            rows="6"
-                            placeholder="Describe the concern..."
-                            class="w-full resize-y rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                        ></textarea>
+                        <textarea v-model="form.description" required rows="6" placeholder="Describe the concern..."
+                            class="w-full resize-y rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"></textarea>
 
                     </div>
 
                     <!-- Multiple Original Images -->
                     <div>
 
-                        <label
-                            class="mb-2 block text-sm font-medium text-slate-700"
-                        >
+                        <label class="mb-2 block text-sm font-medium text-slate-700">
                             Attach Images
 
                             <span class="font-normal text-slate-400">
@@ -480,76 +452,45 @@ onUnmounted(() => {
 
                         </label>
 
-                        <input
-                            id="concern-image"
-                            type="file"
-                            multiple
-                            accept="image/jpeg,image/png,image/gif,image/webp"
-                            @change="handleImageChange"
-                            class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:border-slate-400 hover:file:bg-slate-200"
-                        />
+                        <input id="concern-image" type="file" multiple
+                            accept="image/jpeg,image/png,image/gif,image/webp" @change="handleImageChange"
+                            class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:border-slate-400 hover:file:bg-slate-200" />
 
                         <p class="mt-1 text-xs text-slate-500">
                             You can select multiple images. Maximum size: 5 MB per image.
                         </p>
 
-                        <div
-                            v-if="imagePreviews.length > 0"
-                            class="mt-4"
-                        >
+                        <div v-if="imagePreviews.length > 0" class="mt-4">
 
-                            <div
-                                class="mb-2 flex items-center justify-between"
-                            >
+                            <div class="mb-2 flex items-center justify-between">
 
                                 <p class="text-sm font-medium text-slate-700">
                                     Selected Images
                                 </p>
 
-                                <button
-                                    type="button"
-                                    @click="resetOriginalImages"
-                                    :disabled="saving"
-                                    class="cursor-pointer text-xs font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
+                                <button type="button" @click="resetOriginalImages" :disabled="saving"
+                                    class="cursor-pointer text-xs font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
                                     Remove All
                                 </button>
 
                             </div>
 
-                            <div
-                                class="grid grid-cols-2 gap-3 sm:grid-cols-3"
-                            >
+                            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
 
-                                <div
-                                    v-for="(preview, index) in imagePreviews"
-                                    :key="preview.url"
-                                    class="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
-                                >
+                                <div v-for="(preview, index) in imagePreviews" :key="preview.url"
+                                    class="group relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
 
-                                    <img
-                                        :src="preview.url"
-                                        :alt="preview.file.name"
-                                        class="h-28 w-full bg-white object-cover transition duration-200 group-hover:scale-105"
-                                    />
+                                    <img :src="preview.url" :alt="preview.file.name"
+                                        class="h-28 w-full bg-white object-cover transition duration-200 group-hover:scale-105" />
 
-                                    <button
-                                        type="button"
-                                        @click="removeImage(index)"
-                                        :disabled="saving"
-                                        class="absolute right-2 top-2 cursor-pointer rounded-md bg-black/70 px-2 py-1 text-xs font-medium text-white opacity-90 transition hover:bg-red-600 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
+                                    <button type="button" @click="removeImage(index)" :disabled="saving"
+                                        class="absolute right-2 top-2 cursor-pointer rounded-md bg-black/70 px-2 py-1 text-xs font-medium text-white opacity-90 transition hover:bg-red-600 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50">
                                         Remove
                                     </button>
 
-                                    <div
-                                        class="border-t border-slate-200 bg-white px-2 py-2"
-                                    >
+                                    <div class="border-t border-slate-200 bg-white px-2 py-2">
 
-                                        <p
-                                            class="truncate text-xs text-slate-500"
-                                            :title="preview.file.name"
-                                        >
+                                        <p class="truncate text-xs text-slate-500" :title="preview.file.name">
                                             {{ preview.file.name }}
                                         </p>
 
@@ -569,31 +510,19 @@ onUnmounted(() => {
                         <!-- Concern Type -->
                         <div>
 
-                            <label
-                                class="mb-2 block text-sm font-medium text-slate-700"
-                            >
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
                                 Concern Type
                                 <span class="text-red-500">*</span>
                             </label>
 
-                            <select
-                                v-model="form.concern_type_id"
-                                required
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                            >
+                            <select v-model="form.concern_type_id" required
+                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
 
-                                <option
-                                    value=""
-                                    disabled
-                                >
+                                <option value="" disabled>
                                     Select concern type
                                 </option>
 
-                                <option
-                                    v-for="type in concernTypes"
-                                    :key="type.id"
-                                    :value="type.id"
-                                >
+                                <option v-for="type in concernTypes" :key="type.id" :value="type.id">
                                     {{ type.name }}
                                 </option>
 
@@ -604,40 +533,26 @@ onUnmounted(() => {
                         <!-- Assigned To -->
                         <div>
 
-                            <label
-                                class="mb-2 block text-sm font-medium text-slate-700"
-                            >
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
                                 Assigned To
                                 <span class="text-red-500">*</span>
                             </label>
 
-                            <select
-                                v-model="form.assigned_organization_id"
-                                required
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                            >
+                            <select v-model="form.assigned_organization_id" required
+                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
 
-                                <option
-                                    value=""
-                                    disabled
-                                >
+                                <option value="" disabled>
                                     Select organization
                                 </option>
 
-                                <option
-                                    v-for="organization in availableOrganizations"
-                                    :key="organization.id"
-                                    :value="organization.id"
-                                >
+                                <option v-for="organization in availableOrganizations" :key="organization.id"
+                                    :value="organization.id">
                                     {{ organization.name }}
                                 </option>
 
                             </select>
 
-                            <p
-                                v-if="currentUser?.role_name === 'admin'"
-                                class="mt-1 text-xs text-slate-500"
-                            >
+                            <p v-if="currentUser?.role_name !== 'superadmin'" class="mt-1 text-xs text-slate-500">
                                 Your own organization is not available for assignment.
                             </p>
 
@@ -648,18 +563,13 @@ onUnmounted(() => {
                     <!-- Priority -->
                     <div>
 
-                        <label
-                            class="mb-2 block text-sm font-medium text-slate-700"
-                        >
+                        <label class="mb-2 block text-sm font-medium text-slate-700">
                             Priority
                             <span class="text-red-500">*</span>
                         </label>
 
-                        <select
-                            v-model="form.priority"
-                            required
-                            class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                        >
+                        <select v-model="form.priority" required
+                            class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
 
                             <option value="low">
                                 Low
@@ -682,24 +592,15 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Buttons -->
-                    <div
-                        class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end"
-                    >
+                    <div class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
 
-                        <button
-                            type="button"
-                            @click="closeModal"
-                            :disabled="saving"
-                            class="w-full cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                        >
+                        <button type="button" @click="closeModal" :disabled="saving"
+                            class="w-full cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
                             Cancel
                         </button>
 
-                        <button
-                            type="submit"
-                            :disabled="saving"
-                            class="w-full cursor-pointer rounded-lg bg-emerald-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-emerald-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                        >
+                        <button type="submit" :disabled="saving"
+                            class="w-full cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
 
                             {{
                                 saving

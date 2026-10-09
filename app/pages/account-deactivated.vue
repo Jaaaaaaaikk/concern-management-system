@@ -56,7 +56,7 @@ async function goToLogin() {
                 <button
                     type="button"
                     @click="goToLogin"
-                    class="mt-7 w-full rounded-lg bg-emerald-900 px-4 py-3 font-medium text-white transition hover:bg-emerald-800"
+                    class="mt-7 w-full rounded-lg bg-blue-900 px-4 py-3 font-medium text-white transition hover:bg-blue-800"
                 >
                     Back to Login
                 </button>

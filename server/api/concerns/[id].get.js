@@ -1,26 +1,24 @@
-import db from '../../utils/db.js'
+import db from "../../utils/db.js";
 
-import { requireAuth } from '../../utils/require-auth.js'
+import { requireAuth } from "../../utils/require-auth.js";
 
 export default defineEventHandler(async (event) => {
-    const currentUser = await requireAuth(event)
+  const currentUser = await requireAuth(event);
 
-    const concernId = Number(
-        getRouterParam(event, 'id')
-    )
+  const concernId = Number(getRouterParam(event, "id"));
 
-    if (!concernId || Number.isNaN(concernId)) {
-        throw createError({
-            statusCode: 400,
-            statusMessage: 'Invalid concern ID.'
-        })
-    }
+  if (!concernId || Number.isNaN(concernId)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid concern ID.",
+    });
+  }
 
-    /*
-     * Get concern information.
-     */
-    const [concernRows] = await db.query(
-        `
+  /*
+   * Get concern information.
+   */
+  const [concernRows] = await db.query(
+    `
         SELECT
             c.id,
             c.concern_number,
@@ -44,12 +42,12 @@ export default defineEventHandler(async (event) => {
 
             c.assigned_organization_id,
 
-            assigned_org.name AS organization_name,
+            assigned_org.name AS assigned_organization_name,
 
             c.status,
             c.priority,
             c.created_at,
-            c.acknowledged_at,
+            c.target_commitment_at,
             c.updated_at,
             c.resolved_at,
             c.closed_at
@@ -72,118 +70,122 @@ export default defineEventHandler(async (event) => {
 
         LIMIT 1
         `,
-        [concernId]
-    )
+    [concernId],
+  );
 
-    if (concernRows.length === 0) {
-        throw createError({
-            statusCode: 404,
-            statusMessage: 'Concern not found.'
-        })
+  if (concernRows.length === 0) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: "Concern not found.",
+    });
+  }
+
+  const concern = concernRows[0];
+
+  /*
+   * Check whether the current user is allowed
+   * to view this concern.
+   */
+
+  /*
+   * SUPERADMIN
+   *
+   * Can view every concern.
+   */
+  if (currentUser.role_name === "superadmin") {
+    // Allowed.
+  } else if (currentUser.role_name === "admin") {
+    /*
+     * ADMIN
+     *
+     * Admin can view the concern if:
+     *
+     * 1. They created it themselves
+     *
+     * OR
+     *
+     * 2. The creator belongs to their organization
+     *
+     * OR
+     *
+     * 3. The concern is assigned to their organization
+     */
+    const createdByCurrentUser =
+      Number(concern.created_by) === Number(currentUser.id);
+
+    const creatorSameOrganization =
+      Number(concern.creator_organization_id) ===
+      Number(currentUser.organization_id);
+
+    const assignedToCurrentOrganization =
+      Number(concern.assigned_organization_id) ===
+      Number(currentUser.organization_id);
+
+    if (
+      !createdByCurrentUser &&
+      !creatorSameOrganization &&
+      !assignedToCurrentOrganization
+    ) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: "You do not have permission to view this concern.",
+      });
     }
-
-    const concern = concernRows[0]
-
+  } else if (currentUser.role_name === "user") {
     /*
-     * Check whether the current user is allowed
-     * to view this concern.
-     */
-
-    /*
-     * SUPERADMIN
+     * REGULAR USER
      *
-     * Can view every concern.
+     * Regular users can view:
+     *
+     * 1. Concerns they created themselves
+     *
+     * OR
+     *
+     * 2. Concerns created by someone in their organization
+     *
+     * OR
+     *
+     * 3. Concerns assigned to their organization
      */
-    if (currentUser.role_name === 'superadmin') {
-        // Allowed.
-    } else if (currentUser.role_name === 'admin') {
-        /*
-         * ADMIN
-         *
-         * Admin can view the concern if:
-         *
-         * 1. They created it themselves
-         *
-         * OR
-         *
-         * 2. The creator belongs to their organization
-         *
-         * OR
-         *
-         * 3. The concern is assigned to their organization
-         */
-        const createdByCurrentUser =
-            Number(concern.created_by) ===
-            Number(currentUser.id)
+    const createdByCurrentUser =
+      Number(concern.created_by) === Number(currentUser.id);
 
-        const creatorSameOrganization =
-            Number(concern.creator_organization_id) ===
-            Number(currentUser.organization_id)
+    const creatorSameOrganization =
+      Number(concern.creator_organization_id) ===
+      Number(currentUser.organization_id);
 
-        const assignedToCurrentOrganization =
-            Number(concern.assigned_organization_id) ===
-            Number(currentUser.organization_id)
+    const assignedToCurrentOrganization =
+      Number(concern.assigned_organization_id) ===
+      Number(currentUser.organization_id);
 
-        if (
-            !createdByCurrentUser &&
-            !creatorSameOrganization &&
-            !assignedToCurrentOrganization
-        ) {
-            throw createError({
-                statusCode: 403,
-                statusMessage:
-                    'You do not have permission to view this concern.'
-            })
-        }
-    } else if (currentUser.role_name === 'user') {
-        /*
-         * REGULAR USER
-         *
-         * Regular users can view:
-         *
-         * 1. Concerns they created themselves
-         *
-         * OR
-         *
-         * 2. Concerns created by someone in their
-         *    organization
-         */
-        const createdByCurrentUser =
-            Number(concern.created_by) ===
-            Number(currentUser.id)
-
-        const creatorSameOrganization =
-            Number(concern.creator_organization_id) ===
-            Number(currentUser.organization_id)
-
-        if (
-            !createdByCurrentUser &&
-            !creatorSameOrganization
-        ) {
-            throw createError({
-                statusCode: 403,
-                statusMessage:
-                    'You do not have permission to view this concern.'
-            })
-        }
-    } else {
-        throw createError({
-            statusCode: 403,
-            statusMessage: 'Invalid user role.'
-        })
+    if (
+      !createdByCurrentUser &&
+      !creatorSameOrganization &&
+      !assignedToCurrentOrganization
+    ) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: "You do not have permission to view this concern.",
+      });
     }
+  } else {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Invalid user role.",
+    });
+  }
 
-    /*
-     * Get original concern attachments.
-     *
-     * comment_id IS NULL means the attachment
-     * belongs directly to the concern.
-     *
-     * deleted_at IS NULL means the attachment
-     * has not been soft-deleted.
-     */
-    const [attachments] = await db.query(
-        `
+  /*
+   * Get original concern attachments.
+   *
+   * comment_id IS NULL means the attachment
+   * belongs directly to the concern.
+   *
+   * deleted_at IS NULL means the attachment
+   * has not been soft-deleted.
+   */
+  const [attachments] = await db.query(
+    `
         SELECT
             ca.id,
             ca.file_name,
@@ -210,14 +212,14 @@ export default defineEventHandler(async (event) => {
 
         ORDER BY ca.created_at ASC
         `,
-        [concernId]
-    )
+    [concernId],
+  );
 
-    /*
-     * Get comments.
-     */
-    const [comments] = await db.query(
-        `
+  /*
+   * Get comments.
+   */
+  const [comments] = await db.query(
+    `
         SELECT
             cc.id,
             cc.comment,
@@ -252,14 +254,14 @@ export default defineEventHandler(async (event) => {
 
         ORDER BY cc.created_at ASC
         `,
-        [concernId]
-    )
+    [concernId],
+  );
 
-    /*
-     * Get attachments belonging to comments.
-     */
-    const [commentAttachments] = await db.query(
-        `
+  /*
+   * Get attachments belonging to comments.
+   */
+  const [commentAttachments] = await db.query(
+    `
         SELECT
             ca.id,
             ca.comment_id,
@@ -288,32 +290,28 @@ export default defineEventHandler(async (event) => {
 
         ORDER BY ca.created_at ASC
         `,
-        [concernId]
-    )
+    [concernId],
+  );
 
-    /*
-     * Attach images to their corresponding comments.
-     */
-    const commentsWithAttachments =
-        comments.map((comment) => {
-            const attachmentsForComment =
-                commentAttachments.filter(
-                    (attachment) =>
-                        Number(attachment.comment_id) ===
-                        Number(comment.id)
-                )
+  /*
+   * Attach images to their corresponding comments.
+   */
+  const commentsWithAttachments = comments.map((comment) => {
+    const attachmentsForComment = commentAttachments.filter(
+      (attachment) => Number(attachment.comment_id) === Number(comment.id),
+    );
 
-            return {
-                ...comment,
-                attachments: attachmentsForComment
-            }
-        })
+    return {
+      ...comment,
+      attachments: attachmentsForComment,
+    };
+  });
 
-    /*
-     * Get status history.
-     */
-    const [statusHistoryRows] = await db.query(
-        `
+  /*
+   * Get status history.
+   */
+  const [statusHistoryRows] = await db.query(
+    `
         SELECT
             csh.id,
             csh.old_status,
@@ -337,19 +335,19 @@ export default defineEventHandler(async (event) => {
 
         ORDER BY csh.created_at ASC
         `,
-        [concernId]
-    )
+    [concernId],
+  );
 
-    /*
-     * Get resolution/status evidence.
-     *
-     * These attachments are separate from:
-     *
-     * - original concern attachments
-     * - comment attachments
-     */
-    const [statusAttachments] = await db.query(
-        `
+  /*
+   * Get resolution/status evidence.
+   *
+   * These attachments are separate from:
+   *
+   * - original concern attachments
+   * - comment attachments
+   */
+  const [statusAttachments] = await db.query(
+    `
         SELECT
             csa.id,
             csa.status_history_id,
@@ -376,34 +374,30 @@ export default defineEventHandler(async (event) => {
 
         ORDER BY csa.created_at ASC
         `,
-        [concernId]
-    )
+    [concernId],
+  );
 
-    /*
-     * Attach status evidence to the corresponding
-     * status history record.
-     */
-    const statusHistory =
-        statusHistoryRows.map((history) => {
-            const attachmentsForHistory =
-                statusAttachments.filter(
-                    (attachment) =>
-                        Number(
-                            attachment.status_history_id
-                        ) === Number(history.id)
-                )
-
-            return {
-                ...history,
-                attachments: attachmentsForHistory
-            }
-        })
+  /*
+   * Attach status evidence to the corresponding
+   * status history record.
+   */
+  const statusHistory = statusHistoryRows.map((history) => {
+    const attachmentsForHistory = statusAttachments.filter(
+      (attachment) =>
+        Number(attachment.status_history_id) === Number(history.id),
+    );
 
     return {
-        success: true,
-        concern,
-        attachments,
-        comments: commentsWithAttachments,
-        statusHistory
-    }
-})
+      ...history,
+      attachments: attachmentsForHistory,
+    };
+  });
+
+  return {
+    success: true,
+    concern,
+    attachments,
+    comments: commentsWithAttachments,
+    statusHistory,
+  };
+});

@@ -41,7 +41,7 @@ watch(
 
 <template>
     <span
-        class="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 font-semibold text-emerald-900 ring-1 ring-emerald-900/10"
+        class="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-100 font-semibold text-blue-900 ring-1 ring-blue-900/10"
         :class="size"
         :aria-label="`${name || 'User'} profile photo`"
     >

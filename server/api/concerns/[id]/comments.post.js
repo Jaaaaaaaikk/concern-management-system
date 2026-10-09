@@ -3,8 +3,6 @@ import { requireAuth } from "../../../utils/require-auth.js";
 import { readMultipartFormData } from "h3";
 
 import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
-import crypto from "node:crypto";
 
 export default defineEventHandler(async (event) => {
   const currentUser = await requireAuth(event);
@@ -41,18 +39,24 @@ export default defineEventHandler(async (event) => {
 
   /*
    * Get concern.
+   *
+   * We need both the creator's organization and
+   * the assigned organization for comment permissions.
    */
   const [concernRows] = await db.query(
     `
       SELECT
-          id,
-          created_by,
-          assigned_organization_id,
-          status
-      FROM concerns
-        WHERE id = ?
-        LIMIT 1
-        `,
+          c.id,
+          c.created_by,
+          c.assigned_organization_id,
+          c.status,
+          creator.organization_id AS creator_organization_id
+      FROM concerns c
+      LEFT JOIN users creator
+          ON creator.id = c.created_by
+      WHERE c.id = ?
+      LIMIT 1
+    `,
     [concernId],
   );
 
@@ -65,10 +69,17 @@ export default defineEventHandler(async (event) => {
 
   const concern = concernRows[0];
 
-  if (
-    concern.status === "resolved" ||
-    concern.status === "closed"
-  ) {
+  /*
+   * A concern is only completed for commenting when:
+   *
+   * - closed
+   * - cancelled
+   *
+   * Resolved concerns are still commentable because
+   * the creator organization may still need to discuss
+   * the resolution before the concern is closed.
+   */
+  if (concern.status === "closed" || concern.status === "cancelled") {
     throw createError({
       statusCode: 403,
       statusMessage:
@@ -77,28 +88,57 @@ export default defineEventHandler(async (event) => {
   }
 
   /*
-   * Check permission.
+   * Determine organization membership.
+   */
+  const currentOrganizationId =
+    currentUser.organization_id != null
+      ? Number(currentUser.organization_id)
+      : null;
+
+  const creatorOrganizationId =
+    concern.creator_organization_id != null
+      ? Number(concern.creator_organization_id)
+      : null;
+
+  const assignedOrganizationId =
+    concern.assigned_organization_id != null
+      ? Number(concern.assigned_organization_id)
+      : null;
+
+  /*
+   * Permission rules:
    *
    * Superadmin:
-   * Can comment on any concern.
+   * - Can comment on any concern.
    *
-   * Creator:
-   * Can comment on their own concern.
+   * Creator organization:
+   * - Admin can comment.
+   * - User can comment.
    *
-   * Assigned organization admin:
-   * Can comment if the concern is assigned
-   * to their organization.
+   * Assigned organization:
+   * - Admin can comment.
+   * - User can comment.
+   *
+   * The user does NOT need to be the original creator.
    */
   const isSuperadmin = currentUser.role_name === "superadmin";
 
-  const isCreator = Number(concern.created_by) === Number(currentUser.id);
+  const isCreatorOrganizationMember =
+    currentOrganizationId !== null &&
+    creatorOrganizationId !== null &&
+    currentOrganizationId === creatorOrganizationId &&
+    ["admin", "user"].includes(currentUser.role_name);
 
-  const isAssignedAdmin =
-    currentUser.role_name === "admin" &&
-    Number(concern.assigned_organization_id) ===
-      Number(currentUser.organization_id);
+  const isAssignedOrganizationMember =
+    currentOrganizationId !== null &&
+    assignedOrganizationId !== null &&
+    currentOrganizationId === assignedOrganizationId &&
+    ["admin", "user"].includes(currentUser.role_name);
 
-  if (!isSuperadmin && !isCreator && !isAssignedAdmin) {
+  const canComment =
+    isSuperadmin || isCreatorOrganizationMember || isAssignedOrganizationMember;
+
+  if (!canComment) {
     throw createError({
       statusCode: 403,
       statusMessage: "You do not have permission to comment on this concern.",
@@ -114,12 +154,6 @@ export default defineEventHandler(async (event) => {
 
   /*
    * Require either text or at least one image.
-   *
-   * This means:
-   * - text only = allowed
-   * - image only = allowed
-   * - text + images = allowed
-   * - empty comment with no images = rejected
    */
   if (!comment && imageFiles.length === 0) {
     throw createError({
@@ -133,13 +167,13 @@ export default defineEventHandler(async (event) => {
    */
   const [result] = await db.query(
     `
-        INSERT INTO concern_comments (
-            concern_id,
-            user_id,
-            comment
-        )
-        VALUES (?, ?, ?)
-        `,
+      INSERT INTO concern_comments (
+          concern_id,
+          user_id,
+          comment
+      )
+      VALUES (?, ?, ?)
+    `,
     [concernId, currentUser.id, comment],
   );
 
@@ -147,16 +181,9 @@ export default defineEventHandler(async (event) => {
 
   /*
    * Attachment upload directory.
-   *
-   * Files will be stored under:
-   *
-   * public/uploads/concerns/
    */
   const uploadDirectory = "public/uploads/concerns";
 
-  /*
-   * Make sure the directory exists.
-   */
   await mkdir(uploadDirectory, {
     recursive: true,
   });
@@ -207,17 +234,17 @@ export default defineEventHandler(async (event) => {
 
     const [attachmentResult] = await db.query(
       `
-            INSERT INTO concern_attachments (
-                concern_id,
-                comment_id,
-                uploaded_by,
-                file_name,
-                file_path,
-                file_type,
-                file_size
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            `,
+        INSERT INTO concern_attachments (
+            concern_id,
+            comment_id,
+            uploaded_by,
+            file_name,
+            file_path,
+            file_type,
+            file_size
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
       [
         concernId,
         commentId,
