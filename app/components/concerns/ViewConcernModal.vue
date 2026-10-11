@@ -2157,17 +2157,30 @@ onUnmounted(() => {
 
             <!-- Header -->
             <div
-                class="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+                class="flex shrink-0 items-center justify-between border-b border-blue-800 bg-linear-to-r from-blue-950 via-blue-900 to-slate-800 px-4 py-4 text-white sm:px-6 sm:py-5">
 
                 <div>
 
-                    <p class="text-xs font-medium uppercase tracking-wide text-slate-400">
-                        Concern Details
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200">
+                        Concern Workspace
                     </p>
 
-                    <h3 class="mt-1 text-lg font-semibold text-slate-800">
-                        {{ selectedConcern?.concern_number || 'View Concern' }}
+                    <h3 class="mt-1 text-lg font-bold tracking-tight text-white sm:text-xl">
+                        {{ selectedConcern?.title || 'Concern Details' }}
                     </h3>
+
+                    <p class="mt-1 text-xs font-medium text-blue-100/80">
+                        {{ selectedConcern?.concern_number || 'Ticket' }}
+                    </p>
+
+                    <div v-if="selectedConcern" class="mt-2 flex flex-wrap gap-2">
+                        <span class="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white">
+                            {{ formatStatus(selectedConcern.status) }}
+                        </span>
+                        <span class="rounded-full border border-white/15 bg-amber-300/15 px-2.5 py-1 text-[11px] font-semibold text-amber-100">
+                            {{ formatPriority(selectedConcern.priority) }} priority
+                        </span>
+                    </div>
 
                 </div>
 
@@ -2177,7 +2190,7 @@ onUnmounted(() => {
                     addingAttachments ||
                     replacingAttachmentId
                     "
-                    class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
+                    class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-white/15 bg-white/10 text-2xl text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50">
                     ×
                 </button>
 
@@ -2366,7 +2379,7 @@ onUnmounted(() => {
                     <div class="view-concern-sections grid gap-5 lg:grid-cols-2">
 
                     <!-- Main Information -->
-                    <div class="view-concern-main rounded-xl border border-slate-300 bg-white p-5 shadow-md">
+                    <div class="view-concern-main overflow-hidden rounded-xl border border-blue-100 bg-white p-5 shadow-lg shadow-blue-950/5">
 
                         <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 
@@ -2839,7 +2852,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Attachments -->
-                    <div class="view-concern-attachments rounded-xl border border-slate-300 bg-white p-5 shadow-md">
+                    <div class="view-concern-attachments rounded-xl border border-violet-100 bg-white p-5 shadow-lg shadow-violet-950/5">
 
                         <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 
@@ -3172,7 +3185,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Status History -->
-                    <div class="view-concern-history rounded-xl border border-slate-300 bg-white p-5 shadow-md lg:max-h-[70vh] lg:overflow-y-auto">
+                    <div class="view-concern-history rounded-xl border border-emerald-100 bg-white p-5 shadow-lg shadow-emerald-950/5 lg:max-h-[70vh] lg:overflow-y-auto">
 
                         <div class="mb-4">
 
@@ -3352,7 +3365,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Comments -->
-                    <div class="max-h-[70vh] overflow-y-auto rounded-xl border border-slate-300 bg-white p-5 shadow-md">
+                    <div class="max-h-[70vh] overflow-y-auto rounded-xl border border-amber-100 bg-white p-5 shadow-lg shadow-amber-950/5">
 
                         <div class="mb-5">
 
@@ -3518,7 +3531,7 @@ onUnmounted(() => {
 
                                 <label class="mb-2 block text-sm font-medium text-slate-700">
 
-                                    Attach Images
+                                    Attach Images for Comment
 
                                     <span class="font-normal text-slate-400">
                                         (Optional)

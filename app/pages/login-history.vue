@@ -12,6 +12,8 @@ const isHeaderSticky = useStickyHeader()
 const loading = ref(true)
 const errorMessage = ref('')
 const sessions = ref([])
+const sessionView = ref('active')
+const sessionCounts = ref({ active: 0, history: 0 })
 
 const currentPage = ref(1)
 const pageSize = ref(15)
@@ -31,14 +33,37 @@ async function loadLoginHistory() {
         cache: 'no-store',
         query: {
             page: currentPage.value,
-            limit: pageSize.value
+            limit: pageSize.value,
+            view: sessionView.value
         }
     })
 
     sessions.value = response.sessions || []
+    sessionCounts.value = response.counts || sessionCounts.value
     totalSessions.value = Number(response.pagination?.total || 0)
     totalPages.value = Number(response.pagination?.totalPages || 0)
     currentPage.value = Number(response.pagination?.page || currentPage.value)
+}
+
+async function selectSessionView(view) {
+    if (sessionView.value === view) {
+        return
+    }
+
+    sessionView.value = view
+    currentPage.value = 1
+    loading.value = true
+
+    try {
+        await loadLoginHistory()
+    } catch (error) {
+        errorMessage.value =
+            error?.data?.statusMessage ||
+            error?.statusMessage ||
+            'Failed to load login history.'
+    } finally {
+        loading.value = false
+    }
 }
 
 async function loadData() {
@@ -294,7 +319,7 @@ onMounted(() => {
     </div>
 </header>
 
-            <div class="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8">
+            <div class="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 sm:px-6 sm:py-8">
                 <div v-if="errorMessage"
                     class="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                     {{ errorMessage }}
@@ -307,6 +332,33 @@ onMounted(() => {
                 </div>
 
                 <div v-else class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
+                    <div class="border-b border-slate-200 bg-slate-50/80 p-3 sm:p-4">
+                        <div class="grid grid-cols-2 gap-2 rounded-xl bg-slate-200/70 p-1">
+                            <button type="button" @click="selectSessionView('active')"
+                                :class="sessionView === 'active'
+                                    ? 'bg-white text-blue-900 shadow-sm ring-1 ring-blue-100 cursor-pointer'
+                                    : 'text-slate-600 hover:text-slate-900 cursor-pointer'"
+                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition">
+                                <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                                Active now
+                                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">{{ sessionCounts.active }}</span>
+                            </button>
+                            <button type="button" @click="selectSessionView('history')"
+                                :class="sessionView === 'history'
+                                    ? 'bg-white text-blue-900 shadow-sm ring-1 ring-blue-100'
+                                    : 'text-slate-600 hover:text-slate-900 cursor-pointer'"
+                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition">
+                                Session history
+                                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{{ sessionCounts.history }}</span>
+                            </button>
+                        </div>
+                        <p class="px-1 pt-3 text-xs text-slate-500">
+                            {{ sessionView === 'active'
+                                ? 'Sessions that are still valid and have not been revoked.'
+                                : 'Sessions that have expired or were revoked.' }}
+                        </p>
+                    </div>
+
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-left">
                             <thead class="bg-slate-50">
@@ -404,6 +456,7 @@ onMounted(() => {
                     </div>
                 </div>
             </div>
+            <AppFooter class="mt-auto" />
         </main>
     </div>
 </template>

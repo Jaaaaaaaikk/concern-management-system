@@ -43,25 +43,37 @@ useBodyScrollLock(() => props.show)
 
             <!-- Header -->
             <div
-                class="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"
+                class="flex items-center justify-between border-b border-blue-800 bg-linear-to-r from-blue-950 via-blue-900 to-indigo-800 px-4 py-5 text-white sm:px-6 sm:py-6"
             >
 
-                <div>
+                <div class="flex items-center gap-3">
 
-                    <h3 class="text-lg font-semibold text-slate-800">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-blue-100 shadow-inner">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                            stroke-width="1.8" stroke="currentColor" class="h-6 w-6" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M3.75 21h16.5M4.5 21V7.5L12 3l7.5 4.5V21M9 21v-6h6v6M8 9h.008v.008H8V9Zm4 0h.008v.008H12V9Zm4 0h.008v.008H16V9Z" />
+                        </svg>
+                    </span>
+
+                    <div>
+
+                    <h3 class="text-lg font-bold tracking-tight text-white">
                         Add Organization
                     </h3>
 
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-blue-100/80">
                         Create a new organization.
                     </p>
+
+                    </div>
 
                 </div>
 
                 <button
                     type="button"
                     @click="emit('close')"
-                    class="cursor-pointer text-2xl leading-none text-slate-400 hover:text-slate-700"
+                    class="cursor-pointer rounded-lg p-1 text-2xl leading-none text-blue-100 transition hover:bg-white/10 hover:text-white"
                 >
                     ×
                 </button>

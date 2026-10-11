@@ -392,22 +392,34 @@ onUnmounted(() => {
             class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
 
             <!-- Header -->
-            <div class="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">
+            <div class="flex items-center justify-between border-b border-blue-800 bg-linear-to-r from-blue-950 via-blue-900 to-indigo-800 px-4 py-5 text-white sm:px-6 sm:py-6">
 
-                <div>
+                <div class="flex items-center gap-3">
 
-                    <h3 class="text-lg font-bold text-slate-800">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-blue-100 shadow-inner">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                            stroke-width="1.8" stroke="currentColor" class="h-6 w-6" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M12 4.5v15m7.5-7.5h-15M3.75 3.75h16.5v16.5H3.75V3.75Z" />
+                        </svg>
+                    </span>
+
+                    <div>
+
+                    <h3 class="text-lg font-bold tracking-tight text-white">
                         Create Concern
                     </h3>
 
-                    <p class="mt-1 text-sm text-slate-500">
+                    <p class="mt-1 text-sm text-blue-100/80">
                         Submit a new concern for the assigned organization.
                     </p>
+
+                    </div>
 
                 </div>
 
                 <button type="button" @click="closeModal" :disabled="saving"
-                    class="cursor-pointer rounded-lg p-2 text-2xl leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    class="cursor-pointer rounded-lg border border-white/15 bg-white/10 p-2 text-2xl leading-none text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50">
                     ×
                 </button>
 
@@ -508,7 +520,14 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Concern Type / Assigned To -->
-                    <div class="grid gap-5 sm:grid-cols-2">
+                    <div class="rounded-xl border border-blue-100 bg-blue-50/50 p-4 sm:p-5">
+
+                        <div class="mb-4">
+                            <h4 class="text-sm font-semibold text-slate-800">Request routing</h4>
+                            <p class="mt-1 text-xs text-slate-500">Choose a category and the organization responsible for handling this concern.</p>
+                        </div>
+
+                        <div class="grid gap-5 sm:grid-cols-2">
 
                         <!-- Concern Type -->
                         <div>
@@ -561,12 +580,14 @@ onUnmounted(() => {
 
                         </div>
 
+                        </div>
+
                     </div>
 
                     <!-- Priority -->
-                    <div>
+                    <div class="rounded-xl border border-amber-100 bg-amber-50/60 p-4">
 
-                        <label class="mb-2 block text-sm font-medium text-slate-700">
+                        <label class="mb-2 block text-sm font-semibold text-amber-950">
                             Priority
                             <span class="text-red-500">*</span>
                         </label>

@@ -342,6 +342,13 @@ function openEditModal(organization) {
     showEditModal.value = true
 }
 
+function handleOrganizationRowKeydown(event, organization) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        openEditModal(organization)
+    }
+}
+
 function closeEditModal() {
     if (updating.value) {
         return
@@ -596,7 +603,7 @@ onMounted(() => {
 
                 <div v-else class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
 
-                    <div class="overflow-x-auto">
+                    <div class="hidden overflow-x-auto lg:block">
 
                         <table class="min-w-full divide-y divide-slate-200">
 
@@ -624,11 +631,6 @@ onMounted(() => {
                                         Created
                                     </th>
 
-                                    <th
-                                        class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Actions
-                                    </th>
-
                                 </tr>
 
                             </thead>
@@ -638,7 +640,7 @@ onMounted(() => {
 
                                 <tr v-if="organizations.length === 0">
 
-                                    <td colspan="5" class="px-6 py-10 text-center text-sm text-slate-500">
+                                    <td colspan="4" class="px-6 py-10 text-center text-sm text-slate-500">
                                         No organizations found.
                                     </td>
 
@@ -646,11 +648,21 @@ onMounted(() => {
 
 
                                 <tr v-for="(organization, index) in organizations" :key="organization.id"
-                                    :class="index % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50 hover:bg-slate-100'"
-                                    class="transition">
+                                    :class="index % 2 === 0
+                                        ? 'bg-white hover:bg-blue-50/70'
+                                        : 'bg-slate-50 hover:bg-blue-50/80'"
+                                    class="group cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700"
+                                    role="button" tabindex="0"
+                                    @click="openEditModal(organization)"
+                                    @keydown="handleOrganizationRowKeydown($event, organization)">
 
                                     <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-800">
-                                        {{ organization.name }}
+                                        <div class="flex items-center justify-between gap-3">
+                                            <span>{{ organization.name }}</span>
+                                            <span class="text-xs font-medium text-blue-700 opacity-0 transition group-hover:opacity-100">
+                                                Edit →
+                                            </span>
+                                        </div>
                                     </td>
 
 
@@ -683,21 +695,30 @@ onMounted(() => {
                                     </td>
 
 
-                                    <td class="whitespace-nowrap px-6 py-4 text-right">
-
-                                        <button type="button" @click="openEditModal(organization)"
-                                            class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
-                                            Edit
-                                        </button>
-
-                                    </td>
-
                                 </tr>
 
                             </tbody>
 
                         </table>
 
+                    </div>
+
+                    <!-- Touch-friendly organization rows -->
+                    <div class="space-y-3 p-3 lg:hidden">
+                        <button v-for="organization in organizations" :key="organization.id"
+                            type="button" @click="openEditModal(organization)"
+                            class="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-700">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-semibold text-slate-900">{{ organization.name }}</p>
+                                    <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
+                                        {{ organization.description || organization.address || 'No additional details' }}
+                                    </p>
+                                </div>
+                                <span class="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Edit</span>
+                            </div>
+                            <p class="mt-3 text-xs font-semibold text-blue-800">Tap to edit organization →</p>
+                        </button>
                     </div>
 
 

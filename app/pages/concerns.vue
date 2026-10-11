@@ -873,6 +873,11 @@ async function confirmExport() {
 
             await writable.close()
 
+            showToast(
+                'Excel report saved successfully.',
+                'success'
+            )
+
             showExportModal.value =
                 false
 
@@ -908,6 +913,11 @@ async function confirmExport() {
 
         window.URL.revokeObjectURL(
             url
+        )
+
+        showToast(
+            'Excel report download started successfully.',
+            'success'
         )
 
         showExportModal.value =
@@ -2010,6 +2020,10 @@ onUnmounted(() => {
                                                 }}
                                             </p>
 
+                                            <p class="mt-1 text-[10px] font-semibold text-blue-700/70">
+                                                Click row to view details <span aria-hidden="true">→</span>
+                                            </p>
+
                                             <p
                                                 class="mt-1 truncate text-xs text-slate-500"
                                                 :title="concern.description"
@@ -2223,6 +2237,10 @@ onUnmounted(() => {
                                         concern.description ||
                                         'No description'
                                     }}
+                                </p>
+
+                                <p class="mt-2 text-[11px] font-semibold text-blue-800">
+                                    Tap card to view concern <span aria-hidden="true">→</span>
                                 </p>
 
                                 <div

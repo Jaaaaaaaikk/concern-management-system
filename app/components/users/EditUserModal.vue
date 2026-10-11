@@ -23,6 +23,10 @@ const props = defineProps({
         type: Boolean,
         default: false
     },
+    isCurrentUser: {
+        type: Boolean,
+        default: false
+    },
     updating: {
         type: Boolean,
         default: false
@@ -32,7 +36,8 @@ const props = defineProps({
 const emit = defineEmits([
     'close',
     'submit',
-    'role-change'
+    'role-change',
+    'status-toggle'
 ])
 
 useBodyScrollLock(() => props.show)
@@ -116,22 +121,22 @@ function roleLabel(role) {
         <div class="my-auto max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
 
             <div
-                class="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5"
+                class="flex items-center justify-between border-b border-blue-800 bg-linear-to-r from-blue-950 to-blue-800 px-4 py-4 text-white sm:px-6 sm:py-5"
             >
                 <div>
-                    <h3 class="text-lg font-semibold text-slate-800">
+                    <h3 class="text-lg font-semibold text-white">
                         Edit User
                     </h3>
 
-                    <p class="mt-1 text-sm text-slate-500">
-                        Update the selected user's information.
+                    <p class="mt-1 text-sm text-blue-100/80">
+                        Manage profile, access, and account status.
                     </p>
                 </div>
 
                 <button
                     type="button"
                     @click="emit('close')"
-                    class="cursor-pointer text-2xl leading-none text-slate-400 hover:text-slate-700"
+                    class="cursor-pointer rounded-lg p-1 text-2xl leading-none text-blue-100 transition hover:bg-white/10 hover:text-white"
                 >
                     ×
                 </button>
@@ -328,6 +333,34 @@ function roleLabel(role) {
                     </div>
 
                 </div>
+
+                <section class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-slate-800">Account access</p>
+                            <p class="mt-1 text-xs leading-5 text-slate-500">
+                                {{ props.form.status === 'active'
+                                    ? 'This user can currently sign in.'
+                                    : 'This user is inactive and cannot sign in.' }}
+                            </p>
+                        </div>
+                        <button
+                            v-if="!props.isCurrentUser"
+                            type="button"
+                            :disabled="props.updating"
+                            @click="emit('status-toggle')"
+                            :class="props.form.status === 'active'
+                                ? 'border-red-200 bg-white text-red-700 hover:bg-red-50'
+                                : 'border-green-200 bg-white text-green-700 hover:bg-green-50'"
+                            class="cursor-pointer rounded-lg border px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {{ props.form.status === 'active' ? 'Deactivate User' : 'Activate User' }}
+                        </button>
+                        <span v-else class="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-800">
+                            Signed-in account
+                        </span>
+                    </div>
+                </section>
 
                 <div
                     class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end"

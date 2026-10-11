@@ -58,7 +58,8 @@ const editForm = ref({
     organization_id: '',
     profile_photo_url: '',
     profile_photo_file: null,
-    profile_photo_remove: false
+    profile_photo_remove: false,
+    status: 'active'
 })
 
 const currentPage = ref(1)
@@ -488,7 +489,8 @@ function openEditModal(user) {
         organization_id: user.organization_id || '',
         profile_photo_url: user.profile_photo || '',
         profile_photo_file: null,
-        profile_photo_remove: false
+        profile_photo_remove: false,
+        status: user.status || 'active'
     }
 
     const selectedRole = roles.value.find(
@@ -505,6 +507,23 @@ function openEditModal(user) {
 
     showEditModal.value = true
 
+}
+
+function requestEditUserStatusChange() {
+    if (!editingUser.value || isCurrentUser(editingUser.value)) {
+        return
+    }
+
+    const user = editingUser.value
+    showEditModal.value = false
+    toggleStatus(user)
+}
+
+function handleUserRowKeydown(event, user) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        openEditModal(user)
+    }
 }
 
 function handleEditRoleChange() {
@@ -921,6 +940,10 @@ onMounted(() => {
                             Manage system users and their roles.
                         </p>
 
+                        <p v-if="!loading && users.length" class="mt-1 text-[11px] font-medium text-blue-700/80">
+                            Select a row or card to edit user details and account access.
+                        </p>
+
                     </div>
 
                     <button type="button" @click="openCreateModal"
@@ -998,9 +1021,9 @@ onMounted(() => {
                     </div>
 
                     <!-- Table -->
-                    <div class="overflow-x-auto">
+                    <div class="hidden md:block">
 
-                        <table class="min-w-250 w-full text-left">
+                        <table class="w-full table-fixed text-left">
 
                             <thead class="bg-slate-50">
 
@@ -1029,11 +1052,6 @@ onMounted(() => {
                                     <th
                                         class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                         Status
-                                    </th>
-
-                                    <th
-                                        class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Actions
                                     </th>
 
                                 </tr>
@@ -1065,10 +1083,6 @@ onMounted(() => {
                                         <div class="h-6 w-16 rounded-full bg-slate-200"></div>
                                     </td>
 
-                                    <td class="px-5 py-5">
-                                        <div class="h-9 w-28 rounded bg-slate-200"></div>
-                                    </td>
-
                                 </tr>
 
                             </tbody>
@@ -1078,7 +1092,7 @@ onMounted(() => {
 
                                 <tr>
 
-                                    <td colspan="6" class="px-5 py-12 text-center">
+                                    <td colspan="5" class="px-5 py-12 text-center">
 
                                         <p class="text-sm font-medium text-slate-600">
                                             No users found.
@@ -1099,10 +1113,13 @@ onMounted(() => {
 
                                 <tr v-for="(user, index) in users" :key="user.id"
                                     :class="index % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50 hover:bg-slate-100'"
-                                    class="transition">
+                                    class="cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700"
+                                    role="button" tabindex="0"
+                                    @click="openEditModal(user)"
+                                    @keydown="handleUserRowKeydown($event, user)">
 
                                     <!-- Username -->
-                                    <td class="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">
+                                    <td class="px-4 py-4 text-sm font-semibold text-slate-700">
 
                                         {{ user.username }}
 
@@ -1114,7 +1131,7 @@ onMounted(() => {
                                     </td>
 
                                     <!-- Name -->
-                                    <td class="px-5 py-4 text-sm text-slate-600">
+                                    <td class="px-4 py-4 text-sm text-slate-600">
                                         <div class="flex min-w-0 items-center gap-3">
                                             <UserAvatar :name="fullName(user) || user.username"
                                                 :photo-url="user.profile_photo" />
@@ -1123,7 +1140,7 @@ onMounted(() => {
                                     </td>
 
                                     <!-- Role -->
-                                    <td class="whitespace-nowrap px-5 py-4">
+                                    <td class="px-4 py-4">
 
                                         <span
                                             class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
@@ -1133,12 +1150,14 @@ onMounted(() => {
                                     </td>
 
                                     <!-- Organization -->
-                                    <td class="whitespace-nowrap px-5 py-4 text-sm text-slate-600">
-                                        {{ user.organization_name || '-' }}
+                                    <td class="px-4 py-4 text-sm text-slate-600">
+                                        <span class="block max-w-48 truncate" :title="user.organization_name || '-'">
+                                            {{ user.organization_name || '-' }}
+                                        </span>
                                     </td>
 
                                     <!-- Status -->
-                                    <td class="whitespace-nowrap px-5 py-4">
+                                    <td class="px-4 py-4">
 
                                         <span class="rounded-full px-3 py-1 text-xs font-medium"
                                             :class="statusClass(user.status)">
@@ -1153,40 +1172,38 @@ onMounted(() => {
 
                                     </td>
 
-                                    <!-- Actions -->
-                                    <td class="whitespace-nowrap px-5 py-4">
-
-                                        <div class="flex items-center gap-2">
-
-                                            <!-- Edit is still available for your own account -->
-                                            <button type="button" @click="openEditModal(user)"
-                                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
-                                                Edit
-                                            </button>
-
-                                            <!-- Activate/Deactivate is hidden for your own account -->
-                                            <button v-if="!isCurrentUser(user)" type="button"
-                                                @click="toggleStatus(user)"
-                                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
-
-                                                {{
-                                                    user.status === 'active'
-                                                        ? 'Deactivate'
-                                                        : 'Activate'
-                                                }}
-
-                                            </button>
-
-                                        </div>
-
-                                    </td>
-
                                 </tr>
 
                             </tbody>
 
                         </table>
 
+                    </div>
+
+                    <!-- Compact touch-friendly user cards -->
+                    <div v-if="!loading && users.length" class="space-y-3 p-3 md:hidden">
+                        <button v-for="user in users" :key="user.id" type="button"
+                            @click="openEditModal(user)"
+                            class="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/40 focus:outline-none focus:ring-2 focus:ring-blue-700">
+                            <div class="flex items-start gap-3">
+                                <UserAvatar :name="fullName(user) || user.username" :photo-url="user.profile_photo" />
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <p class="truncate text-sm font-semibold text-slate-900">{{ fullName(user) || user.username }}</p>
+                                            <p class="mt-0.5 truncate text-xs text-slate-500">@{{ user.username }}</p>
+                                        </div>
+                                        <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                                            :class="statusClass(user.status)">{{ user.status === 'active' ? 'Active' : 'Inactive' }}</span>
+                                    </div>
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        <span class="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-800">{{ roleLabel(user.role_name) }}</span>
+                                        <span class="max-w-full truncate rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{{ user.organization_name || 'No organization' }}</span>
+                                    </div>
+                                    <p class="mt-3 text-xs font-semibold text-blue-800">Tap to edit account →</p>
+                                </div>
+                            </div>
+                        </button>
                     </div>
 
                     <!-- Pagination -->
@@ -1250,8 +1267,9 @@ onMounted(() => {
 
         <!-- Edit User Modal -->
         <EditUserModal :show="showEditModal" :form="editForm" :roles="roles" :organizations="organizations"
+            :is-current-user="editingUser ? isCurrentUser(editingUser) : false"
             :is-superadmin-role="isEditSuperadminRole" :updating="updating" @close="closeEditModal" @submit="updateUser"
-            @role-change="handleEditRoleChange" />
+            @role-change="handleEditRoleChange" @status-toggle="requestEditUserStatusChange" />
 
         <div
             v-if="statusConfirmation"

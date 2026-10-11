@@ -256,7 +256,7 @@ export default defineEventHandler(async (event) => {
             c.status,
             c.priority,
             c.created_at,
-            c.acknowledged_at,
+            c.target_commitment_at,
             c.updated_at,
             c.resolved_at,
             c.closed_at
@@ -281,6 +281,34 @@ export default defineEventHandler(async (event) => {
     `;
 
   const [rows] = await db.query(query, params);
+
+  const statusHistoryByConcern = new Map();
+  const concernIds = rows.map((row) => row.id);
+
+  for (let startIndex = 0; startIndex < concernIds.length; startIndex += 500) {
+    const concernIdBatch = concernIds.slice(startIndex, startIndex + 500);
+    const placeholders = concernIdBatch.map(() => "?").join(", ");
+
+    const [historyRows] = await db.query(
+      `
+        SELECT concern_id, new_status, remarks, created_at
+        FROM concern_status_history
+        WHERE concern_id IN (${placeholders})
+        ORDER BY created_at ASC
+      `,
+      concernIdBatch,
+    );
+
+    for (const history of historyRows) {
+      const historyForConcern = statusHistoryByConcern.get(Number(history.concern_id)) || [];
+      historyForConcern.push(history);
+      statusHistoryByConcern.set(Number(history.concern_id), historyForConcern);
+    }
+  }
+
+  for (const concern of rows) {
+    concern.statusHistory = statusHistoryByConcern.get(Number(concern.id)) || [];
+  }
 
   /*
    * EXCEL HELPERS
@@ -309,39 +337,119 @@ export default defineEventHandler(async (event) => {
     return labels[priority] || priority || "-";
   }
 
+  function parseLocalDateTime(value) {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value;
+    }
+
+    const text = String(value).trim();
+
+    if (!text) {
+      return null;
+    }
+
+    if (text.includes("Z") || /[+-]\d{2}:\d{2}$/.test(text)) {
+      const date = new Date(text);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const match = text.match(
+      /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/,
+    );
+
+    if (!match) {
+      const date = new Date(text);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const [, year, month, day, hour, minute, second = "0"] = match;
+    const date = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+    );
+
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function getCommitmentStartFromRemarks(remarks) {
+    const match = String(remarks || "").match(
+      /(?:commitment start|scheduled start(?: date\/time)?|target resolution date):\s*(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?)/i,
+    );
+
+    return match ? parseLocalDateTime(match[1]) : null;
+  }
+
   function getHandlingDuration(concern) {
-    if (!concern?.acknowledged_at) {
-      return "-";
+    const histories = concern.statusHistory || [];
+    let elapsedMilliseconds = 0;
+    let activeSince = null;
+    const latestInProgress = [...histories]
+      .reverse()
+      .find((history) => history.new_status === "in_progress");
+
+    for (const history of histories) {
+      const changedAt = parseLocalDateTime(history.created_at);
+
+      if (!changedAt) {
+        continue;
+      }
+
+      if (history.new_status === "in_progress") {
+        activeSince =
+          getCommitmentStartFromRemarks(history.remarks) ||
+          (history === latestInProgress
+            ? parseLocalDateTime(concern.target_commitment_at)
+            : null) ||
+          changedAt;
+      } else if (
+        ["on_hold", "resolved", "closed", "cancelled"].includes(history.new_status) &&
+        activeSince
+      ) {
+        elapsedMilliseconds += Math.max(
+          0,
+          changedAt.getTime() - activeSince.getTime(),
+        );
+        activeSince = null;
+      }
     }
 
-    const start = new Date(concern.acknowledged_at);
-
-    if (Number.isNaN(start.getTime())) {
-      return "-";
+    if (activeSince && concern.status === "in_progress") {
+      elapsedMilliseconds += Math.max(
+        0,
+        Date.now() - activeSince.getTime(),
+      );
     }
 
-    let end = null;
+    if (histories.length === 0 && concern.target_commitment_at) {
+      const start = parseLocalDateTime(concern.target_commitment_at);
+      const end = concern.resolved_at
+        ? parseLocalDateTime(concern.resolved_at)
+        : concern.status === "in_progress"
+          ? new Date()
+          : null;
 
-    if (concern.resolved_at) {
-      end = new Date(concern.resolved_at);
-    } else if (
-      concern.status === "in_progress" ||
-      concern.status === "on_hold"
-    ) {
-      end = new Date();
+      if (start && end) {
+        elapsedMilliseconds = Math.max(0, end.getTime() - start.getTime());
+      }
     }
 
-    if (!end || Number.isNaN(end.getTime())) {
-      return "-";
+    if (!activeSince && elapsedMilliseconds === 0) {
+      return "Not started";
     }
 
-    const difference = end.getTime() - start.getTime();
-
-    if (difference < 0) {
-      return "-";
+    if (activeSince && Date.now() < activeSince.getTime() && elapsedMilliseconds === 0) {
+      return "Not started";
     }
 
-    const totalMinutes = Math.floor(difference / 60000);
+    const totalMinutes = Math.floor(elapsedMilliseconds / 60000);
 
     const days = Math.floor(totalMinutes / 1440);
 
@@ -371,9 +479,9 @@ export default defineEventHandler(async (event) => {
       return "-";
     }
 
-    const date = new Date(value);
+    const date = parseLocalDateTime(value);
 
-    if (Number.isNaN(date.getTime())) {
+    if (!date) {
       return "-";
     }
 
@@ -459,6 +567,13 @@ export default defineEventHandler(async (event) => {
     filterParts.push(`Priority: ${formatPriority(priority)}`);
   }
 
+  if (Number.isInteger(department) && department > 0) {
+    const selectedDepartment = rows.find(
+      (row) => Number(row.assigned_organization_id) === department,
+    );
+    filterParts.push(`Department: ${selectedDepartment?.organization_name || department}`);
+  }
+
   if (date === "today") {
     filterParts.push("Date: Today");
   } else if (date === "week") {
@@ -509,7 +624,7 @@ export default defineEventHandler(async (event) => {
     "Created By",
     "Creator Organization",
     "Date",
-    "Acknowledged At",
+    "Committed Start",
     "Resolved At",
     "Handling Duration",
   ];
@@ -570,7 +685,7 @@ export default defineEventHandler(async (event) => {
       concern.created_by_name || "-",
       concern.creator_organization_name || "-",
       concern.created_at ? new Date(concern.created_at) : null,
-      concern.acknowledged_at ? new Date(concern.acknowledged_at) : null,
+      concern.target_commitment_at ? parseLocalDateTime(concern.target_commitment_at) : null,
       concern.resolved_at ? new Date(concern.resolved_at) : null,
       getHandlingDuration(concern),
     ]);

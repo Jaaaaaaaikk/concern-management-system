@@ -7,7 +7,12 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const page = Math.max(1, Number(query.page) || 1)
   const limit = Math.min(100, Math.max(1, Number(query.limit) || 20))
+  const view = query.view === 'active' ? 'active' : 'history'
   const offset = (page - 1) * limit
+
+  const sessionCondition = view === 'active'
+    ? "s.revoked_at IS NULL AND s.expires_at > NOW()"
+    : "(s.revoked_at IS NOT NULL OR s.expires_at <= NOW())"
 
   const [countRows] = await db.query(
     `
@@ -15,6 +20,18 @@ export default defineEventHandler(async (event) => {
     FROM user_sessions s
     INNER JOIN users u
       ON u.id = s.user_id
+    WHERE u.deleted_at IS NULL
+      AND ${sessionCondition}
+    `
+  )
+
+  const [sessionCountRows] = await db.query(
+    `
+    SELECT
+      SUM(CASE WHEN s.revoked_at IS NULL AND s.expires_at > NOW() THEN 1 ELSE 0 END) AS active_count,
+      SUM(CASE WHEN s.revoked_at IS NOT NULL OR s.expires_at <= NOW() THEN 1 ELSE 0 END) AS history_count
+    FROM user_sessions s
+    INNER JOIN users u ON u.id = s.user_id
     WHERE u.deleted_at IS NULL
     `
   )
@@ -47,6 +64,7 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN organizations o
       ON o.id = u.organization_id
     WHERE u.deleted_at IS NULL
+      AND ${sessionCondition}
     ORDER BY s.created_at DESC
     LIMIT ? OFFSET ?
     `,
@@ -58,6 +76,11 @@ export default defineEventHandler(async (event) => {
 
   return {
     success: true,
+    view,
+    counts: {
+      active: Number(sessionCountRows[0]?.active_count || 0),
+      history: Number(sessionCountRows[0]?.history_count || 0)
+    },
     sessions: rows.map((row) => ({
       ...row,
       full_name: [row.first_name, row.middle_name, row.last_name]
