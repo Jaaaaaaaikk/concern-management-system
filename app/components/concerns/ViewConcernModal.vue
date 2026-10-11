@@ -2,6 +2,7 @@
 
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
+import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
 
 const props = defineProps({
     show: {
@@ -19,6 +20,8 @@ const props = defineProps({
         default: null
     }
 })
+
+useBodyScrollLock(() => props.show)
 
 const { showToast } = useToast()
 
@@ -2150,7 +2153,7 @@ onUnmounted(() => {
         class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6">
 
         <div
-            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
 
             <!-- Header -->
             <div
@@ -2360,8 +2363,10 @@ onUnmounted(() => {
                         </div>
                     </div>
 
+                    <div class="view-concern-sections grid gap-5 lg:grid-cols-2">
+
                     <!-- Main Information -->
-                    <div class="rounded-xl border border-slate-300 bg-white p-5 shadow-md">
+                    <div class="view-concern-main rounded-xl border border-slate-300 bg-white p-5 shadow-md">
 
                         <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 
@@ -2619,7 +2624,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Status Update -->
-                    <div v-if="canUpdateStatus()" class="overflow-hidden rounded-xl border border-blue-200 bg-white shadow-md">
+                    <div v-if="canUpdateStatus()" class="view-concern-status overflow-hidden rounded-xl border border-blue-200 bg-white shadow-md">
 
                         <div class="border-b border-blue-100 bg-blue-50/70 px-5 py-4">
 
@@ -2834,7 +2839,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Attachments -->
-                    <div class="rounded-xl border border-slate-300 bg-white p-5 shadow-md">
+                    <div class="view-concern-attachments rounded-xl border border-slate-300 bg-white p-5 shadow-md">
 
                         <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 
@@ -3167,7 +3172,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Status History -->
-                    <div class="rounded-xl border border-slate-300 bg-white p-5 shadow-md">
+                    <div class="view-concern-history rounded-xl border border-slate-300 bg-white p-5 shadow-md lg:max-h-[70vh] lg:overflow-y-auto">
 
                         <div class="mb-4">
 
@@ -3344,8 +3349,10 @@ onUnmounted(() => {
 
                     </div>
 
+                    </div>
+
                     <!-- Comments -->
-                    <div class="rounded-xl border border-slate-300 bg-white p-5 shadow-md">
+                    <div class="max-h-[70vh] overflow-y-auto rounded-xl border border-slate-300 bg-white p-5 shadow-md">
 
                         <div class="mb-5">
 
@@ -3664,3 +3671,30 @@ onUnmounted(() => {
     </div>
 
 </template>
+
+<style scoped>
+@media (min-width: 1024px) {
+    .view-concern-sections {
+        grid-template-areas:
+            'main history'
+            'status status'
+            'attachments attachments';
+    }
+
+    .view-concern-main {
+        grid-area: main;
+    }
+
+    .view-concern-history {
+        grid-area: history;
+    }
+
+    .view-concern-status {
+        grid-area: status;
+    }
+
+    .view-concern-attachments {
+        grid-area: attachments;
+    }
+}
+</style>

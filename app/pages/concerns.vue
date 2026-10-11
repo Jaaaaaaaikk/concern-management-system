@@ -22,6 +22,7 @@ const currentUser = useState(
 
 const loading = ref(true)
 const exporting = ref(false)
+const isHeaderSticky = ref(false)
 
 const errorMessage = ref('')
 
@@ -74,6 +75,16 @@ const currentTime = ref(
 )
 
 let durationTimer = null
+
+function handlePageScroll() {
+    const scrollY = window.scrollY
+
+    if (!isHeaderSticky.value && scrollY > 96) {
+        isHeaderSticky.value = true
+    } else if (isHeaderSticky.value && scrollY <= 24) {
+        isHeaderSticky.value = false
+    }
+}
 
 /*
  * PAGINATION DISPLAY
@@ -1166,6 +1177,8 @@ function updateProfilePhoto(
 
 onMounted(() => {
 
+    window.addEventListener('scroll', handlePageScroll, { passive: true })
+
     loadData()
 
     durationTimer =
@@ -1181,6 +1194,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+
+    window.removeEventListener('scroll', handlePageScroll)
 
     if (
         durationTimer
@@ -1216,10 +1231,10 @@ onUnmounted(() => {
         <!-- Sidebar -->
 
         <aside
-            class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-blue-950 text-white lg:flex"
+            class="fixed inset-y-0 left-0 z-40 hidden h-screen w-64 flex-col bg-blue-950 text-white lg:flex"
         >
 
-            <div class="border-b border-blue-900 px-6 py-5">
+            <div class="px-6 py-5">
 
                 <h1 class="text-lg font-bold">
                     Felcris Centrale
@@ -1238,7 +1253,7 @@ onUnmounted(() => {
                     :class="
                         $route.path === '/dashboard'
                             ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'
+                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
                     "
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
@@ -1260,7 +1275,7 @@ onUnmounted(() => {
                     :class="
                         $route.path === '/organizations'
                             ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'
+                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
                     "
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
@@ -1278,7 +1293,7 @@ onUnmounted(() => {
                     :class="
                         $route.path === '/concerns'
                             ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'
+                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
                     "
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
@@ -1300,7 +1315,7 @@ onUnmounted(() => {
                     :class="
                         $route.path === '/users'
                             ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'
+                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
                     "
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
@@ -1322,7 +1337,7 @@ onUnmounted(() => {
                     :class="
                         $route.path === '/login-history'
                             ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'
+                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
                     "
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
                 >
@@ -1337,7 +1352,7 @@ onUnmounted(() => {
 
             </nav>
 
-            <div class="border-t border-blue-900 p-4">
+            <div class="p-4">
 
                 <UserProfileControl
                     :current-user="currentUser"
@@ -1355,19 +1370,27 @@ onUnmounted(() => {
             class="flex min-h-screen flex-col lg:ml-64"
         >
 
+            <!-- Header -->
+
             <div
-                class="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8"
+                :class="[
+                    'w-full transition-[transform,opacity,background-color,box-shadow] duration-300 ease-out',
+                    isHeaderSticky
+                        ? 'lg:sticky lg:top-0 lg:z-30 lg:-translate-y-1 lg:bg-white/30 lg:shadow-md lg:backdrop-blur-md'
+                        : 'translate-y-0'
+                ]"
             >
 
-                <!-- Header -->
-
                 <div
-                    class="mb-7 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+                    :class="[
+                        'mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 transition-[padding] duration-300 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8',
+                        isHeaderSticky ? 'py-6 sm:py-8 lg:py-3' : 'py-6 sm:py-8'
+                    ]"
                 >
 
                     <div>
 
-                        <h2 class="text-2xl font-bold text-slate-800">
+                        <h2 class="text-xl font-semibold text-slate-900">
                             Concerns
                         </h2>
 
@@ -1394,6 +1417,10 @@ onUnmounted(() => {
                     </div>
 
                 </div>
+
+            </div>
+
+            <div class="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8">
 
                 <!-- Error -->
 

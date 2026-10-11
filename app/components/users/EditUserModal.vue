@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
 
 const props = defineProps({
     show: {
@@ -33,6 +34,8 @@ const emit = defineEmits([
     'submit',
     'role-change'
 ])
+
+useBodyScrollLock(() => props.show)
 
 const photoPreview = ref('')
 let photoPreviewUrl = null

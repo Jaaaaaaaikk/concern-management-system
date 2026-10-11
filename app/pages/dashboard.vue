@@ -6,14 +6,22 @@ import {
 } from 'chart.js'
 import { watch } from 'vue'
 import { useToast } from '~/composables/useToast'
+import { useStickyHeader } from '~/composables/useStickyHeader'
 
 Chart.register(...registerables)
+Chart.defaults.animation.duration = 1000
+Chart.defaults.animation.easing = 'easeOutQuart'
 
 definePageMeta({
-    middleware: 'auth'
+    middleware: 'auth',
+    pageTransition: {
+        name: 'dashboard-zoom',
+        mode: 'out-in'
+    }
 })
 
 const currentUser = useState('current-user', () => null)
+const isHeaderSticky = useStickyHeader()
 
 const dashboardData = ref(null)
 
@@ -53,6 +61,8 @@ let trendChart = null
 let organizationChart = null
 
 let creatorChart = null
+
+let scrollRevealObserver = null
 
 
 /* --------------------------------------------------------------------------
@@ -150,6 +160,7 @@ async function loadData() {
 
         destroyCharts()
         renderCharts()
+        setupScrollReveal()
     }
 }
 
@@ -536,7 +547,7 @@ function renderStatusChart() {
 
                         {
 
-                            data: values,
+                            data: values.map(() => 0),
 
                             backgroundColor:
                                 statuses.map(
@@ -563,6 +574,20 @@ function renderStatusChart() {
                     responsive: true,
 
                     maintainAspectRatio: false,
+
+                    animation: {
+
+                        duration: 1400,
+
+                        easing: 'easeOutQuart',
+
+                        delay: 100,
+
+                        animateRotate: true,
+
+                        animateScale: true
+
+                    },
 
                     cutout: '65%',
 
@@ -616,6 +641,17 @@ function renderStatusChart() {
 
             }
         )
+
+    const chartInstance = statusChart
+
+    requestAnimationFrame(() => {
+        if (statusChart !== chartInstance) {
+            return
+        }
+
+        chartInstance.data.datasets[0].data = values
+        chartInstance.update()
+    })
 }
 
 
@@ -641,6 +677,12 @@ function renderPriorityChart() {
 
     ]
 
+    const values =
+        priorities.map(
+            priority =>
+                getPriorityTotal(priority)
+        )
+
     priorityChart =
         new Chart(
             priorityChartCanvas.value,
@@ -665,13 +707,7 @@ function renderPriorityChart() {
                             label:
                                 'Number of Concerns',
 
-                            data:
-                                priorities.map(
-                                    priority =>
-                                        getPriorityTotal(
-                                            priority
-                                        )
-                                ),
+                            data: values.map(() => 0),
 
                             backgroundColor:
                                 priorities.map(
@@ -696,6 +732,16 @@ function renderPriorityChart() {
                     responsive: true,
 
                     maintainAspectRatio: false,
+
+                    animation: {
+
+                        duration: 1400,
+
+                        easing: 'easeOutQuart',
+
+                        delay: 250
+
+                    },
 
                     plugins: {
 
@@ -756,6 +802,17 @@ function renderPriorityChart() {
 
             }
         )
+
+    const chartInstance = priorityChart
+
+    requestAnimationFrame(() => {
+        if (priorityChart !== chartInstance) {
+            return
+        }
+
+        chartInstance.data.datasets[0].data = values
+        chartInstance.update()
+    })
 }
 
 
@@ -1249,6 +1306,45 @@ function renderCharts() {
     renderCreatorChart()
 }
 
+function setupScrollReveal() {
+    if (
+        typeof window === 'undefined' ||
+        !('IntersectionObserver' in window) ||
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+        return
+    }
+
+    const sections = document.querySelectorAll('[data-scroll-reveal]')
+
+    if (sections.length === 0) {
+        return
+    }
+
+    scrollRevealObserver?.disconnect()
+    document.documentElement.classList.add('has-scroll-reveal')
+
+    scrollRevealObserver = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            entry.target.classList.toggle('is-scroll-visible', entry.isIntersecting)
+        })
+    }, {
+        threshold: 0.12,
+        rootMargin: '0px 0px -48px 0px'
+    })
+
+    sections.forEach((section, index) => {
+        section.style.setProperty('--scroll-reveal-delay', `${(index % 2) * 100}ms`)
+        scrollRevealObserver.observe(section)
+    })
+}
+
+function cleanupScrollReveal() {
+    scrollRevealObserver?.disconnect()
+    scrollRevealObserver = null
+    document.documentElement.classList.remove('has-scroll-reveal')
+}
+
 
 /* --------------------------------------------------------------------------
 | Logout
@@ -1284,6 +1380,7 @@ async function logout() {
 onBeforeUnmount(() => {
 
     destroyCharts()
+    cleanupScrollReveal()
 
 })
 
@@ -1314,11 +1411,11 @@ onMounted(() => {
 
         <!-- Sidebar -->
 
-        <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-blue-950 text-white lg:flex">
+        <aside class="fixed inset-y-0 left-0 z-40 hidden h-screen w-64 flex-col bg-blue-950 text-white lg:flex">
 
             <!-- Logo -->
 
-            <div class="border-b border-blue-900 px-6 py-5">
+            <div class="px-6 py-5">
 
                 <h1 class="text-lg font-bold">
                     Felcris Centrale
@@ -1336,7 +1433,7 @@ onMounted(() => {
             <nav class="flex-1 space-y-1 px-3 py-4">
 
                 <NuxtLink to="/dashboard"
-                    :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="dashboard" />
                     <span>Dashboard</span>
@@ -1344,21 +1441,21 @@ onMounted(() => {
 
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
-                    :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="organizations" />
                     <span>Manage Organizations</span>
                 </NuxtLink>
 
                 <NuxtLink to="/concerns"
-                    :class="$route.path === '/concerns' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/concerns' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="concerns" />
                     <span>Manage Concerns</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
-                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="users" />
                     <span>Manage Users</span>
@@ -1366,7 +1463,7 @@ onMounted(() => {
 
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/login-history"
-                    :class="$route.path === '/login-history' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/login-history' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="history" />
                     <span>Login History</span>
@@ -1377,7 +1474,7 @@ onMounted(() => {
 
             <!-- Logged-in User -->
 
-            <div class="border-t border-blue-900 p-4">
+            <div class="p-4">
                 <UserProfileControl :current-user="currentUser" @logout="logout"
                     @profile-updated="updateProfilePhoto" />
             </div>
@@ -1392,7 +1489,12 @@ onMounted(() => {
             <!-- Header -->
 
             <header
-                class="sticky top-0 z-20 flex min-h-16 flex-col items-start justify-between gap-4 border-b border-slate-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:px-6 lg:px-8">
+                :class="[
+                    'flex min-h-16 flex-col items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 backdrop-blur-md transition-[transform,opacity,background-color,box-shadow,padding] duration-300 ease-out sm:flex-row sm:items-center sm:px-6 lg:px-8',
+                    isHeaderSticky
+                        ? 'lg:sticky lg:top-0 lg:z-30 lg:-translate-y-1 lg:py-3 bg-white/30 shadow-md'
+                        : 'translate-y-0 bg-white/30 shadow-sm'
+                ]">
 
                 <div>
 
@@ -1548,7 +1650,7 @@ onMounted(() => {
 
                     <!-- Summary Cards -->
 
-                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+                    <div data-scroll-reveal class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
 
                         <!-- Total -->
 
@@ -1672,7 +1774,7 @@ onMounted(() => {
 
                         <!-- Status -->
 
-                        <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
+                        <div data-scroll-reveal class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                             <div class="flex flex-wrap items-start justify-between gap-4">
 
@@ -1824,7 +1926,7 @@ onMounted(() => {
 
                         <!-- Priority -->
 
-                        <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
+                        <div data-scroll-reveal class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                             <div>
 
@@ -1861,7 +1963,7 @@ onMounted(() => {
 
                     <!-- Trend -->
 
-                    <div class="mt-6 rounded-xl border border-slate-300 bg-white p-6 shadow-md">
+                    <div data-scroll-reveal class="mt-6 rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 
@@ -1913,7 +2015,7 @@ onMounted(() => {
 
                         <!-- Organization -->
 
-                        <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
+                        <div data-scroll-reveal class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                             <div>
 
@@ -1948,7 +2050,7 @@ onMounted(() => {
 
                         <!-- Top Creators -->
 
-                        <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
+                        <div data-scroll-reveal class="rounded-xl border border-slate-300 bg-white p-6 shadow-md">
 
                             <div>
 

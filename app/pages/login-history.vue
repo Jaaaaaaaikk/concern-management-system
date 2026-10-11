@@ -1,10 +1,13 @@
 <script setup>
 
+import { useStickyHeader } from '~/composables/useStickyHeader'
+
 definePageMeta({
     middleware: 'auth'
 })
 
 const currentUser = useState('current-user', () => null)
+const isHeaderSticky = useStickyHeader()
 
 const loading = ref(true)
 const errorMessage = ref('')
@@ -221,8 +224,8 @@ onMounted(() => {
 
 <template>
     <div class="min-h-screen bg-slate-100">
-        <aside class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-blue-950 text-white lg:flex">
-            <div class="flex h-20 items-center border-b border-blue-900/60 px-5">
+        <aside class="fixed inset-y-0 left-0 z-40 hidden h-screen w-64 flex-col bg-blue-950 text-white lg:flex">
+            <div class="px-6 py-5">
                 <div>
                     <h1 class="text-lg font-bold text-white">Felcris Centrale</h1>
                     <p class="mt-1 text-xs text-blue-100/80">Concern Management System</p>
@@ -231,28 +234,28 @@ onMounted(() => {
 
             <nav class="flex-1 space-y-1 px-3 py-4">
                 <NuxtLink to="/dashboard"
-                    :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="dashboard" />
                     <span>Dashboard</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
-                    :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="organizations" />
                     <span>Manage Organizations</span>
                 </NuxtLink>
 
                 <NuxtLink to="/concerns"
-                    :class="$route.path === '/concerns' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/concerns' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="concerns" />
                     <span>Manage Concerns</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
-                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="users" />
                     <span>Manage Users</span>
@@ -260,14 +263,14 @@ onMounted(() => {
 
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/login-history"
-                    :class="$route.path === '/login-history' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-blue-900 hover:text-white'"
+                    :class="$route.path === '/login-history' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="history" />
                     <span>Login History</span>
                 </NuxtLink>
             </nav>
 
-            <div class="border-t border-blue-900 p-4">
+            <div class="p-4">
                 <UserProfileControl :current-user="currentUser" />
             </div>
         </aside>
@@ -275,14 +278,21 @@ onMounted(() => {
         <main class="flex min-h-screen flex-col lg:ml-64">
             <MobileNavigation :current-user="currentUser" />
 
-            <header class="border-b border-slate-200 bg-white px-4 py-5 sm:px-6 lg:px-8">
-                <div>
-                    <h2 class="text-xl font-semibold text-slate-900">Login History</h2>
-                    <p class="mt-1 text-sm text-slate-500">
-                        Audit trail of user login sessions and activity.
-                    </p>
-                </div>
-            </header>
+            <header :class="[
+                'border-b border-slate-200 px-4 py-5 backdrop-blur-md transition-[transform,opacity,background-color,box-shadow,padding] duration-300 ease-out sm:px-6 lg:px-8',
+                isHeaderSticky
+                    ? 'lg:sticky lg:top-0 lg:z-30 lg:-translate-y-1 lg:py-3 bg-white/30 shadow-md'
+                    : 'translate-y-0 bg-white/30 shadow-sm'
+            ]">
+    <div>
+        <h2 class="text-xl font-semibold text-slate-900">
+            Login History
+        </h2>
+        <p class="mt-1 text-sm text-slate-500">
+            Audit trail of user login sessions and activity.
+        </p>
+    </div>
+</header>
 
             <div class="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8">
                 <div v-if="errorMessage"

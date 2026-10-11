@@ -10,6 +10,7 @@ const showPassword = ref(false)
 const username = ref('')
 const password = ref('')
 const loading = ref(false)
+const isNavigating = ref(false)
 const { showToast } = useToast()
 const currentYear = new Date().getFullYear()
 
@@ -50,6 +51,8 @@ async function login() {
         })
 
         showToast('You have signed in successfully.')
+        isNavigating.value = true
+        await new Promise(resolve => setTimeout(resolve, 450))
         await navigateTo('/dashboard')
     } catch (error) {
         if (error?.statusCode === 403) {
@@ -71,6 +74,7 @@ async function login() {
 
 <template>
     <main
+        :class="{ 'login-page-exit': isNavigating }"
         class="relative flex min-h-screen items-start justify-center overflow-hidden bg-[#eef3f1] px-4 py-8 sm:px-6 lg:items-center lg:px-8">
 
         <div class="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-blue-100/70 blur-3xl"></div>
@@ -264,6 +268,11 @@ async function login() {
     animation: slideFromRight 0.8s ease-out both;
 }
 
+.login-page-exit {
+    animation: loginZoomOut 450ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+    transform-origin: center;
+}
+
 
 /* LEFT SIDE */
 @keyframes slideFromLeft {
@@ -292,12 +301,20 @@ async function login() {
     }
 }
 
+@keyframes loginZoomOut {
+    to {
+        opacity: 0;
+        transform: scale(1.06);
+    }
+}
+
 
 /* REDUCE ANIMATION IF USER PREFERS REDUCED MOTION */
 @media (prefers-reduced-motion: reduce) {
 
     .login-left,
-    .login-right {
+    .login-right,
+    .login-page-exit {
         animation: none;
     }
 }

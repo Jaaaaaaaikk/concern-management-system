@@ -1,5 +1,7 @@
 <script setup>
 
+import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
+
 const props = defineProps({
 
     show: {
@@ -36,6 +38,7 @@ const saving = ref(false)
 const selectedImages = ref([])
 
 const imagePreviews = ref([])
+useBodyScrollLock(() => props.show)
 
 const form = ref({
 
@@ -386,7 +389,7 @@ onUnmounted(() => {
         class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6">
 
         <div
-            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
 
             <!-- Header -->
             <div class="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6 sm:py-5">

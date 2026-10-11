@@ -1,5 +1,7 @@
 <script setup>
 
+import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
+
 const props = defineProps({
 
     show: {
@@ -23,6 +25,8 @@ const emit = defineEmits([
     'close',
     'submit'
 ])
+
+useBodyScrollLock(() => props.show)
 
 </script>
 

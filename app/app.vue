@@ -51,12 +51,12 @@ onBeforeUnmount(() => {
   >
     <div
       v-if="isNavigating"
-      class="fixed right-4 top-4 z-[100] flex items-center gap-3 rounded-2xl border border-emerald-900/15 bg-white px-4 py-3 shadow-xl shadow-emerald-950/15"
+      class="fixed right-4 top-4 z-[100] flex items-center gap-3 rounded-2xl border border-blue-900/15 bg-white px-4 py-3 shadow-xl shadow-blue-950/15"
       role="status"
       aria-live="polite"
       aria-label="Loading the next page"
     >
-      <span class="relative flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-900 text-white">
+      <span class="relative flex h-8 w-8 items-center justify-center rounded-xl bg-blue-900 text-white">
         <svg
           class="h-4 w-4 motion-safe:animate-pulse"
           viewBox="0 0 24 24"
@@ -67,10 +67,10 @@ onBeforeUnmount(() => {
         >
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 9h.01M15 9h.01" />
         </svg>
-        <span class="absolute -right-1 -top-1 h-2.5 w-2.5 animate-ping rounded-full bg-emerald-400 motion-reduce:animate-none" />
+        <span class="absolute -right-1 -top-1 h-2.5 w-2.5 animate-ping rounded-full bg-blue-400 motion-reduce:animate-none" />
       </span>
       <span>
-        <span class="block text-sm font-semibold text-emerald-950">One moment</span>
+        <span class="block text-sm font-semibold text-blue-950">One moment</span>
         <span class="block text-xs text-slate-500">Getting things ready…</span>
       </span>
     </div>
