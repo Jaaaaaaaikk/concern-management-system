@@ -394,6 +394,13 @@ export default defineEventHandler(async (event) => {
     const latestInProgress = [...histories]
       .reverse()
       .find((history) => history.new_status === "in_progress");
+    const latestInProgressAt = parseLocalDateTime(latestInProgress?.created_at);
+    const reopenedAfterResolution = Boolean(
+      latestInProgressAt && histories.some((history) =>
+        history.new_status === "resolved" &&
+        parseLocalDateTime(history.created_at)?.getTime() < latestInProgressAt.getTime()
+      ),
+    );
 
     for (const history of histories) {
       const changedAt = parseLocalDateTime(history.created_at);
@@ -405,7 +412,7 @@ export default defineEventHandler(async (event) => {
       if (history.new_status === "in_progress") {
         activeSince =
           getCommitmentStartFromRemarks(history.remarks) ||
-          (history === latestInProgress
+          (history === latestInProgress && !reopenedAfterResolution
             ? parseLocalDateTime(concern.target_commitment_at)
             : null) ||
           changedAt;

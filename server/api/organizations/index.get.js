@@ -59,6 +59,7 @@ export default defineEventHandler(async (event) => {
             SELECT
                 id,
                 name,
+                organization_type,
                 description,
                 address,
                 status,
@@ -123,6 +124,7 @@ export default defineEventHandler(async (event) => {
         SELECT
             id,
             name,
+            organization_type,
             description,
             address,
             status,

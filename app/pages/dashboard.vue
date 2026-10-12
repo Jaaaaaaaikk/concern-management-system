@@ -1439,6 +1439,12 @@ onMounted(() => {
                     <span>Dashboard</span>
                 </NuxtLink>
 
+                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
+                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+                    <NavIcon name="users" />
+                    <span>Manage Users</span>
+                </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
                     :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
@@ -1454,12 +1460,13 @@ onMounted(() => {
                     <span>Manage Concerns</span>
                 </NuxtLink>
 
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
-                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
+                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/concern-categories"
+                    :class="$route.path === '/concern-categories' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
-                    <NavIcon name="users" />
-                    <span>Manage Users</span>
+                    <NavIcon name="categories" />
+                    <span>Concern Categories</span>
                 </NuxtLink>
+
 
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/login-history"
@@ -1488,13 +1495,12 @@ onMounted(() => {
 
             <!-- Header -->
 
-            <header
-                :class="[
-                    'flex min-h-16 flex-col items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 backdrop-blur-md transition-[transform,opacity,background-color,box-shadow,padding] duration-300 ease-out sm:flex-row sm:items-center sm:px-6 lg:px-8',
-                    isHeaderSticky
-                        ? 'lg:sticky lg:top-0 lg:z-30 lg:-translate-y-1 lg:py-3 bg-white/30 shadow-md'
-                        : 'translate-y-0 bg-white/30 shadow-sm'
-                ]">
+            <header :class="[
+                'flex min-h-16 flex-col items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 backdrop-blur-md transition-[transform,opacity,background-color,box-shadow,padding] duration-300 ease-out sm:flex-row sm:items-center sm:px-6 lg:px-8',
+                isHeaderSticky
+                    ? 'lg:sticky lg:top-0 lg:z-30 lg:-translate-y-1 lg:py-3 bg-white/30 shadow-md'
+                    : 'translate-y-0 bg-white/30 shadow-sm'
+            ]">
 
                 <div>
 
@@ -1650,15 +1656,20 @@ onMounted(() => {
 
                     <!-- Summary Cards -->
 
-                    <div data-scroll-reveal class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+                    <div data-scroll-reveal class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
 
                         <!-- Total -->
 
                         <NuxtLink to="/concerns"
-                            class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300">
-                            <p class="text-sm text-slate-500">
-                                Total Concerns
-                            </p>
+                            class="group rounded-xl border border-slate-200 bg-white p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300">
+                            <div class="flex items-start justify-between gap-3">
+                                <p class="text-sm font-semibold text-slate-700">Total Concerns</p>
+                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition group-hover:bg-slate-200" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12m-12 5.25h12m-12 5.25h12M3.75 6.75h.008v.008H3.75V6.75Zm0 5.25h.008v.008H3.75V12Zm0 5.25h.008v.008H3.75v-.008Z" />
+                                    </svg>
+                                </span>
+                            </div>
 
                             <p class="mt-2 text-3xl font-bold text-slate-900">
                                 {{
@@ -1666,7 +1677,7 @@ onMounted(() => {
                                 }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-slate-600">
+                            <p class="mt-2 text-xs font-medium text-slate-500 transition group-hover:text-slate-700">
                                 View all concerns
                             </p>
                         </NuxtLink>
@@ -1680,16 +1691,21 @@ onMounted(() => {
                                 status: 'pending'
                             }
                         }"
-                            class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-yellow-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-200">
-                            <p class="text-sm text-slate-500">
-                                Pending
-                            </p>
+                            class="group rounded-xl border border-yellow-200 bg-yellow-50/60 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-yellow-300 hover:bg-yellow-50 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-200">
+                            <div class="flex items-start justify-between gap-3">
+                                <p class="text-sm font-semibold text-yellow-950">Pending</p>
+                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-100 text-yellow-800 transition group-hover:bg-yellow-200" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75h9A2.25 2.25 0 0 1 18.75 6v15l-6.75-3.75L5.25 21V6A2.25 2.25 0 0 1 7.5 3.75Z" />
+                                    </svg>
+                                </span>
+                            </div>
 
-                            <p class="mt-2 text-3xl font-bold text-yellow-600">
+                            <p class="mt-2 text-3xl font-bold text-yellow-700">
                                 {{ getStatusTotal('pending') }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-yellow-600">
+                            <p class="mt-2 text-xs font-medium text-yellow-800 transition group-hover:text-yellow-950">
                                 View pending concerns
                             </p>
                         </NuxtLink>
@@ -1703,16 +1719,21 @@ onMounted(() => {
                                 status: 'in_progress'
                             }
                         }"
-                            class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-200">
-                            <p class="text-sm text-slate-500">
-                                In Progress
-                            </p>
+                            class="group rounded-xl border border-blue-200 bg-blue-50/60 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-200">
+                            <div class="flex items-start justify-between gap-3">
+                                <p class="text-sm font-semibold text-blue-900">In Progress</p>
+                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700 transition group-hover:bg-blue-200" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h3l2.25-6 4.5 12 2.25-6h3" />
+                                    </svg>
+                                </span>
+                            </div>
 
                             <p class="mt-2 text-3xl font-bold text-blue-600">
                                 {{ getStatusTotal('in_progress') }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-blue-600">
+                            <p class="mt-2 text-xs font-medium text-blue-700 transition group-hover:text-blue-900">
                                 View in-progress concerns
                             </p>
                         </NuxtLink>
@@ -1726,16 +1747,21 @@ onMounted(() => {
                                 status: 'resolved'
                             }
                         }"
-                            class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-green-300 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-200">
-                            <p class="text-sm text-slate-500">
-                                Resolved
-                            </p>
+                            class="group rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-200">
+                            <div class="flex items-start justify-between gap-3">
+                                <p class="text-sm font-semibold text-emerald-900">Resolved</p>
+                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 transition group-hover:bg-emerald-200" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m5.25 12.75 4.5 4.5 9-10.5" />
+                                    </svg>
+                                </span>
+                            </div>
 
                             <p class="mt-2 text-3xl font-bold text-green-600">
                                 {{ getStatusTotal('resolved') }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-green-600">
+                            <p class="mt-2 text-xs font-medium text-emerald-700 transition group-hover:text-emerald-900">
                                 View resolved concerns
                             </p>
                         </NuxtLink>
@@ -1749,17 +1775,51 @@ onMounted(() => {
                                 status: 'closed'
                             }
                         }"
-                            class="group rounded-xl border border-slate-300 bg-white p-5 shadow-md transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300">
-                            <p class="text-sm text-slate-500">
-                                Closed
-                            </p>
+                            class="group rounded-xl border border-slate-300 bg-slate-50 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300">
+                            <div class="flex items-start justify-between gap-3">
+                                <p class="text-sm font-semibold text-slate-800">Closed</p>
+                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-200 text-slate-700 transition group-hover:bg-slate-300" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 10.5V7.875a4.5 4.5 0 0 1 9 0V10.5m-11.25 0h13.5v10.125H5.25V10.5Z" />
+                                    </svg>
+                                </span>
+                            </div>
 
                             <p class="mt-2 text-3xl font-bold text-slate-600">
                                 {{ getStatusTotal('closed') }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-slate-400 transition group-hover:text-slate-600">
+                            <p class="mt-2 text-xs font-medium text-slate-600 transition group-hover:text-slate-800">
                                 View closed concerns
+                            </p>
+                        </NuxtLink>
+
+                        <!-- Late Response -->
+
+                        <NuxtLink :to="{
+                            path: '/concerns',
+                            query: {
+                                late_response: '1'
+                            }
+                        }"
+                            class="group cursor-pointer rounded-xl border border-rose-300 bg-rose-50 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-rose-400 hover:bg-rose-100 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-rose-300">
+                            <div class="flex items-start justify-between gap-3">
+                                <p class="text-sm font-semibold text-rose-950">
+                                    Late Response
+                                </p>
+                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-200/70 text-rose-800 transition group-hover:bg-rose-300/70" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75v5.25l3.25 1.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                    </svg>
+                                </span>
+                            </div>
+
+                            <p class="mt-2 text-3xl font-bold text-rose-800">
+                                {{ dashboardData?.summary?.lateResponses ?? 0 }}
+                            </p>
+
+                            <p class="mt-2 text-xs font-medium text-rose-700 transition group-hover:text-rose-950">
+                                View late responses
                             </p>
                         </NuxtLink>
 

@@ -218,8 +218,8 @@ export default defineEventHandler(async (event) => {
    * in_progress -> resolved
    * on_hold     -> in_progress
    *
-   * Creator-organization admin:
-   * resolved    -> closed
+  * Creator-organization admin:
+  * resolved    -> in_progress / closed
    *
    * ---------------------------------------------------------
    */
@@ -228,7 +228,7 @@ export default defineEventHandler(async (event) => {
     pending: ["in_progress", "on_hold"],
     in_progress: ["resolved"],
     on_hold: ["in_progress"],
-    resolved: ["closed"],
+    resolved: ["in_progress", "closed"],
     closed: [],
     cancelled: [],
   };
@@ -265,6 +265,12 @@ export default defineEventHandler(async (event) => {
         statusMessage: "Only a resolved concern can be closed.",
       });
     }
+  } else if (
+    isCreatorOrganizationAdmin &&
+    concern.status === "resolved" &&
+    newStatus === "in_progress"
+  ) {
+    // Creator handler rejects the reported resolution and returns it for rework.
   } else if (isRecipientAdmin) {
     const allowedForRecipientAdmin = {
       pending: ["in_progress", "on_hold"],
@@ -470,14 +476,21 @@ export default defineEventHandler(async (event) => {
    */
 
   const requiresRemarks =
-    isRecipientAdmin &&
     (
-      newStatus === "in_progress" ||
-      newStatus === "on_hold" ||
+      isRecipientAdmin &&
       (
-        concern.status === "in_progress" &&
-        newStatus === "resolved"
+        newStatus === "in_progress" ||
+        newStatus === "on_hold" ||
+        (
+          concern.status === "in_progress" &&
+          newStatus === "resolved"
+        )
       )
+    ) ||
+    (
+      isCreatorOrganizationAdmin &&
+      concern.status === "resolved" &&
+      newStatus === "in_progress"
     );
 
   if (requiresRemarks && !remarks) {
@@ -488,7 +501,9 @@ export default defineEventHandler(async (event) => {
           ? "Please explain why the concern is being placed on hold."
           : newStatus === "resolved"
             ? "Resolution remarks are required before marking the concern as resolved."
-            : "Please enter remarks for this status change.",
+            : isCreatorOrganizationAdmin && newStatus === "in_progress"
+              ? "Please explain why the reported resolution is being rejected and what work remains."
+              : "Please enter remarks for this status change.",
     });
   }
 
@@ -649,12 +664,14 @@ export default defineEventHandler(async (event) => {
           status = ?,
 
           target_commitment_at = CASE
-            WHEN ? = 'in_progress'
+            WHEN ? = 1
             THEN ?
             ELSE target_commitment_at
           END,
 
           resolved_at = CASE
+            WHEN ? = 'in_progress'
+            THEN NULL
             WHEN ? = 'resolved'
             THEN NOW()
             ELSE resolved_at
@@ -672,8 +689,9 @@ export default defineEventHandler(async (event) => {
       `,
       [
         newStatus,
-        newStatus,
+        movingToInProgress ? 1 : 0,
         movingToInProgress ? targetCommitmentAt : null,
+        newStatus,
         newStatus,
         newStatus,
         concernId,

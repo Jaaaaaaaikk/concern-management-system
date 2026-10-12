@@ -8,8 +8,10 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event)
 
     const name = body?.name?.trim()
+    const organizationType = body?.organization_type
     const description = body?.description?.trim() || null
     const address = body?.address?.trim() || null
+    const allowedOrganizationTypes = ['bpo', 'tenant', 'admin_facilities']
 
     if (!name) {
         throw createError({
@@ -18,19 +20,28 @@ export default defineEventHandler(async (event) => {
         })
     }
 
+    if (!allowedOrganizationTypes.includes(organizationType)) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Select a valid organization type.'
+        })
+    }
+
     try {
         const [result] = await db.query(
             `
             INSERT INTO organizations (
                 name,
+                organization_type,
                 description,
                 address,
                 status
             )
-            VALUES (?, ?, ?, 'active')
+            VALUES (?, ?, ?, ?, 'active')
             `,
             [
                 name,
+                organizationType,
                 description,
                 address
             ]

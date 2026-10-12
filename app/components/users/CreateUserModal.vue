@@ -1,6 +1,7 @@
 <script setup>
 
 import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
+import { roleDisplayName } from '~/composables/useRoleLabel'
 
 const props = defineProps({
 
@@ -43,24 +44,30 @@ const emit = defineEmits([
 ])
 
 useBodyScrollLock(() => props.show)
+const showSaveConfirmation = ref(false)
 
-function roleLabel(role) {
+const confirmationMessage = computed(() => {
+    const fullName = [props.form.first_name, props.form.last_name].filter(Boolean).join(' ').trim()
+    const role = props.roles.find(item => Number(item.id) === Number(props.form.role_id))?.name
+    const organization = props.organizations.find(item => Number(item.id) === Number(props.form.organization_id))?.name
+    const details = [role, organization].filter(Boolean).join(' in ')
 
-    if (role === 'superadmin') {
-        return 'Superadmin'
-    }
+    return `Create the account for ${fullName || props.form.username || 'this user'}${details ? ` as ${details}` : ''}?`
+})
 
-    if (role === 'admin') {
-        return 'Admin'
-    }
-
-    if (role === 'user') {
-        return 'User'
-    }
-
-    return role || '-'
-
+function requestSubmit() {
+    if (!props.saving) showSaveConfirmation.value = true
 }
+
+function confirmSubmit() {
+    if (props.saving) return
+    showSaveConfirmation.value = false
+    emit('submit')
+}
+
+watch(() => props.show, (isShown) => {
+    if (!isShown) showSaveConfirmation.value = false
+})
 
 </script>
 
@@ -116,7 +123,7 @@ function roleLabel(role) {
 
             <!-- Form -->
             <form
-                @submit.prevent="emit('submit')"
+                @submit.prevent="requestSubmit"
                 class="space-y-5 px-4 py-5 sm:px-6 sm:py-6"
             >
 
@@ -251,7 +258,7 @@ function roleLabel(role) {
                                 :key="role.id"
                                 :value="role.id"
                             >
-                                {{ roleLabel(role.name) }}
+                                {{ roleDisplayName(role.name) }}
                             </option>
 
                         </select>
@@ -342,6 +349,16 @@ function roleLabel(role) {
             </form>
 
         </div>
+
+        <ConfirmActionModal
+            :show="showSaveConfirmation"
+            title="Create this user?"
+            :message="confirmationMessage"
+            confirm-label="Create user"
+            :loading="props.saving"
+            @cancel="showSaveConfirmation = false"
+            @confirm="confirmSubmit"
+        />
 
     </div>
 

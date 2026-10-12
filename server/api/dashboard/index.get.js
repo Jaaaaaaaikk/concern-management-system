@@ -171,6 +171,43 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  let lateResponseWhere = concernWhere;
+  const lateResponseParams = [...concernParams];
+  const lateResponseCondition = `
+    c.deleted_at IS NULL
+    AND
+    c.status = 'pending'
+    AND c.created_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)
+    AND NOT EXISTS (
+      SELECT 1
+      FROM concern_status_history response_status
+      INNER JOIN users response_user
+        ON response_user.id = response_status.changed_by
+      WHERE response_status.concern_id = c.id
+        AND response_status.new_status <> 'pending'
+        AND response_user.organization_id = c.assigned_organization_id
+        AND response_status.created_at <= DATE_ADD(c.created_at, INTERVAL 4 HOUR)
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM concern_comments response_comment
+      INNER JOIN users response_user
+        ON response_user.id = response_comment.user_id
+      WHERE response_comment.concern_id = c.id
+        AND response_user.organization_id = c.assigned_organization_id
+        AND response_comment.created_at <= DATE_ADD(c.created_at, INTERVAL 4 HOUR)
+    )
+  `;
+
+  lateResponseWhere += lateResponseWhere
+    ? ` AND ${lateResponseCondition}`
+    : ` WHERE ${lateResponseCondition}`;
+
+  const [lateResponseRows] = await db.query(
+    `SELECT COUNT(*) AS total FROM concerns c ${lateResponseWhere}`,
+    lateResponseParams,
+  );
+
   /*
    * ---------------------------------------------------------
    * Status summary
@@ -519,6 +556,7 @@ export default defineEventHandler(async (event) => {
 
     summary: {
       total: Number(totalRows[0]?.total || 0),
+      lateResponses: Number(lateResponseRows[0]?.total || 0),
     },
 
     status: statusRows.map((row) => ({

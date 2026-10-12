@@ -61,6 +61,21 @@ const pageSize = ref(10)
 const sortBy = ref('created_at')
 
 const sortDirection = ref('desc')
+const lateResponseFilter = ref(String(route.query.late_response || '') === '1')
+
+const statusDropdownValue = computed({
+    get: () => lateResponseFilter.value ? 'late_response' : statusFilter.value,
+    set: (value) => {
+        if (value === 'late_response') {
+            statusFilter.value = ''
+            lateResponseFilter.value = true
+            return
+        }
+
+        lateResponseFilter.value = false
+        statusFilter.value = value
+    }
+})
 
 const totalConcerns = ref(0)
 
@@ -73,6 +88,8 @@ const totalPages = ref(0)
 const currentTime = ref(
     new Date()
 )
+
+const RESPONSE_ATTENTION_HOURS = 4
 
 let durationTimer = null
 
@@ -116,7 +133,7 @@ const showingTo = computed(() => {
 
     return Math.min(
         currentPage.value *
-            pageSize.value,
+        pageSize.value,
         totalConcerns.value
     )
 })
@@ -194,8 +211,7 @@ function formatStatus(status) {
         in_progress: 'In Progress',
         on_hold: 'On Hold',
         resolved: 'Resolved',
-        closed: 'Closed',
-        cancelled: 'Cancelled'
+        closed: 'Closed'
     }
 
     return (
@@ -237,10 +253,7 @@ function statusClass(status) {
             'bg-green-100 text-green-700',
 
         closed:
-            'bg-slate-200 text-slate-700',
-
-        cancelled:
-            'bg-red-100 text-red-700'
+            'bg-slate-200 text-slate-700'
     }
 
     return (
@@ -345,6 +358,41 @@ function getScheduledStartFromRemarks(remarks) {
     return match ? parseDate(match[1]) : null
 }
 
+function responseAttentionState(concern) {
+    if (
+        !concern ||
+        concern.deleted_at ||
+        trashView.value ||
+        concern.status !== 'pending'
+    ) {
+        return ''
+    }
+
+    const createdAt = parseDate(concern.created_at)
+
+    if (!createdAt) {
+        return ''
+    }
+
+    const responseDeadline = createdAt.getTime() + RESPONSE_ATTENTION_HOURS * 60 * 60 * 1000
+    const handlerResponses = [
+        parseDate(concern.first_handler_status_response_at),
+        parseDate(concern.first_handler_comment_response_at)
+    ].filter(Boolean)
+
+    if (handlerResponses.length) {
+        const firstResponseAt = Math.min(
+            ...handlerResponses.map(response => response.getTime())
+        )
+
+        return firstResponseAt > responseDeadline ? 'late' : ''
+    }
+
+    return currentTime.value.getTime() > responseDeadline
+        ? 'overdue'
+        : ''
+}
+
 /*
  * Handling duration is accumulated across In Progress periods.
  * Each period starts at its recipient commitment time in target_commitment_at and
@@ -364,6 +412,13 @@ function getConcernDuration(
     const latestInProgressHistory = [...histories]
         .reverse()
         .find((history) => history.new_status === 'in_progress')
+    const latestInProgressAt = parseDate(latestInProgressHistory?.created_at)
+    const reopenedAfterResolution = Boolean(
+        latestInProgressAt && histories.some((history) =>
+            history.new_status === 'resolved' &&
+            parseDate(history.created_at)?.getTime() < latestInProgressAt.getTime()
+        )
+    )
 
     for (const history of histories) {
         const changedAt = parseDate(history.created_at)
@@ -376,13 +431,13 @@ function getConcernDuration(
             activeSince =
                 getScheduledStartFromRemarks(history.remarks) ||
                 (
-                    history === latestInProgressHistory
+                    history === latestInProgressHistory && !reopenedAfterResolution
                         ? parseDate(concern.target_commitment_at)
                         : null
                 ) ||
                 changedAt
         } else if (
-            ['on_hold', 'resolved', 'closed', 'cancelled'].includes(history.new_status) &&
+            ['on_hold', 'resolved', 'closed'].includes(history.new_status) &&
             activeSince
         ) {
             elapsedMilliseconds += Math.max(
@@ -496,7 +551,7 @@ function getExportDateLabel() {
 
     return (
         labels[
-            exportDateFilter.value
+        exportDateFilter.value
         ] ||
         'All Dates'
     )
@@ -635,6 +690,9 @@ async function loadConcerns() {
 
                     view:
                         trashView.value ? 'trash' : 'active',
+
+                    late_response:
+                        lateResponseFilter.value ? '1' : '',
 
                     sortBy:
                         sortBy.value,
@@ -1009,6 +1067,16 @@ async function handleDepartmentChange() {
     await loadConcernsWithLoading()
 }
 
+async function clearLateResponseFilter() {
+    lateResponseFilter.value = false
+    currentPage.value = 1
+    await navigateTo({
+        path: '/concerns',
+        query: {}
+    })
+    await loadConcernsWithLoading()
+}
+
 /*
  * PAGINATION
  */
@@ -1020,10 +1088,10 @@ async function goToPage(
     if (
         page === '...' ||
         page ===
-            currentPage.value ||
+        currentPage.value ||
         page < 1 ||
         page >
-            totalPages.value
+        totalPages.value
     ) {
         return
     }
@@ -1232,17 +1300,11 @@ onUnmounted(() => {
 
     <div class="min-h-screen bg-slate-100">
 
-        <MobileNavigation
-            :current-user="currentUser"
-            @logout="logout"
-            @profile-updated="updateProfilePhoto"
-        />
+        <MobileNavigation :current-user="currentUser" @logout="logout" @profile-updated="updateProfilePhoto" />
 
         <!-- Sidebar -->
 
-        <aside
-            class="fixed inset-y-0 left-0 z-40 hidden h-screen w-64 flex-col bg-blue-950 text-white lg:flex"
-        >
+        <aside class="fixed inset-y-0 left-0 z-40 hidden h-screen w-64 flex-col bg-blue-950 text-white lg:flex">
 
             <div class="px-6 py-5">
 
@@ -1258,15 +1320,10 @@ onUnmounted(() => {
 
             <nav class="flex-1 space-y-1 px-3 py-4">
 
-                <NuxtLink
-                    to="/dashboard"
-                    :class="
-                        $route.path === '/dashboard'
-                            ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
-                    "
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
-                >
+                <NuxtLink to="/dashboard" :class="$route.path === '/dashboard'
+                    ? 'bg-blue-800 text-white'
+                    : 'text-blue-100/80 transition hover:bg-white hover:text-black'
+                    " class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
 
                     <NavIcon name="dashboard" />
 
@@ -1276,59 +1333,13 @@ onUnmounted(() => {
 
                 </NuxtLink>
 
-                <NuxtLink
-                    v-if="
-                        currentUser?.role_name ===
-                        'superadmin'
-                    "
-                    to="/organizations"
-                    :class="
-                        $route.path === '/organizations'
-                            ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
-                    "
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
-                >
-
-                    <NavIcon name="organizations" />
-
-                    <span>
-                        Manage Organizations
-                    </span>
-
-                </NuxtLink>
-
-                <NuxtLink
-                    to="/concerns"
-                    :class="
-                        $route.path === '/concerns'
-                            ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
-                    "
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
-                >
-
-                    <NavIcon name="concerns" />
-
-                    <span>
-                        Manage Concerns
-                    </span>
-
-                </NuxtLink>
-
-                <NuxtLink
-                    v-if="
-                        currentUser?.role_name ===
-                        'superadmin'
-                    "
-                    to="/users"
-                    :class="
-                        $route.path === '/users'
-                            ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
-                    "
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
-                >
+                <NuxtLink v-if="
+                    currentUser?.role_name ===
+                    'superadmin'
+                " to="/users" :class="$route.path === '/users'
+                    ? 'bg-blue-800 text-white'
+                    : 'text-blue-100/80 transition hover:bg-white hover:text-black'
+                    " class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
 
                     <NavIcon name="users" />
 
@@ -1338,19 +1349,56 @@ onUnmounted(() => {
 
                 </NuxtLink>
 
-                <NuxtLink
-                    v-if="
-                        currentUser?.role_name ===
-                        'superadmin'
-                    "
-                    to="/login-history"
-                    :class="
-                        $route.path === '/login-history'
-                            ? 'bg-blue-800 text-white'
-                            : 'text-blue-100/80 transition hover:bg-white hover:text-black'
-                    "
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium"
-                >
+
+                <NuxtLink v-if="
+                    currentUser?.role_name ===
+                    'superadmin'
+                " to="/organizations" :class="$route.path === '/organizations'
+                    ? 'bg-blue-800 text-white'
+                    : 'text-blue-100/80 transition hover:bg-white hover:text-black'
+                    " class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+
+                    <NavIcon name="organizations" />
+
+                    <span>
+                        Manage Organizations
+                    </span>
+
+                </NuxtLink>
+
+                <NuxtLink to="/concerns" :class="$route.path === '/concerns'
+                    ? 'bg-blue-800 text-white'
+                    : 'text-blue-100/80 transition hover:bg-white hover:text-black'
+                    " class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+
+                    <NavIcon name="concerns" />
+
+                    <span>
+                        Manage Concerns
+                    </span>
+
+                </NuxtLink>
+                
+                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/concern-categories" :class="$route.path === '/concern-categories'
+                    ? 'bg-blue-800 text-white'
+                    : 'text-blue-100/80 transition hover:bg-white hover:text-black'
+                    " class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+
+                    <NavIcon name="categories" />
+
+                    <span>
+                        Concern Categories
+                    </span>
+
+                </NuxtLink>
+
+                <NuxtLink v-if="
+                    currentUser?.role_name ===
+                    'superadmin'
+                " to="/login-history" :class="$route.path === '/login-history'
+                    ? 'bg-blue-800 text-white'
+                    : 'text-blue-100/80 transition hover:bg-white hover:text-black'
+                    " class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
 
                     <NavIcon name="history" />
 
@@ -1364,11 +1412,8 @@ onUnmounted(() => {
 
             <div class="p-4">
 
-                <UserProfileControl
-                    :current-user="currentUser"
-                    @logout="logout"
-                    @profile-updated="updateProfilePhoto"
-                />
+                <UserProfileControl :current-user="currentUser" @logout="logout"
+                    @profile-updated="updateProfilePhoto" />
 
             </div>
 
@@ -1376,27 +1421,21 @@ onUnmounted(() => {
 
         <!-- Main Content -->
 
-        <main
-            class="flex min-h-screen flex-col lg:ml-64"
-        >
+        <main class="flex min-h-screen flex-col lg:ml-64">
 
             <!-- Header -->
 
-            <div
-                :class="[
-                    'w-full transition-[transform,opacity,background-color,box-shadow] duration-300 ease-out',
-                    isHeaderSticky
-                        ? 'lg:sticky lg:top-0 lg:z-30 lg:-translate-y-1 lg:bg-white/30 lg:shadow-md lg:backdrop-blur-md'
-                        : 'translate-y-0'
-                ]"
-            >
+            <div :class="[
+                'w-full transition-[transform,opacity,background-color,box-shadow] duration-300 ease-out',
+                isHeaderSticky
+                    ? 'lg:sticky lg:top-0 lg:z-30 lg:-translate-y-1 lg:bg-white/30 lg:shadow-md lg:backdrop-blur-md'
+                    : 'translate-y-0'
+            ]">
 
-                <div
-                    :class="[
-                        'mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 transition-[padding] duration-300 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8',
-                        isHeaderSticky ? 'py-6 sm:py-8 lg:py-3' : 'py-6 sm:py-8'
-                    ]"
-                >
+                <div :class="[
+                    'mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 transition-[padding] duration-300 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8',
+                    isHeaderSticky ? 'py-6 sm:py-8 lg:py-3' : 'py-6 sm:py-8'
+                ]">
 
                     <div>
 
@@ -1418,8 +1457,8 @@ onUnmounted(() => {
                             {{ trashView ? 'Back to Concerns' : 'View Trash' }}
                         </button>
 
-                        <button v-if="!trashView && ['admin', 'user'].includes(currentUser?.role_name)"
-                            type="button" @click="openCreateModal"
+                        <button v-if="!trashView && ['admin', 'user'].includes(currentUser?.role_name)" type="button"
+                            @click="openCreateModal"
                             class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 hover:shadow-md active:scale-[0.99]">
                             <span class="text-lg leading-none">+</span>
                             Create Concern
@@ -1434,20 +1473,15 @@ onUnmounted(() => {
 
                 <!-- Error -->
 
-                <div
-                    v-if="errorMessage"
-                    class="mb-5 flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700"
-                >
+                <div v-if="errorMessage"
+                    class="mb-5 flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
 
                     <p>
                         {{ errorMessage }}
                     </p>
 
-                    <button
-                        type="button"
-                        @click="errorMessage = ''"
-                        class="cursor-pointer text-xl leading-none text-red-400 transition hover:text-red-700"
-                    >
+                    <button type="button" @click="errorMessage = ''"
+                        class="cursor-pointer text-xl leading-none text-red-400 transition hover:text-red-700">
                         ×
                     </button>
 
@@ -1455,9 +1489,7 @@ onUnmounted(() => {
 
                 <!-- Filters -->
 
-                <div
-                    class="mb-6 rounded-xl border border-slate-300 bg-white p-5 shadow-md"
-                >
+                <div class="mb-6 rounded-xl border border-slate-300 bg-white p-5 shadow-md">
 
                     <div class="grid gap-4 md:grid-cols-5">
 
@@ -1465,19 +1497,13 @@ onUnmounted(() => {
 
                         <div>
 
-                            <label
-                                class="mb-2 block text-sm font-medium text-slate-700"
-                            >
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
                                 Search
                             </label>
 
-                            <input
-                                v-model="search"
-                                @input="handleSearchInput"
-                                type="text"
+                            <input v-model="search" @input="handleSearchInput" type="text"
                                 placeholder="Search concern number, title, or description..."
-                                class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                            />
+                                class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100" />
 
                         </div>
 
@@ -1485,17 +1511,12 @@ onUnmounted(() => {
 
                         <div>
 
-                            <label
-                                class="mb-2 block text-sm font-medium text-slate-700"
-                            >
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
                                 Status
                             </label>
 
-                            <select
-                                v-model="statusFilter"
-                                @change="handleStatusChange"
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                            >
+                            <select v-model="statusDropdownValue" @change="handleStatusChange"
+                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
 
                                 <option value="">
                                     All Statuses
@@ -1521,8 +1542,8 @@ onUnmounted(() => {
                                     Closed
                                 </option>
 
-                                <option value="cancelled">
-                                    Cancelled
+                                <option value="late_response">
+                                    Late Response
                                 </option>
 
                             </select>
@@ -1533,17 +1554,12 @@ onUnmounted(() => {
 
                         <div>
 
-                            <label
-                                class="mb-2 block text-sm font-medium text-slate-700"
-                            >
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
                                 Priority
                             </label>
 
-                            <select
-                                v-model="priorityFilter"
-                                @change="handlePriorityChange"
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                            >
+                            <select v-model="priorityFilter" @change="handlePriorityChange"
+                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
 
                                 <option value="">
                                     All Priorities
@@ -1573,27 +1589,19 @@ onUnmounted(() => {
 
                         <div>
 
-                            <label
-                                class="mb-2 block text-sm font-medium text-slate-700"
-                            >
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
                                 Department
                             </label>
 
-                            <select
-                                v-model="departmentFilter"
-                                @change="handleDepartmentChange"
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                            >
+                            <select v-model="departmentFilter" @change="handleDepartmentChange"
+                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
 
                                 <option value="">
                                     All Departments
                                 </option>
 
-                                <option
-                                    v-for="organization in organizations"
-                                    :key="organization.id"
-                                    :value="String(organization.id)"
-                                >
+                                <option v-for="organization in organizations" :key="organization.id"
+                                    :value="String(organization.id)">
                                     {{ organization.name }}
                                 </option>
 
@@ -1605,17 +1613,12 @@ onUnmounted(() => {
 
                         <div>
 
-                            <label
-                                class="mb-2 block text-sm font-medium text-slate-700"
-                            >
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
                                 Date
                             </label>
 
-                            <select
-                                v-model="exportDateFilter"
-                                @change="handleExportDateChange"
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                            >
+                            <select v-model="exportDateFilter" @change="handleExportDateChange"
+                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
 
                                 <option value="">
                                     All Dates
@@ -1645,56 +1648,24 @@ onUnmounted(() => {
 
                     <!-- Export -->
 
-                    <div
-                        class="mt-4 flex justify-end border-t border-slate-100 pt-4"
-                    >
+                    <div class="mt-4 flex justify-end border-t border-slate-100 pt-4">
 
-                        <button
-                            type="button"
-                            @click="openExportModal"
-                            :disabled="exporting"
-                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
+                        <button type="button" @click="openExportModal" :disabled="exporting"
+                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
 
-                            <svg
-                                v-if="!exporting"
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke-width="1.8"
-                                stroke="currentColor"
-                                class="h-5 w-5"
-                            >
+                            <svg v-if="!exporting" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
 
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M12 3v12m0 0 4-4m-4 4-4-4"
-                                />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4" />
 
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M5 21h14"
-                                />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 21h14" />
 
                             </svg>
 
-                            <svg
-                                v-else
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke-width="1.8"
-                                stroke="currentColor"
-                                class="h-5 w-5 animate-spin"
-                            >
+                            <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                stroke-width="1.8" stroke="currentColor" class="h-5 w-5 animate-spin">
 
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="M12 3a9 9 0 1 0 9 9"
-                                />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 9 9" />
 
                             </svg>
 
@@ -1714,43 +1685,38 @@ onUnmounted(() => {
 
                 <!-- Concerns Table -->
 
-                <div
-                    class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md"
-                >
+                <div v-if="lateResponseFilter && !trashView" class="mb-4 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-start gap-3">
+                        <span class="mt-0.5 text-amber-700" aria-hidden="true">⏱</span>
+                        <div>
+                            <p class="text-sm font-semibold text-amber-950">Late response concerns</p>
+                            <p class="mt-0.5 text-xs leading-5 text-amber-900">Pending concerns with no response from the assigned organization within four hours.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="cursor-pointer self-start rounded-lg border border-amber-400 bg-white px-3 py-2 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 sm:self-auto" @click="clearLateResponseFilter">Clear filter</button>
+                </div>
+
+                <div class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
 
                     <!-- Table Header -->
 
-                    <div
-                        class="border-b border-slate-200 px-5 py-4"
-                    >
+                    <div class="border-b border-slate-200 px-5 py-4">
 
-                        <h3
-                            class="text-base font-semibold text-slate-800"
-                        >
+                        <h3 class="text-base font-semibold text-slate-800">
                             {{ trashView ? 'Trashed Concerns' : 'Concern List' }}
                         </h3>
 
-                        <p
-                            v-if="loading"
-                            class="mt-1 flex items-center gap-2 text-xs text-slate-400"
-                        >
+                        <p v-if="loading" class="mt-1 flex items-center gap-2 text-xs text-slate-400">
 
-                            <span
-                                class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-slate-300"
-                            ></span>
+                            <span class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-slate-300"></span>
 
                             Loading concerns...
 
                         </p>
 
-                        <p
-                            v-else
-                            class="mt-1 text-xs text-slate-500"
-                        >
+                        <p v-else class="mt-1 text-xs text-slate-500">
 
-                            <template
-                                v-if="totalConcerns > 0"
-                            >
+                            <template v-if="totalConcerns > 0">
 
                                 Showing
                                 {{ showingFrom }}–{{ showingTo }}
@@ -1774,58 +1740,32 @@ onUnmounted(() => {
 
                     <!-- Desktop Loading -->
 
-                    <div
-                        v-if="loading"
-                        class="hidden animate-pulse lg:block"
-                    >
+                    <div v-if="loading" class="hidden animate-pulse lg:block">
 
-                        <div
-                            class="grid grid-cols-6 gap-6 border-b border-slate-200 bg-slate-50 px-5 py-3"
-                        >
+                        <div class="grid grid-cols-6 gap-6 border-b border-slate-200 bg-slate-50 px-5 py-3">
 
-                            <div
-                                v-for="column in 6"
-                                :key="column"
-                                class="h-3 rounded bg-slate-200"
-                            ></div>
+                            <div v-for="column in 6" :key="column" class="h-3 rounded bg-slate-200"></div>
 
                         </div>
 
-                        <div
-                            v-for="row in 5"
-                            :key="row"
-                            class="grid grid-cols-6 gap-6 border-b border-slate-100 px-5 py-5"
-                        >
+                        <div v-for="row in 5" :key="row"
+                            class="grid grid-cols-6 gap-6 border-b border-slate-100 px-5 py-5">
 
-                            <div
-                                class="col-span-2 space-y-2"
-                            >
+                            <div class="col-span-2 space-y-2">
 
-                                <div
-                                    class="h-4 w-24 rounded bg-slate-200"
-                                ></div>
+                                <div class="h-4 w-24 rounded bg-slate-200"></div>
 
-                                <div
-                                    class="h-3 w-36 rounded bg-slate-100"
-                                ></div>
+                                <div class="h-3 w-36 rounded bg-slate-100"></div>
 
                             </div>
 
-                            <div
-                                class="h-4 rounded bg-slate-200"
-                            ></div>
+                            <div class="h-4 rounded bg-slate-200"></div>
 
-                            <div
-                                class="h-6 w-16 rounded-full bg-slate-200"
-                            ></div>
+                            <div class="h-6 w-16 rounded-full bg-slate-200"></div>
 
-                            <div
-                                class="h-6 w-20 rounded-full bg-slate-200"
-                            ></div>
+                            <div class="h-6 w-20 rounded-full bg-slate-200"></div>
 
-                            <div
-                                class="h-4 w-24 rounded bg-slate-200"
-                            ></div>
+                            <div class="h-4 w-24 rounded bg-slate-200"></div>
 
                         </div>
 
@@ -1833,28 +1773,15 @@ onUnmounted(() => {
 
                     <!-- Mobile Loading -->
 
-                    <div
-                        v-if="loading"
-                        class="space-y-3 p-4 lg:hidden"
-                    >
+                    <div v-if="loading" class="space-y-3 p-4 lg:hidden">
 
-                        <div
-                            v-for="row in 4"
-                            :key="row"
-                            class="animate-pulse rounded-xl border border-slate-200 p-4"
-                        >
+                        <div v-for="row in 4" :key="row" class="animate-pulse rounded-xl border border-slate-200 p-4">
 
-                            <div
-                                class="h-4 w-28 rounded bg-slate-200"
-                            ></div>
+                            <div class="h-4 w-28 rounded bg-slate-200"></div>
 
-                            <div
-                                class="mt-3 h-4 w-3/4 rounded bg-slate-200"
-                            ></div>
+                            <div class="mt-3 h-4 w-3/4 rounded bg-slate-200"></div>
 
-                            <div
-                                class="mt-4 h-3 w-1/2 rounded bg-slate-100"
-                            ></div>
+                            <div class="mt-4 h-3 w-1/2 rounded bg-slate-100"></div>
 
                         </div>
 
@@ -1862,20 +1789,13 @@ onUnmounted(() => {
 
                     <!-- Empty -->
 
-                    <div
-                        v-else-if="concerns.length === 0"
-                        class="px-5 py-12 text-center"
-                    >
+                    <div v-else-if="concerns.length === 0" class="px-5 py-12 text-center">
 
-                        <p
-                            class="text-sm font-medium text-slate-600"
-                        >
+                        <p class="text-sm font-medium text-slate-600">
                             No concerns found.
                         </p>
 
-                        <p
-                            class="mt-1 text-xs text-slate-400"
-                        >
+                        <p class="mt-1 text-xs text-slate-400">
                             {{ trashView ? 'There are no concerns in trash.' : 'Try changing your search or filters.' }}
                         </p>
 
@@ -1887,90 +1807,74 @@ onUnmounted(() => {
 
                         <div class="hidden lg:block">
 
-                            <table
-                                class="w-full table-fixed text-left"
-                            >
+                            <table class="w-full table-fixed text-left">
 
                                 <colgroup>
 
-                                    <col
-                                        class="w-[30%]"
-                                    />
+                                    <col class="w-[30%]" />
 
-                                    <col
-                                        class="w-[20%]"
-                                    />
+                                    <col class="w-[20%]" />
 
-                                    <col
-                                        class="w-[12%]"
-                                    />
+                                    <col class="w-[12%]" />
 
-                                    <col
-                                        class="w-[14%]"
-                                    />
+                                    <col class="w-[14%]" />
 
-                                    <col
-                                        class="w-[24%]"
-                                    />
+                                    <col class="w-[24%]" />
 
                                 </colgroup>
 
-                                <thead
-                                    class="bg-slate-50"
-                                >
+                                <thead class="bg-slate-50">
 
-                                    <tr
-                                        class="border-b border-slate-200"
-                                    >
+                                    <tr class="border-b border-slate-200">
 
                                         <th
-                                            class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
-                                        >
+                                            class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('title')"
                                                 class="inline-flex items-center gap-1.5 transition hover:text-blue-800"
                                                 :aria-label="`Sort by concern title ${sortDirection === 'asc' ? 'descending' : 'ascending'}`">
                                                 Concern
-                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('title') }}</span>
+                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('title')
+                                                }}</span>
                                             </button>
                                         </th>
 
                                         <th
-                                            class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
-                                        >
+                                            class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('assigned_to')"
                                                 class="inline-flex items-center gap-1.5 transition hover:text-blue-800">
                                                 Assigned To
-                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('assigned_to') }}</span>
+                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('assigned_to')
+                                                }}</span>
                                             </button>
                                         </th>
 
                                         <th
-                                            class="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
-                                        >
+                                            class="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('priority')"
                                                 class="inline-flex items-center gap-1.5 transition hover:text-blue-800">
                                                 Priority
-                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('priority') }}</span>
+                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('priority')
+                                                }}</span>
                                             </button>
                                         </th>
 
                                         <th
-                                            class="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
-                                        >
+                                            class="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('status')"
                                                 class="inline-flex items-center gap-1.5 transition hover:text-blue-800">
                                                 Status
-                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('status') }}</span>
+                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('status')
+                                                }}</span>
                                             </button>
                                         </th>
 
                                         <th
-                                            class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500"
-                                        >
+                                            class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('target_commitment_at')"
                                                 class="inline-flex items-center gap-1.5 transition hover:text-blue-800">
                                                 Committed Start
-                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('target_commitment_at') }}</span>
+                                                <span class="text-sm" aria-hidden="true">{{
+                                                    sortIndicator('target_commitment_at') }}</span>
                                             </button>
                                         </th>
 
@@ -1978,43 +1882,44 @@ onUnmounted(() => {
 
                                 </thead>
 
-                                <tbody
-                                    class="divide-y divide-slate-200"
-                                >
+                                <tbody class="divide-y divide-slate-200">
 
-                                    <tr
-                                        v-for="(concern, index) in concerns"
-                                        :key="concern.id"
-                                        role="button"
-                                        tabindex="0"
-                                        @click="viewConcern(concern)"
-                                        @keydown="handleConcernRowKeydown($event, concern)"
-                                        :class="
-                                            index % 2 === 0
-                                                ? 'bg-white hover:bg-blue-50/50'
-                                                : 'bg-slate-50 hover:bg-blue-50/70'
-                                        "
-                                        class="cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700"
-                                    >
+                                        <tr v-for="(concern, index) in concerns" :key="concern.id" role="button"
+                                        tabindex="0" @click="viewConcern(concern)"
+                                        @keydown="handleConcernRowKeydown($event, concern)" :class="index % 2 === 0
+                                            ? (responseAttentionState(concern) ? 'bg-amber-50 hover:bg-amber-100/80' : 'bg-white hover:bg-blue-50/50')
+                                            : (responseAttentionState(concern) ? 'bg-amber-50/70 hover:bg-amber-100/80' : 'bg-slate-50 hover:bg-blue-50/70')
+                                            "
+                                        class="cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700">
 
                                         <!-- Concern -->
 
-                                        <td
-                                            class="px-5 py-4"
-                                        >
+                                        <td class="px-5 py-4">
 
-                                            <p
-                                                class="text-xs font-semibold text-blue-800"
-                                            >
+                                            <p class="text-xs font-semibold text-blue-800">
                                                 {{
                                                     concern.concern_number
                                                 }}
                                             </p>
 
-                                            <p
-                                                class="mt-1 truncate text-sm font-semibold text-slate-800"
-                                                :title="concern.title"
+                                            <span
+                                                v-if="responseAttentionState(concern)"
+                                                class="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold"
+                                                :class="responseAttentionState(concern) === 'overdue'
+                                                    ? 'border-amber-300 bg-amber-100 text-amber-900'
+                                                    : 'border-rose-300 bg-rose-100 text-rose-900'"
+                                                :title="responseAttentionState(concern) === 'overdue'
+                                                    ? 'The assigned organization has not responded within 4 hours.'
+                                                    : 'The assigned organization’s first response came after the 4-hour target.'"
                                             >
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3 w-3" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75v5.25l3.25 1.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                </svg>
+                                                {{ responseAttentionState(concern) === 'overdue' ? 'Needs attention · No response in 4h' : 'Late response · over 4h' }}
+                                            </span>
+
+                                            <p class="mt-1 truncate text-sm font-semibold text-slate-800"
+                                                :title="concern.title">
                                                 {{
                                                     concern.title
                                                 }}
@@ -2024,10 +1929,8 @@ onUnmounted(() => {
                                                 Click row to view details <span aria-hidden="true">→</span>
                                             </p>
 
-                                            <p
-                                                class="mt-1 truncate text-xs text-slate-500"
-                                                :title="concern.description"
-                                            >
+                                            <p class="mt-1 truncate text-xs text-slate-500"
+                                                :title="concern.description">
                                                 {{
                                                     concern.description ||
                                                     '-'
@@ -2038,17 +1941,11 @@ onUnmounted(() => {
 
                                         <!-- Assigned To -->
 
-                                        <td
-                                            class="px-4 py-4"
-                                        >
+                                        <td class="px-4 py-4">
 
-                                            <p
-                                                class="truncate text-sm font-medium text-slate-700"
-                                                :title="
-                                                    concern.organization_name ||
-                                                    '-'
-                                                "
-                                            >
+                                            <p class="truncate text-sm font-medium text-slate-700" :title="concern.organization_name ||
+                                                '-'
+                                                ">
                                                 {{
                                                     concern.organization_name ||
                                                     '-'
@@ -2059,18 +1956,14 @@ onUnmounted(() => {
 
                                         <!-- Priority -->
 
-                                        <td
-                                            class="px-3 py-4"
-                                        >
+                                        <td class="px-3 py-4">
 
                                             <span
                                                 class="inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
-                                                :class="
-                                                    priorityClass(
-                                                        concern.priority
-                                                    )
-                                                "
-                                            >
+                                                :class="priorityClass(
+                                                    concern.priority
+                                                )
+                                                    ">
 
                                                 {{
                                                     formatPriority(
@@ -2084,18 +1977,14 @@ onUnmounted(() => {
 
                                         <!-- Status -->
 
-                                        <td
-                                            class="px-3 py-4"
-                                        >
+                                        <td class="px-3 py-4">
 
                                             <span
                                                 class="inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
-                                                :class="
-                                                    statusClass(
-                                                        concern.status
-                                                    )
-                                                "
-                                            >
+                                                :class="statusClass(
+                                                    concern.status
+                                                )
+                                                    ">
 
                                                 {{
                                                     formatStatus(
@@ -2109,13 +1998,9 @@ onUnmounted(() => {
 
                                         <!-- Target Commitment -->
 
-                                        <td
-                                            class="px-4 py-4"
-                                        >
+                                        <td class="px-4 py-4">
 
-                                            <p
-                                                class="text-sm font-semibold text-slate-800"
-                                            >
+                                            <p class="text-sm font-semibold text-slate-800">
 
                                                 {{
                                                     formatDate(
@@ -2125,13 +2010,9 @@ onUnmounted(() => {
 
                                             </p>
 
-                                            <p
-                                                class="mt-1 text-xs text-slate-500"
-                                            >
+                                            <p class="mt-1 text-xs text-slate-500">
 
-                                                <span
-                                                    class="font-medium text-slate-600"
-                                                >
+                                                <span class="font-medium text-slate-600">
                                                     Duration:
                                                 </span>
 
@@ -2143,9 +2024,7 @@ onUnmounted(() => {
 
                                             </p>
 
-                                            <p
-                                                class="mt-1 text-xs text-slate-400"
-                                            >
+                                            <p class="mt-1 text-xs text-slate-400">
 
                                                 Created
                                                 {{
@@ -2168,44 +2047,28 @@ onUnmounted(() => {
 
                         <!-- Mobile Cards -->
 
-                        <div
-                            class="space-y-3 p-3 lg:hidden"
-                        >
+                        <div class="space-y-3 p-3 lg:hidden">
 
-                            <article
-                                v-for="(concern, index) in concerns"
-                                :key="concern.id"
-                                role="button"
-                                tabindex="0"
-                                @click="viewConcern(concern)"
-                                @keydown="handleConcernRowKeydown($event, concern)"
-                                :class="
-                                    index % 2 === 0
+                            <article v-for="(concern, index) in concerns" :key="concern.id" role="button" tabindex="0"
+                                @click="viewConcern(concern)" @keydown="handleConcernRowKeydown($event, concern)"
+                                :class="responseAttentionState(concern)
+                                    ? 'border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100'
+                                    : index % 2 === 0
                                         ? 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
-                                        : 'border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/70'
-                                "
-                                class="cursor-pointer rounded-xl border p-4 transition focus:outline-none focus:ring-2 focus:ring-blue-700"
-                            >
+                                        : 'border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/70'"
+                                class="cursor-pointer rounded-xl border p-4 transition focus:outline-none focus:ring-2 focus:ring-blue-700">
 
-                                <div
-                                    class="flex items-start justify-between gap-3"
-                                >
+                                <div class="flex items-start justify-between gap-3">
 
-                                    <div
-                                        class="min-w-0"
-                                    >
+                                    <div class="min-w-0">
 
-                                        <p
-                                            class="text-xs font-semibold text-blue-800"
-                                        >
+                                        <p class="text-xs font-semibold text-blue-800">
                                             {{
                                                 concern.concern_number
                                             }}
                                         </p>
 
-                                        <h4
-                                            class="mt-1 break-words text-sm font-semibold text-slate-900"
-                                        >
+                                        <h4 class="mt-1 break-words text-sm font-semibold text-slate-900">
                                             {{
                                                 concern.title
                                             }}
@@ -2213,26 +2076,32 @@ onUnmounted(() => {
 
                                     </div>
 
-                                    <span
-                                        class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium"
-                                        :class="
-                                            statusClass(
-                                                concern.status
-                                            )
-                                        "
-                                    >
+                                    <div class="flex shrink-0 flex-col items-end gap-1">
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="statusClass(
+                                        concern.status
+                                    )
+                                        ">
                                         {{
                                             formatStatus(
                                                 concern.status
                                             )
                                         }}
                                     </span>
+                                    <span
+                                        v-if="responseAttentionState(concern)"
+                                        class="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold"
+                                        :class="responseAttentionState(concern) === 'overdue'
+                                            ? 'border-amber-300 bg-amber-100 text-amber-900'
+                                            : 'border-rose-300 bg-rose-100 text-rose-900'"
+                                    >
+                                        <span aria-hidden="true">⏱</span>
+                                        {{ responseAttentionState(concern) === 'overdue' ? 'Needs attention' : 'Late response' }}
+                                    </span>
+                                    </div>
 
                                 </div>
 
-                                <p
-                                    class="mt-2 line-clamp-2 text-xs leading-5 text-slate-500"
-                                >
+                                <p class="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
                                     {{
                                         concern.description ||
                                         'No description'
@@ -2243,18 +2112,12 @@ onUnmounted(() => {
                                     Tap card to view concern <span aria-hidden="true">→</span>
                                 </p>
 
-                                <div
-                                    class="mt-3 flex flex-wrap items-center gap-2"
-                                >
+                                <div class="mt-3 flex flex-wrap items-center gap-2">
 
-                                    <span
-                                        class="rounded-full px-2.5 py-1 text-xs font-medium"
-                                        :class="
-                                            priorityClass(
-                                                concern.priority
-                                            )
-                                        "
-                                    >
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-medium" :class="priorityClass(
+                                        concern.priority
+                                    )
+                                        ">
                                         {{
                                             formatPriority(
                                                 concern.priority
@@ -2262,9 +2125,7 @@ onUnmounted(() => {
                                         }}
                                     </span>
 
-                                    <span
-                                        class="text-xs text-slate-500"
-                                    >
+                                    <span class="text-xs text-slate-500">
                                         {{
                                             formatDate(
                                                 concern.created_at
@@ -2275,28 +2136,19 @@ onUnmounted(() => {
                                 </div>
 
                                 <div
-                                    class="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-slate-100 pt-3 text-xs"
-                                >
+                                    class="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-slate-100 pt-3 text-xs">
 
                                     <!-- Assigned To -->
 
-                                    <div
-                                        class="min-w-0"
-                                    >
+                                    <div class="min-w-0">
 
-                                        <p
-                                            class="text-slate-400"
-                                        >
+                                        <p class="text-slate-400">
                                             Assigned to
                                         </p>
 
-                                        <p
-                                            class="mt-0.5 truncate font-medium text-slate-700"
-                                            :title="
-                                                concern.organization_name ||
-                                                '-'
-                                            "
-                                        >
+                                        <p class="mt-0.5 truncate font-medium text-slate-700" :title="concern.organization_name ||
+                                            '-'
+                                            ">
                                             {{
                                                 concern.organization_name ||
                                                 '-'
@@ -2307,19 +2159,13 @@ onUnmounted(() => {
 
                                     <!-- Type -->
 
-                                    <div
-                                        class="min-w-0"
-                                    >
+                                    <div class="min-w-0">
 
-                                        <p
-                                            class="text-slate-400"
-                                        >
+                                        <p class="text-slate-400">
                                             Type
                                         </p>
 
-                                        <p
-                                            class="mt-0.5 truncate font-medium text-slate-700"
-                                        >
+                                        <p class="mt-0.5 truncate font-medium text-slate-700">
                                             {{
                                                 concern.concern_type_name ||
                                                 '-'
@@ -2330,19 +2176,13 @@ onUnmounted(() => {
 
                                     <!-- Created By -->
 
-                                    <div
-                                        class="min-w-0"
-                                    >
+                                    <div class="min-w-0">
 
-                                        <p
-                                            class="text-slate-400"
-                                        >
+                                        <p class="text-slate-400">
                                             Created by
                                         </p>
 
-                                        <p
-                                            class="mt-0.5 truncate font-medium text-slate-700"
-                                        >
+                                        <p class="mt-0.5 truncate font-medium text-slate-700">
                                             {{
                                                 concern.created_by_name ||
                                                 '-'
@@ -2353,19 +2193,13 @@ onUnmounted(() => {
 
                                     <!-- Target Commitment -->
 
-                                    <div
-                                        class="min-w-0"
-                                    >
+                                    <div class="min-w-0">
 
-                                        <p
-                                            class="text-slate-400"
-                                        >
+                                        <p class="text-slate-400">
                                             Committed Start
                                         </p>
 
-                                        <p
-                                            class="mt-0.5 font-medium text-slate-700"
-                                        >
+                                        <p class="mt-0.5 font-medium text-slate-700">
                                             {{
                                                 formatDate(
                                                     concern.target_commitment_at
@@ -2377,19 +2211,13 @@ onUnmounted(() => {
 
                                     <!-- Duration -->
 
-                                    <div
-                                        class="min-w-0"
-                                    >
+                                    <div class="min-w-0">
 
-                                        <p
-                                            class="text-slate-400"
-                                        >
+                                        <p class="text-slate-400">
                                             Duration
                                         </p>
 
-                                        <p
-                                            class="mt-0.5 font-medium text-slate-700"
-                                        >
+                                        <p class="mt-0.5 font-medium text-slate-700">
                                             {{
                                                 getConcernDuration(
                                                     concern
@@ -2409,17 +2237,13 @@ onUnmounted(() => {
 
                     <!-- Pagination -->
 
-                    <div
-                        v-if="
-                            !loading &&
-                            totalPages > 1
-                        "
-                        class="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
+                    <div v-if="
+                        !loading &&
+                        totalPages > 1
+                    "
+                        class="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
 
-                        <p
-                            class="text-xs text-slate-500"
-                        >
+                        <p class="text-xs text-slate-500">
 
                             Page
                             {{ currentPage }}
@@ -2428,60 +2252,36 @@ onUnmounted(() => {
 
                         </p>
 
-                        <div
-                            class="flex items-center gap-1"
-                        >
+                        <div class="flex items-center gap-1">
 
-                            <button
-                                type="button"
-                                @click="goToPreviousPage"
-                                :disabled="
-                                    currentPage === 1
+                            <button type="button" @click="goToPreviousPage" :disabled="currentPage === 1
                                 "
-                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
+                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
                                 Previous
                             </button>
 
-                            <template
-                                v-for="(page, index) in paginationPages"
-                                :key="`${page}-${index}`"
-                            >
+                            <template v-for="(page, index) in paginationPages" :key="`${page}-${index}`">
 
-                                <span
-                                    v-if="
-                                        page === '...'
-                                    "
-                                    class="px-2 py-2 text-sm text-slate-400"
-                                >
+                                <span v-if="
+                                    page === '...'
+                                " class="px-2 py-2 text-sm text-slate-400">
                                     ...
                                 </span>
 
-                                <button
-                                    v-else
-                                    type="button"
-                                    @click="goToPage(page)"
-                                    :class="
-                                        page === currentPage
-                                            ? 'bg-blue-900 text-white'
-                                            : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
+                                <button v-else type="button" @click="goToPage(page)" :class="page === currentPage
+                                    ? 'bg-blue-900 text-white'
+                                    : 'border border-slate-300 text-slate-600 hover:bg-slate-50'
                                     "
-                                    class="min-w-9 cursor-pointer rounded-lg px-3 py-2 text-sm font-medium transition"
-                                >
+                                    class="min-w-9 cursor-pointer rounded-lg px-3 py-2 text-sm font-medium transition">
                                     {{ page }}
                                 </button>
 
                             </template>
 
-                            <button
-                                type="button"
-                                @click="goToNextPage"
-                                :disabled="
-                                    currentPage === totalPages ||
-                                    totalPages === 0
+                            <button type="button" @click="goToNextPage" :disabled="currentPage === totalPages ||
+                                totalPages === 0
                                 "
-                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
+                                class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">
                                 Next
                             </button>
 
@@ -2493,147 +2293,80 @@ onUnmounted(() => {
 
             </div>
 
-            <AppFooter
-                class="mt-auto"
-            />
+            <AppFooter class="mt-auto" />
 
         </main>
 
         <!-- Create Concern Modal -->
 
-        <CreateConcernModal
-            :show="showModal"
-            :current-user="currentUser"
-            :concern-types="concernTypes"
-            :organizations="organizations"
-            @close="closeModal"
-            @created="loadConcerns"
-        />
+        <CreateConcernModal :show="showModal" :current-user="currentUser" :concern-types="concernTypes"
+            :organizations="organizations" @close="closeModal" @created="loadConcerns" />
 
         <!-- View Concern Modal -->
 
-        <ViewConcernModal
-            :show="showViewModal"
-            :concern-id="selectedConcernId"
-            :current-user="currentUser"
-            @close="closeViewModal"
-            @refresh="loadConcerns"
-        />
+        <ViewConcernModal :show="showViewModal" :concern-id="selectedConcernId" :current-user="currentUser"
+            @close="closeViewModal" @refresh="loadConcerns" />
 
         <!-- Export Confirmation Modal -->
 
-        <Transition
-            enter-active-class="transition duration-200 ease-out"
-            enter-from-class="opacity-0"
-            enter-to-class="opacity-100"
-            leave-active-class="transition duration-150 ease-in"
-            leave-from-class="opacity-100"
-            leave-to-class="opacity-0"
-        >
+        <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0"
+            enter-to-class="opacity-100" leave-active-class="transition duration-150 ease-in"
+            leave-from-class="opacity-100" leave-to-class="opacity-0">
 
-            <div
-                v-if="showExportModal"
+            <div v-if="showExportModal"
                 class="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-slate-950/50 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6"
-                @click.self="closeExportModal"
-            >
+                @click.self="closeExportModal">
 
-                <Transition
-                    appear
-                    enter-active-class="transition duration-200 ease-out"
+                <Transition appear enter-active-class="transition duration-200 ease-out"
                     enter-from-class="translate-y-3 scale-95 opacity-0"
                     enter-to-class="translate-y-0 scale-100 opacity-100"
                     leave-active-class="transition duration-150 ease-in"
                     leave-from-class="translate-y-0 scale-100 opacity-100"
-                    leave-to-class="translate-y-3 scale-95 opacity-0"
-                >
+                    leave-to-class="translate-y-3 scale-95 opacity-0">
 
-                    <div
-                        v-if="showExportModal"
-                        class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="export-modal-title"
-                    >
+                    <div v-if="showExportModal" class="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+                        role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
 
                         <!-- Modal Header -->
 
-                        <div
-                            class="border-b border-slate-100 px-6 py-5"
-                        >
+                        <div class="border-b border-slate-100 px-6 py-5">
 
-                            <div
-                                class="flex items-start gap-4"
-                            >
+                            <div class="flex items-start gap-4">
 
                                 <div
-                                    class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600"
-                                >
+                                    class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-600">
 
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke-width="1.8"
-                                        stroke="currentColor"
-                                        class="h-6 w-6"
-                                    >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.8" stroke="currentColor" class="h-6 w-6">
 
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            d="M12 3v12m0 0 4-4m-4 4-4-4"
-                                        />
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M12 3v12m0 0 4-4m-4 4-4-4" />
 
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            d="M5 21h14"
-                                        />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 21h14" />
 
                                     </svg>
 
                                 </div>
 
-                                <div
-                                    class="min-w-0 flex-1"
-                                >
+                                <div class="min-w-0 flex-1">
 
-                                    <h3
-                                        id="export-modal-title"
-                                        class="text-lg font-semibold text-slate-900"
-                                    >
+                                    <h3 id="export-modal-title" class="text-lg font-semibold text-slate-900">
                                         Export Concern Report
                                     </h3>
 
-                                    <p
-                                        class="mt-1 text-sm leading-5 text-slate-500"
-                                    >
+                                    <p class="mt-1 text-sm leading-5 text-slate-500">
                                         Review the export settings before continuing.
                                     </p>
 
                                 </div>
 
-                                <button
-                                    type="button"
-                                    @click="closeExportModal"
-                                    :disabled="exporting"
-                                    class="cursor-pointer rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
+                                <button type="button" @click="closeExportModal" :disabled="exporting"
+                                    class="cursor-pointer rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50">
 
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke-width="2"
-                                        stroke="currentColor"
-                                        class="h-5 w-5"
-                                    >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="2" stroke="currentColor" class="h-5 w-5">
 
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            d="M6 18 18 6M6 6l12 12"
-                                        />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
 
                                     </svg>
 
@@ -2645,29 +2378,19 @@ onUnmounted(() => {
 
                         <!-- Modal Body -->
 
-                        <div
-                            class="px-6 py-5"
-                        >
+                        <div class="px-6 py-5">
 
-                            <div
-                                class="rounded-xl border border-slate-200 bg-slate-50 p-4"
-                            >
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
 
-                                <div
-                                    class="flex items-center justify-between gap-4"
-                                >
+                                <div class="flex items-center justify-between gap-4">
 
                                     <div>
 
-                                        <p
-                                            class="text-xs font-medium uppercase tracking-wide text-slate-400"
-                                        >
+                                        <p class="text-xs font-medium uppercase tracking-wide text-slate-400">
                                             Export Date
                                         </p>
 
-                                        <p
-                                            class="mt-1 text-sm font-semibold text-slate-800"
-                                        >
+                                        <p class="mt-1 text-sm font-semibold text-slate-800">
                                             {{
                                                 getExportDateLabel()
                                             }}
@@ -2676,23 +2399,13 @@ onUnmounted(() => {
                                     </div>
 
                                     <div
-                                        class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm"
-                                    >
+                                        class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm">
 
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke-width="1.8"
-                                            stroke="currentColor"
-                                            class="h-5 w-5"
-                                        >
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                            stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
 
-                                            <path
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                d="M6.75 3v2.25M17.25 3v2.25M3.75 9h16.5M5.25 5.25h13.5a2.25 2.25 0 0 1 2.25 2.25v11.25a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25Z"
-                                            />
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M6.75 3v2.25M17.25 3v2.25M3.75 9h16.5M5.25 5.25h13.5a2.25 2.25 0 0 1 2.25 2.25v11.25a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25Z" />
 
                                         </svg>
 
@@ -2702,44 +2415,29 @@ onUnmounted(() => {
 
                             </div>
 
-                            <div
-                                class="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"
-                            >
+                            <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
 
-                                <div
-                                    class="flex gap-3"
-                                >
+                                <div class="flex gap-3">
 
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke-width="1.8"
-                                        stroke="currentColor"
-                                        class="mt-0.5 h-5 w-5 shrink-0 text-blue-600"
-                                    >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.8" stroke="currentColor"
+                                        class="mt-0.5 h-5 w-5 shrink-0 text-blue-600">
 
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            d="M12 9.75h.008v.008H12V9.75Zm0 3v3.75m9-4.5a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-                                        />
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M12 9.75h.008v.008H12V9.75Zm0 3v3.75m9-4.5a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
 
                                     </svg>
 
                                     <div>
 
-                                        <p
-                                            class="text-sm font-medium text-blue-800"
-                                        >
+                                        <p class="text-sm font-medium text-blue-800">
                                             All matching concerns will be exported.
                                         </p>
 
-                                        <p
-                                            class="mt-1 text-xs leading-5 text-blue-700"
-                                        >
+                                        <p class="mt-1 text-xs leading-5 text-blue-700">
                                             The export is not limited to the current table page.
-                                            Your search, status, priority, department, and selected date will be applied.
+                                            Your search, status, priority, department, and selected date will be
+                                            applied.
                                         </p>
 
                                     </div>
@@ -2753,64 +2451,30 @@ onUnmounted(() => {
                         <!-- Modal Footer -->
 
                         <div
-                            class="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4"
-                        >
+                            class="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
 
-                            <button
-                                type="button"
-                                @click="closeExportModal"
-                                :disabled="exporting"
-                                class="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
+                            <button type="button" @click="closeExportModal" :disabled="exporting"
+                                class="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
                                 Cancel
                             </button>
 
-                            <button
-                                type="button"
-                                @click="confirmExport"
-                                :disabled="exporting"
-                                class="inline-flex min-w-[120px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
+                            <button type="button" @click="confirmExport" :disabled="exporting"
+                                class="inline-flex min-w-[120px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">
 
-                                <svg
-                                    v-if="exporting"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke-width="1.8"
-                                    stroke="currentColor"
-                                    class="h-4 w-4 animate-spin"
-                                >
+                                <svg v-if="exporting" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                    stroke-width="1.8" stroke="currentColor" class="h-4 w-4 animate-spin">
 
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        d="M12 3a9 9 0 1 0 9 9"
-                                    />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 9 9" />
 
                                 </svg>
 
-                                <svg
-                                    v-else
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke-width="1.8"
-                                    stroke="currentColor"
-                                    class="h-4 w-4"
-                                >
+                                <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                    stroke-width="1.8" stroke="currentColor" class="h-4 w-4">
 
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        d="M12 3v12m0 0 4-4m-4 4-4-4"
-                                    />
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M12 3v12m0 0 4-4m-4 4-4-4" />
 
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        d="M5 21h14"
-                                    />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 21h14" />
 
                                 </svg>
 

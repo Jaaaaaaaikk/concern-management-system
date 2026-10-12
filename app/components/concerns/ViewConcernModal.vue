@@ -3,6 +3,7 @@
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
+import { roleDisplayName } from '~/composables/useRoleLabel'
 
 const props = defineProps({
     show: {
@@ -390,6 +391,13 @@ function getConcernDuration(concern) {
     const latestInProgressHistory = [...histories]
         .reverse()
         .find((history) => history.new_status === 'in_progress')
+    const latestInProgressAt = parseDate(latestInProgressHistory?.created_at)
+    const reopenedAfterResolution = Boolean(
+        latestInProgressAt && histories.some((history) =>
+            history.new_status === 'resolved' &&
+            parseDate(history.created_at)?.getTime() < latestInProgressAt.getTime()
+        )
+    )
 
     for (const history of histories) {
         const changedAt =
@@ -406,7 +414,7 @@ function getConcernDuration(concern) {
             activeSince =
                 commitmentStartFromRemarks(history.remarks) ||
                 (
-                    history === latestInProgressHistory
+                    history === latestInProgressHistory && !reopenedAfterResolution
                         ? parseDate(concern.target_commitment_at)
                         : null
                 ) ||
@@ -834,7 +842,7 @@ async function permanentlyDeleteConcern() {
  *   On Hold -> In Progress
  *
  * Creator organization admin:
- *   Resolved -> Closed
+ *   Resolved -> In Progress (reopen) / Closed
  *
  * Regular users:
  *   No status changes.
@@ -865,6 +873,14 @@ function canChangeToStatus(newStatus) {
      */
     if (newStatus === 'closed') {
         return canCloseConcern()
+    }
+
+    if (
+        newStatus === 'in_progress' &&
+        isCreatorOrganizationAdmin() &&
+        currentStatus === 'resolved'
+    ) {
+        return true
     }
 
     if (isAssignedAdmin()) {
@@ -933,6 +949,10 @@ const availableStatusOptions = computed(() => {
         currentStatus === 'resolved'
     ) {
         return [
+            {
+                value: 'in_progress',
+                label: 'Reopen · In Progress'
+            },
             {
                 value: 'closed',
                 label: 'Closed'
@@ -1003,6 +1023,14 @@ function isCommitmentDateRequired() {
 function isRemarksRequired() {
     if (!selectedConcern.value) {
         return false
+    }
+
+    if (
+        isCreatorOrganizationAdmin() &&
+        selectedConcern.value.status === 'resolved' &&
+        selectedStatus.value === 'in_progress'
+    ) {
+        return true
     }
 
     const canManageInProgress =
@@ -2697,6 +2725,9 @@ onUnmounted(() => {
                                     <p class="mt-2 text-xs text-slate-500">
                                         Choose the next status allowed for your organization.
                                     </p>
+                                    <p v-if="isCreatorOrganizationAdmin() && selectedConcern.status === 'resolved'" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                                        Review the reported resolution. If work is incomplete, reopen it as In Progress and explain what remains. The original commitment date is retained; no new commitment date is required.
+                                    </p>
 
                                 </div>
 
@@ -2743,6 +2774,8 @@ onUnmounted(() => {
                                 <textarea id="status-remarks" v-model="statusRemarks" :disabled="updatingStatus" rows="3"
                                     :placeholder="isAssignedAdmin() && selectedStatus === 'on_hold'
                                         ? 'Explain why this concern is being placed on hold...'
+                                        : isCreatorOrganizationAdmin() && selectedConcern.status === 'resolved' && selectedStatus === 'in_progress'
+                                            ? 'Explain why the reported resolution is rejected and what work remains...'
                                         : isAssignedAdmin() && selectedStatus === 'in_progress'
                                             ? 'Explain what work is starting or continuing...'
                                             : isAssignedAdmin() && selectedConcern.status === 'in_progress' && selectedStatus === 'resolved'
@@ -3421,8 +3454,7 @@ onUnmounted(() => {
                                         <span
                                             class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
                                             {{
-                                                comment.role_name ||
-                                                '-'
+                                                roleDisplayName(comment.role_name)
                                             }}
                                         </span>
 
@@ -3514,8 +3546,7 @@ onUnmounted(() => {
 
                                 <span class="text-xs text-slate-400">
                                     {{
-                                        currentUser?.role_name ||
-                                        ''
+                                        roleDisplayName(currentUser?.role_name)
                                     }}
                                 </span>
 

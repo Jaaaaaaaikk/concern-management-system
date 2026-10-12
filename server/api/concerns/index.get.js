@@ -54,6 +54,10 @@ export default defineEventHandler(async (event) => {
         queryParams.view || ''
     ).trim() === 'trash'
 
+    const lateResponseFilter = String(
+        queryParams.late_response || ''
+    ).trim() === '1'
+
     const sortColumns = {
         title: 'c.title',
         assigned_to: 'assigned_org.name',
@@ -251,6 +255,32 @@ export default defineEventHandler(async (event) => {
         params.push(status)
     }
 
+    if (lateResponseFilter && !trashView) {
+        conditions.push(`
+            c.status = 'pending'
+            AND c.created_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)
+            AND NOT EXISTS (
+                SELECT 1
+                FROM concern_status_history response_status
+                INNER JOIN users response_user
+                    ON response_user.id = response_status.changed_by
+                WHERE response_status.concern_id = c.id
+                  AND response_status.new_status <> 'pending'
+                  AND response_user.organization_id = c.assigned_organization_id
+                  AND response_status.created_at <= DATE_ADD(c.created_at, INTERVAL 4 HOUR)
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM concern_comments response_comment
+                INNER JOIN users response_user
+                    ON response_user.id = response_comment.user_id
+                WHERE response_comment.concern_id = c.id
+                  AND response_user.organization_id = c.assigned_organization_id
+                  AND response_comment.created_at <= DATE_ADD(c.created_at, INTERVAL 4 HOUR)
+            )
+        `)
+    }
+
     /*
      * PRIORITY FILTER
      */
@@ -425,6 +455,23 @@ export default defineEventHandler(async (event) => {
             c.created_at,
             c.target_commitment_at,
             c.updated_at,
+            (
+                SELECT MIN(csh.created_at)
+                FROM concern_status_history csh
+                INNER JOIN users response_user
+                    ON response_user.id = csh.changed_by
+                WHERE csh.concern_id = c.id
+                  AND csh.new_status <> 'pending'
+                  AND response_user.organization_id = c.assigned_organization_id
+            ) AS first_handler_status_response_at,
+            (
+                SELECT MIN(cc.created_at)
+                FROM concern_comments cc
+                INNER JOIN users response_user
+                    ON response_user.id = cc.user_id
+                WHERE cc.concern_id = c.id
+                  AND response_user.organization_id = c.assigned_organization_id
+            ) AS first_handler_comment_response_at,
             c.resolved_at,
             c.closed_at,
             c.deleted_at,

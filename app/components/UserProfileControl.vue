@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useToast } from '~/composables/useToast'
+import { roleDisplayName } from '~/composables/useRoleLabel'
 
 const props = defineProps({
     currentUser: {
@@ -119,8 +120,8 @@ function confirmPhotoRemoval() {
                 <p class="truncate text-sm font-semibold" :class="mobile ? 'text-slate-900' : 'text-white'">
                     {{ displayName }}
                 </p>
-                <p class="truncate text-xs capitalize" :class="mobile ? 'text-slate-500' : 'text-blue-100/70'">
-                    {{ currentUser?.role_name || 'Account' }}
+                <p class="truncate text-xs" :class="mobile ? 'text-slate-500' : 'text-blue-100/70'">
+                    {{ roleDisplayName(currentUser?.role_name) }}
                 </p>
                 <p
                     v-if="currentUser?.organization_name"

@@ -27,6 +27,29 @@ const emit = defineEmits([
 ])
 
 useBodyScrollLock(() => props.show)
+const showSaveConfirmation = ref(false)
+
+function requestSubmit() {
+    if (!props.saving) showSaveConfirmation.value = true
+}
+
+function organizationTypeLabel(type) {
+    return {
+        bpo: 'BPO',
+        tenant: 'Tenant',
+        admin_facilities: 'Admin Facilities'
+    }[type] || 'organization'
+}
+
+function confirmSubmit() {
+    if (props.saving) return
+    showSaveConfirmation.value = false
+    emit('submit')
+}
+
+watch(() => props.show, (isShown) => {
+    if (!isShown) showSaveConfirmation.value = false
+})
 
 </script>
 
@@ -82,7 +105,7 @@ useBodyScrollLock(() => props.show)
 
             <!-- Form -->
             <form
-                @submit.prevent="emit('submit')"
+                @submit.prevent="requestSubmit"
                 class="space-y-5 px-4 py-5 sm:px-6 sm:py-6"
             >
 
@@ -104,6 +127,24 @@ useBodyScrollLock(() => props.show)
                         class="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none placeholder:text-slate-400 focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
                     />
 
+                </div>
+
+                <!-- Organization Type -->
+                <div>
+                    <label class="mb-2 block text-sm font-medium text-slate-700">
+                        Organization type <span class="text-red-500">*</span>
+                    </label>
+                    <select
+                        v-model="props.form.organization_type"
+                        required
+                        class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+                    >
+                        <option value="" disabled>Select organization type</option>
+                        <option value="bpo">BPO</option>
+                        <option value="tenant">Tenant</option>
+                        <option value="admin_facilities">Admin Facilities</option>
+                    </select>
+                    <p class="mt-1 text-xs leading-5 text-slate-500">This determines which organizations its users can route concerns to.</p>
                 </div>
 
                 <!-- Address -->
@@ -175,6 +216,16 @@ useBodyScrollLock(() => props.show)
             </form>
 
         </div>
+
+        <ConfirmActionModal
+            :show="showSaveConfirmation"
+            title="Create organization?"
+            :message="`Create “${props.form.name?.trim() || 'this organization'}” as ${organizationTypeLabel(props.form.organization_type)} with the entered details?`"
+            confirm-label="Create organization"
+            :loading="props.saving"
+            @cancel="showSaveConfirmation = false"
+            @confirm="confirmSubmit"
+        />
 
     </div>
 

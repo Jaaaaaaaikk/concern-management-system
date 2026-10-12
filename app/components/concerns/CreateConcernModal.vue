@@ -1,5 +1,6 @@
 <script setup>
 
+import ConfirmActionModal from '~/components/ConfirmActionModal.vue'
 import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
 
 const props = defineProps({
@@ -34,6 +35,7 @@ const emit = defineEmits([
 const { showToast } = useToast()
 
 const saving = ref(false)
+const showSaveConfirmation = ref(false)
 
 const selectedImages = ref([])
 
@@ -66,10 +68,22 @@ const availableOrganizations = computed(() => {
         return props.organizations
     }
 
+    const ownOrganizationId = Number(props.currentUser.organization_id)
+    const ownOrganization = props.organizations.find(
+        organization => Number(organization.id) === ownOrganizationId
+    )
+    const isAdminFacilitiesOrganization =
+        ownOrganization?.organization_type === 'admin_facilities'
+
+    if (!isAdminFacilitiesOrganization) {
+        return props.organizations.filter(
+            organization => organization.organization_type === 'admin_facilities'
+        )
+    }
+
     return props.organizations.filter(
         organization =>
-            Number(organization.id) !==
-            Number(props.currentUser.organization_id)
+            Number(organization.id) !== ownOrganizationId
     )
 
 })
@@ -204,7 +218,7 @@ function closeModal() {
 
 }
 
-async function createConcern() {
+async function createConcern(confirmed = false) {
 
     if (!form.value.title.trim()) {
 
@@ -250,6 +264,17 @@ async function createConcern() {
 
     }
 
+    if (!availableOrganizations.value.some(
+        organization => Number(organization.id) === Number(form.value.assigned_organization_id)
+    )) {
+        showToast(
+            'Please select an organization allowed for your department.',
+            'error'
+        )
+
+        return
+    }
+
     /*
      * Frontend protection:
      * Admin cannot assign a concern to
@@ -279,6 +304,12 @@ async function createConcern() {
 
     }
 
+    if (!confirmed) {
+        showSaveConfirmation.value = true
+        return
+    }
+
+    showSaveConfirmation.value = false
     saving.value = true
 
     try {
@@ -369,6 +400,12 @@ watch(
 
             resetOriginalImages()
 
+            showSaveConfirmation.value = false
+
+        } else {
+
+            showSaveConfirmation.value = false
+
         }
 
     }
@@ -425,7 +462,7 @@ onUnmounted(() => {
 
             </div>
 
-            <form @submit.prevent="createConcern" class="flex-1 overflow-y-auto">
+            <form @submit.prevent="createConcern(false)" class="flex-1 overflow-y-auto">
 
                 <div class="space-y-5 p-4 sm:p-6">
 
@@ -560,11 +597,11 @@ onUnmounted(() => {
                                 <span class="text-red-500">*</span>
                             </label>
 
-                            <select v-model="form.assigned_organization_id" required
+                            <select v-model="form.assigned_organization_id" required :disabled="availableOrganizations.length === 0"
                                 class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
 
                                 <option value="" disabled>
-                                    Select organization
+                                    {{ availableOrganizations.length ? 'Select organization' : 'No Admin Facilities organization is available' }}
                                 </option>
 
                                 <option v-for="organization in availableOrganizations" :key="organization.id"
@@ -574,8 +611,10 @@ onUnmounted(() => {
 
                             </select>
 
-                            <p v-if="currentUser?.role_name !== 'superadmin'" class="mt-1 text-xs text-slate-500">
-                                Your own organization is not available for assignment.
+                            <p v-if="currentUser?.role_name !== 'superadmin' && currentUser?.organization_id" class="mt-1 text-xs text-slate-500">
+                                {{ availableOrganizations.length && availableOrganizations.every(organization => organization.organization_type === 'admin_facilities') && props.organizations.find(organization => Number(organization.id) === Number(currentUser.organization_id))?.organization_type !== 'admin_facilities'
+                                    ? 'BPO and tenant concerns can only be assigned to Admin Facilities.'
+                                    : 'Admin Facilities can route to any other organization, but not to itself.' }}
                             </p>
 
                         </div>
@@ -643,5 +682,15 @@ onUnmounted(() => {
         </div>
 
     </div>
+
+    <ConfirmActionModal
+        :show="show && showSaveConfirmation"
+        title="Submit this concern?"
+        :message="`Submit “${form.title.trim()}” to ${availableOrganizations.find(organization => Number(organization.id) === Number(form.assigned_organization_id))?.name || 'the selected organization'}?`"
+        confirm-label="Submit concern"
+        :loading="saving"
+        @cancel="showSaveConfirmation = false"
+        @confirm="createConcern(true)"
+    />
 
 </template>

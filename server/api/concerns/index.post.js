@@ -174,7 +174,9 @@ export default defineEventHandler(async (event) => {
   const [organizationRows] = await db.query(
     `
             SELECT
-                id
+                id,
+              name,
+              organization_type
             FROM organizations
             WHERE id = ?
               AND deleted_at IS NULL
@@ -192,7 +194,7 @@ export default defineEventHandler(async (event) => {
 
   const [creatorOrganizationRows] = await db.query(
     `
-      SELECT id
+      SELECT id, name, organization_type
       FROM organizations
       WHERE id = ?
         AND deleted_at IS NULL
@@ -208,12 +210,24 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  const assignedOrganization = organizationRows[0];
+  const creatorOrganization = creatorOrganizationRows[0];
+  const isAdminFacilitiesCreator =
+    creatorOrganization.organization_type === "admin_facilities";
+  const isAssignedToAdminFacilities =
+    assignedOrganization.organization_type === "admin_facilities";
+
+  if (!isAdminFacilitiesCreator && !isAssignedToAdminFacilities) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "BPO and tenant organizations can only assign concerns to an Admin Facilities organization.",
+    });
+  }
+
   /*
- * Prevent admin from assigning a concern
- * to their own organization.
+ * All organization users and admins must route outside their own organization.
  */
   if (
-    currentUser.role_name === "admin" &&
     Number(assignedOrganizationId) === Number(currentUser.organization_id)
   ) {
     throw createError({

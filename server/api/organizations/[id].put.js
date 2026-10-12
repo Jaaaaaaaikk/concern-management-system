@@ -22,12 +22,15 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event)
 
     const name = body?.name?.trim()
+    const organizationType = body?.organization_type
 
     const description =
         body?.description?.trim() || null
 
     const address =
         body?.address?.trim() || null
+
+    const allowedOrganizationTypes = ['bpo', 'tenant', 'admin_facilities']
 
     if (!name) {
 
@@ -36,6 +39,13 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Organization name is required.'
         })
 
+    }
+
+    if (!allowedOrganizationTypes.includes(organizationType)) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Select a valid organization type.'
+        })
     }
 
     try {
@@ -67,6 +77,7 @@ export default defineEventHandler(async (event) => {
             UPDATE organizations
             SET
                 name = ?,
+                organization_type = ?,
                 description = ?,
                 address = ?
             WHERE id = ?
@@ -74,6 +85,7 @@ export default defineEventHandler(async (event) => {
             `,
             [
                 name,
+                organizationType,
                 description,
                 address,
                 organizationId

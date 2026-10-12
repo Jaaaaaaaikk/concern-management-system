@@ -1,6 +1,7 @@
 <script setup>
 
 import { useStickyHeader } from '~/composables/useStickyHeader'
+import { roleDisplayName } from '~/composables/useRoleLabel'
 
 definePageMeta({
     middleware: 'auth'
@@ -265,6 +266,13 @@ onMounted(() => {
                     <span>Dashboard</span>
                 </NuxtLink>
 
+                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
+                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+                    <NavIcon name="users" />
+                    <span>Manage Users</span>
+                </NuxtLink>
+
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
                     :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
@@ -279,13 +287,13 @@ onMounted(() => {
                     <span>Manage Concerns</span>
                 </NuxtLink>
 
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
-                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
-                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
-                    <NavIcon name="users" />
-                    <span>Manage Users</span>
-                </NuxtLink>
 
+                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/concern-categories"
+                    :class="$route.path === '/concern-categories' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+                    <NavIcon name="categories" />
+                    <span>Concern Categories</span>
+                </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/login-history"
                     :class="$route.path === '/login-history' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
@@ -293,6 +301,7 @@ onMounted(() => {
                     <NavIcon name="history" />
                     <span>Login History</span>
                 </NuxtLink>
+
             </nav>
 
             <div class="p-4">
@@ -309,15 +318,15 @@ onMounted(() => {
                     ? 'lg:sticky lg:top-0 lg:z-30 lg:-translate-y-1 lg:py-3 bg-white/30 shadow-md'
                     : 'translate-y-0 bg-white/30 shadow-sm'
             ]">
-    <div>
-        <h2 class="text-xl font-semibold text-slate-900">
-            Login History
-        </h2>
-        <p class="mt-1 text-sm text-slate-500">
-            Audit trail of user login sessions and activity.
-        </p>
-    </div>
-</header>
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-900">
+                        Login History
+                    </h2>
+                    <p class="mt-1 text-sm text-slate-500">
+                        Audit trail of user login sessions and activity.
+                    </p>
+                </div>
+            </header>
 
             <div class="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 sm:px-6 sm:py-8">
                 <div v-if="errorMessage"
@@ -334,22 +343,22 @@ onMounted(() => {
                 <div v-else class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
                     <div class="border-b border-slate-200 bg-slate-50/80 p-3 sm:p-4">
                         <div class="grid grid-cols-2 gap-2 rounded-xl bg-slate-200/70 p-1">
-                            <button type="button" @click="selectSessionView('active')"
-                                :class="sessionView === 'active'
-                                    ? 'bg-white text-blue-900 shadow-sm ring-1 ring-blue-100 cursor-pointer'
-                                    : 'text-slate-600 hover:text-slate-900 cursor-pointer'"
+                            <button type="button" @click="selectSessionView('active')" :class="sessionView === 'active'
+                                ? 'bg-white text-blue-900 shadow-sm ring-1 ring-blue-100 cursor-pointer'
+                                : 'text-slate-600 hover:text-slate-900 cursor-pointer'"
                                 class="flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition">
                                 <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
                                 Active now
-                                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">{{ sessionCounts.active }}</span>
+                                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">{{
+                                    sessionCounts.active }}</span>
                             </button>
-                            <button type="button" @click="selectSessionView('history')"
-                                :class="sessionView === 'history'
-                                    ? 'bg-white text-blue-900 shadow-sm ring-1 ring-blue-100'
-                                    : 'text-slate-600 hover:text-slate-900 cursor-pointer'"
+                            <button type="button" @click="selectSessionView('history')" :class="sessionView === 'history'
+                                ? 'bg-white text-blue-900 shadow-sm ring-1 ring-blue-100'
+                                : 'text-slate-600 hover:text-slate-900 cursor-pointer'"
                                 class="flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition">
                                 Session history
-                                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{{ sessionCounts.history }}</span>
+                                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{{
+                                    sessionCounts.history }}</span>
                             </button>
                         </div>
                         <p class="px-1 pt-3 text-xs text-slate-500">
@@ -398,7 +407,7 @@ onMounted(() => {
                                     <td class="px-5 py-4 text-sm text-slate-600">
                                         <span
                                             class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                                            {{ session.role_name || '-' }}
+                                            {{ roleDisplayName(session.role_name) }}
                                         </span>
                                     </td>
 

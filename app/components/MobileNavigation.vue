@@ -15,12 +15,17 @@ const links = computed(() => [
     { label: 'Dashboard', to: '/dashboard', icon: 'dashboard' },
     ...(props.currentUser?.role_name === 'superadmin'
         ? [
-            { label: 'Organizations', to: '/organizations', icon: 'organizations' },
-            { label: 'Users', to: '/users', icon: 'users' },
-            { label: 'Login History', to: '/login-history', icon: 'history' }
+            { label: 'Manage Users', to: '/users', icon: 'users' },
+            { label: 'Manage Organizations', to: '/organizations', icon: 'organizations' }
         ]
         : []),
-    { label: 'Concerns', to: '/concerns', icon: 'concerns' }
+    { label: 'Manage Concerns', to: '/concerns', icon: 'concerns' },
+    ...(props.currentUser?.role_name === 'superadmin'
+        ? [
+            { label: 'Concern Categories', to: '/concern-categories', icon: 'categories' },
+            { label: 'Login History', to: '/login-history', icon: 'history' }
+        ]
+        : [])
 ])
 </script>
 

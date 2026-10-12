@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
+import { roleDisplayName } from '~/composables/useRoleLabel'
 
 const props = defineProps({
     show: {
@@ -41,6 +42,22 @@ const emit = defineEmits([
 ])
 
 useBodyScrollLock(() => props.show)
+
+const showSaveConfirmation = ref(false)
+
+function requestSubmit() {
+    if (!props.updating) showSaveConfirmation.value = true
+}
+
+function confirmSubmit() {
+    if (props.updating) return
+    showSaveConfirmation.value = false
+    emit('submit')
+}
+
+watch(() => props.show, (isShown) => {
+    if (!isShown) showSaveConfirmation.value = false
+})
 
 const photoPreview = ref('')
 let photoPreviewUrl = null
@@ -95,22 +112,6 @@ watch(
 
 onBeforeUnmount(releasePhotoPreview)
 
-function roleLabel(role) {
-    if (role === 'superadmin') {
-        return 'Superadmin'
-    }
-
-    if (role === 'admin') {
-        return 'Admin'
-    }
-
-    if (role === 'user') {
-        return 'User'
-    }
-
-    return role || '-'
-}
-
 </script>
 
 <template>
@@ -143,7 +144,7 @@ function roleLabel(role) {
             </div>
 
             <form
-                @submit.prevent="emit('submit')"
+                @submit.prevent="requestSubmit"
                 class="space-y-5 px-4 py-5 sm:px-6 sm:py-6"
             >
 
@@ -174,7 +175,7 @@ function roleLabel(role) {
                             <button
                                 v-if="props.form.profile_photo_url && !props.form.profile_photo_remove"
                                 type="button"
-                                class="rounded-lg px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                                class="cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50"
                                 @click="removeProfilePhoto"
                             >
                                 Remove photo
@@ -296,7 +297,7 @@ function roleLabel(role) {
                                 :key="role.id"
                                 :value="role.id"
                             >
-                                {{ roleLabel(role.name) }}
+                                {{ roleDisplayName(role.name) }}
                             </option>
                         </select>
                     </div>
@@ -391,5 +392,15 @@ function roleLabel(role) {
 
             </form>
         </div>
+
+        <ConfirmActionModal
+            :show="showSaveConfirmation"
+            title="Save user changes?"
+            :message="`Save the updated account details for ${[props.form.first_name, props.form.last_name].filter(Boolean).join(' ') || props.form.username || 'this user'}?`"
+            confirm-label="Save changes"
+            :loading="props.updating"
+            @cancel="showSaveConfirmation = false"
+            @confirm="confirmSubmit"
+        />
     </div>
 </template>

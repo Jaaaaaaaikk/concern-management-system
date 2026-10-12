@@ -22,12 +22,14 @@ const updating = ref(false)
 
 const createForm = ref({
     name: '',
+    organization_type: '',
     description: '',
     address: ''
 })
 
 const editForm = ref({
     name: '',
+    organization_type: '',
     description: '',
     address: ''
 })
@@ -252,6 +254,7 @@ async function goToNextPage() {
 function resetCreateForm() {
     createForm.value = {
         name: '',
+        organization_type: '',
         description: '',
         address: ''
     }
@@ -287,6 +290,7 @@ async function createOrganization() {
                 credentials: 'include',
                 body: {
                     name: createForm.value.name,
+                    organization_type: createForm.value.organization_type,
                     description: createForm.value.description,
                     address: createForm.value.address
                 }
@@ -321,6 +325,7 @@ async function createOrganization() {
 function resetEditForm() {
     editForm.value = {
         name: '',
+        organization_type: '',
         description: '',
         address: ''
     }
@@ -335,6 +340,7 @@ function openEditModal(organization) {
 
     editForm.value = {
         name: organization?.name || '',
+        organization_type: organization?.organization_type || '',
         description: organization?.description || '',
         address: organization?.address || ''
     }
@@ -377,6 +383,7 @@ async function updateOrganization() {
                 credentials: 'include',
                 body: {
                     name: editForm.value.name,
+                    organization_type: editForm.value.organization_type,
                     description: editForm.value.description,
                     address: editForm.value.address
                 }
@@ -422,6 +429,14 @@ function formatDate(date) {
             minute: '2-digit'
         }
     )
+}
+
+function organizationTypeLabel(type) {
+    return {
+        bpo: 'BPO',
+        tenant: 'Tenant',
+        admin_facilities: 'Admin Facilities'
+    }[type] || 'Unclassified'
 }
 
 
@@ -497,6 +512,12 @@ onMounted(() => {
                     <span>Dashboard</span>
                 </NuxtLink>
 
+                <NuxtLink to="/users"
+                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
+                    class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
+                    <NavIcon name="users" />
+                    <span>Manage Users</span>
+                </NuxtLink>
 
                 <NuxtLink to="/organizations"
                     :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
@@ -512,11 +533,11 @@ onMounted(() => {
                     <span>Manage Concerns</span>
                 </NuxtLink>
 
-                <NuxtLink to="/users"
-                    :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
+                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/concern-categories"
+                    :class="$route.path === '/concern-categories' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
-                    <NavIcon name="users" />
-                    <span>Manage Users</span>
+                    <NavIcon name="categories" />
+                    <span>Concern Categories</span>
                 </NuxtLink>
 
                 <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/login-history"
@@ -618,6 +639,11 @@ onMounted(() => {
 
                                     <th
                                         class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                        Organization Type
+                                    </th>
+
+                                    <th
+                                        class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                                         Address
                                     </th>
 
@@ -640,29 +666,32 @@ onMounted(() => {
 
                                 <tr v-if="organizations.length === 0">
 
-                                    <td colspan="4" class="px-6 py-10 text-center text-sm text-slate-500">
+                                    <td colspan="5" class="px-6 py-10 text-center text-sm text-slate-500">
                                         No organizations found.
                                     </td>
 
                                 </tr>
-
-
-                                <tr v-for="(organization, index) in organizations" :key="organization.id"
-                                    :class="index % 2 === 0
-                                        ? 'bg-white hover:bg-blue-50/70'
-                                        : 'bg-slate-50 hover:bg-blue-50/80'"
+                                <tr v-for="(organization, index) in organizations" :key="organization.id" :class="index % 2 === 0
+                                    ? 'bg-white hover:bg-blue-50/70'
+                                    : 'bg-slate-50 hover:bg-blue-50/80'"
                                     class="group cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700"
-                                    role="button" tabindex="0"
-                                    @click="openEditModal(organization)"
+                                    role="button" tabindex="0" @click="openEditModal(organization)"
                                     @keydown="handleOrganizationRowKeydown($event, organization)">
 
                                     <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-800">
                                         <div class="flex items-center justify-between gap-3">
                                             <span>{{ organization.name }}</span>
-                                            <span class="text-xs font-medium text-blue-700 opacity-0 transition group-hover:opacity-100">
+                                            <span
+                                                class="text-xs font-medium text-blue-700 opacity-0 transition group-hover:opacity-100">
                                                 Edit →
                                             </span>
                                         </div>
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
+                                        <span class="rounded-full px-2.5 py-1 text-xs font-semibold" :class="organization.organization_type === 'admin_facilities' ? 'bg-blue-50 text-blue-800' : organization.organization_type === 'bpo' ? 'bg-violet-50 text-violet-800' : 'bg-teal-50 text-teal-800'">
+                                            {{ organizationTypeLabel(organization.organization_type) }}
+                                        </span>
                                     </td>
 
 
@@ -705,17 +734,22 @@ onMounted(() => {
 
                     <!-- Touch-friendly organization rows -->
                     <div class="space-y-3 p-3 lg:hidden">
-                        <button v-for="organization in organizations" :key="organization.id"
-                            type="button" @click="openEditModal(organization)"
+                        <button v-for="organization in organizations" :key="organization.id" type="button"
+                            @click="openEditModal(organization)"
                             class="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-700">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
                                     <p class="truncate text-sm font-semibold text-slate-900">{{ organization.name }}</p>
+                                    <span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold" :class="organization.organization_type === 'admin_facilities' ? 'bg-blue-50 text-blue-800' : organization.organization_type === 'bpo' ? 'bg-violet-50 text-violet-800' : 'bg-teal-50 text-teal-800'">
+                                        {{ organizationTypeLabel(organization.organization_type) }}
+                                    </span>
                                     <p class="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
-                                        {{ organization.description || organization.address || 'No additional details' }}
+                                        {{ organization.description || organization.address || 'No additional details'
+                                        }}
                                     </p>
                                 </div>
-                                <span class="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Edit</span>
+                                <span
+                                    class="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Edit</span>
                             </div>
                             <p class="mt-3 text-xs font-semibold text-blue-800">Tap to edit organization →</p>
                         </button>
