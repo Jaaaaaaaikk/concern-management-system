@@ -42,38 +42,129 @@ onBeforeUnmount(() => {
 <template>
   <NuxtPage />
   <Transition
-    enter-active-class="transition duration-200 ease-out"
-    enter-from-class="-translate-y-2 opacity-0"
-    enter-to-class="translate-y-0 opacity-100"
-    leave-active-class="transition duration-200 ease-in"
-    leave-from-class="translate-y-0 opacity-100"
-    leave-to-class="-translate-y-2 opacity-0"
+    enter-active-class="nav-loader-enter-active"
+    leave-active-class="nav-loader-leave-active"
   >
     <div
       v-if="isNavigating"
-      class="fixed right-4 top-4 z-[100] flex items-center gap-3 rounded-2xl border border-blue-900/15 bg-white px-4 py-3 shadow-xl shadow-blue-950/15"
+      class="pointer-events-none fixed inset-x-0 top-4 z-100 flex justify-center"
       role="status"
       aria-live="polite"
       aria-label="Loading the next page"
     >
-      <span class="relative flex h-8 w-8 items-center justify-center rounded-xl bg-blue-900 text-white">
+      <div class="pointer-events-auto flex items-center gap-3 rounded-2xl border border-blue-900/15 bg-white px-4 py-3 shadow-xl shadow-blue-950/15">
+      <span class="relative flex h-12 w-14 shrink-0 items-center justify-center text-blue-800">
         <svg
-          class="h-4 w-4 motion-safe:animate-pulse"
-          viewBox="0 0 24 24"
+          class="h-10 w-14"
+          viewBox="0 0 32 24"
           fill="none"
           stroke="currentColor"
-          stroke-width="1.8"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
           aria-hidden="true"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 9h.01M15 9h.01" />
+          <g class="loading-cat-body">
+            <path d="M8 12.5c1.2-2 3.1-3 6.2-3h4.2a4.4 4.4 0 0 1 4.2 3.2l.8 2.8H9.2L8 12.5Z" fill="currentColor" stroke="none" />
+            <path d="M18.5 10.1 19 6.6l3 2.3a4.1 4.1 0 0 1 2.8 3.9v1.1h-5.3" fill="currentColor" stroke="none" />
+            <path d="m19 6.7 2.5-.3-.2 2.8m-1.5 3.2h.01" />
+            <path class="loading-cat-tail" d="M8.6 12.5c-2.8-.2-3-3.7-5.4-3.5-1.3.1-1.5 1.4-.8 2" />
+            <path class="loading-cat-leg loading-cat-leg-back" d="m11 15.2-.8 3.3 2.2 1.2m1.1-4.5-.4 3.4 2 1.1" />
+            <path class="loading-cat-leg loading-cat-leg-front" d="m18 15.2.6 3.3 2.2.8m1.1-4.1 1.1 3.1 2.3.3" />
+          </g>
         </svg>
-        <span class="absolute -right-1 -top-1 h-2.5 w-2.5 animate-ping rounded-full bg-blue-400 motion-reduce:animate-none" />
       </span>
       <span>
         <span class="block text-sm font-semibold text-blue-950">One moment</span>
         <span class="block text-xs text-slate-500">Getting things ready…</span>
       </span>
+      </div>
     </div>
   </Transition>
   <ToastNotification />
 </template>
+
+<style scoped>
+.nav-loader-enter-active {
+  animation: loader-drop-in 420ms cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+}
+
+.nav-loader-leave-active {
+  animation: loader-climb-out 260ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes loader-drop-in {
+  0% {
+    opacity: 0;
+    translate: 0 -140%;
+  }
+
+  72% {
+    opacity: 1;
+    translate: 0 8%;
+  }
+
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes loader-climb-out {
+  from {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  to {
+    opacity: 0;
+    translate: 0 -140%;
+  }
+}
+
+.loading-cat-body {
+  transform-origin: 50% 70%;
+  animation: cat-run-bob 280ms ease-in-out infinite alternate;
+}
+
+.loading-cat-leg {
+  transform-box: fill-box;
+  transform-origin: top center;
+  animation: cat-run-legs 180ms ease-in-out infinite alternate;
+}
+
+.loading-cat-leg-front {
+  animation-delay: 90ms;
+}
+
+.loading-cat-tail {
+  transform-box: fill-box;
+  transform-origin: right center;
+  animation: cat-run-tail 320ms ease-in-out infinite alternate;
+}
+
+@keyframes cat-run-bob {
+  from { transform: translateY(0); }
+  to { transform: translateY(-1.5px); }
+}
+
+@keyframes cat-run-legs {
+  from { transform: rotate(-22deg); }
+  to { transform: rotate(24deg); }
+}
+
+@keyframes cat-run-tail {
+  from { transform: rotate(-14deg); }
+  to { transform: rotate(18deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-loader-enter-active,
+  .nav-loader-leave-active,
+  .loading-cat-body,
+  .loading-cat-leg,
+  .loading-cat-tail {
+    animation: none;
+  }
+}
+</style>

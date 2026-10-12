@@ -10,6 +10,8 @@ const props = defineProps({
 
 const emit = defineEmits(['logout', 'profile-updated'])
 const route = useRoute()
+const navigationScroller = ref(null)
+const savedNavigationScroll = useState('mobile-navigation-scroll-left', () => 0)
 
 const links = computed(() => [
     { label: 'Dashboard', to: '/dashboard', icon: 'dashboard' },
@@ -27,6 +29,20 @@ const links = computed(() => [
         ]
         : [])
 ])
+
+function saveNavigationScroll() {
+    if (navigationScroller.value) {
+        savedNavigationScroll.value = navigationScroller.value.scrollLeft
+    }
+}
+
+onMounted(async () => {
+    await nextTick()
+
+    if (navigationScroller.value) {
+        navigationScroller.value.scrollLeft = savedNavigationScroll.value
+    }
+})
 </script>
 
 <template>
@@ -53,7 +69,12 @@ const links = computed(() => [
             />
         </div>
 
-        <nav aria-label="Main navigation" class="flex gap-1 overflow-x-auto px-3 pb-3">
+        <nav
+            ref="navigationScroller"
+            aria-label="Main navigation"
+            class="flex gap-1 overflow-x-auto px-3 pb-3"
+            @scroll.passive="saveNavigationScroll"
+        >
             <NuxtLink
                 v-for="link in links"
                 :key="link.to"

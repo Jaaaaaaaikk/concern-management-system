@@ -28,6 +28,7 @@ const errorMessage = ref('')
 
 const showModal = ref(false)
 const showExportModal = ref(false)
+const showFilterPanel = ref(false)
 
 const route = useRoute()
 
@@ -76,6 +77,13 @@ const statusDropdownValue = computed({
         statusFilter.value = value
     }
 })
+
+const activeFilterCount = computed(() => [
+    statusDropdownValue.value,
+    priorityFilter.value,
+    departmentFilter.value,
+    exportDateFilter.value
+].filter(Boolean).length)
 
 const totalConcerns = ref(0)
 
@@ -1077,6 +1085,19 @@ async function clearLateResponseFilter() {
     await loadConcernsWithLoading()
 }
 
+async function clearAllFilters() {
+    statusDropdownValue.value = ''
+    priorityFilter.value = ''
+    departmentFilter.value = ''
+    exportDateFilter.value = ''
+    currentPage.value = 1
+    await navigateTo({
+        path: '/concerns',
+        query: {}
+    })
+    await loadConcernsWithLoading()
+}
+
 /*
  * PAGINATION
  */
@@ -1469,7 +1490,7 @@ onUnmounted(() => {
 
             </div>
 
-            <div class="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 sm:py-8">
+            <div class="mx-auto w-full max-w-[1600px] px-4 pt-1 pb-6 sm:px-6 sm:pt-2 sm:pb-8">
 
                 <!-- Error -->
 
@@ -1487,207 +1508,130 @@ onUnmounted(() => {
 
                 </div>
 
-                <!-- Filters -->
-
-                <div class="mb-6 rounded-xl border border-slate-300 bg-white p-5 shadow-md">
-
-                    <div class="grid gap-4 md:grid-cols-5">
-
-                        <!-- Search -->
-
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Search
-                            </label>
-
-                            <input v-model="search" @input="handleSearchInput" type="text"
-                                placeholder="Search concern number, title, or description..."
-                                class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100" />
-
-                        </div>
-
-                        <!-- Status -->
-
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Status
-                            </label>
-
-                            <select v-model="statusDropdownValue" @change="handleStatusChange"
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
-
-                                <option value="">
-                                    All Statuses
-                                </option>
-
-                                <option value="pending">
-                                    Pending
-                                </option>
-
-                                <option value="in_progress">
-                                    In Progress
-                                </option>
-
-                                <option value="on_hold">
-                                    On Hold
-                                </option>
-
-                                <option value="resolved">
-                                    Resolved
-                                </option>
-
-                                <option value="closed">
-                                    Closed
-                                </option>
-
-                                <option value="late_response">
-                                    Late Response
-                                </option>
-
-                            </select>
-
-                        </div>
-
-                        <!-- Priority -->
-
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Priority
-                            </label>
-
-                            <select v-model="priorityFilter" @change="handlePriorityChange"
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
-
-                                <option value="">
-                                    All Priorities
-                                </option>
-
-                                <option value="low">
-                                    Low
-                                </option>
-
-                                <option value="medium">
-                                    Medium
-                                </option>
-
-                                <option value="high">
-                                    High
-                                </option>
-
-                                <option value="urgent">
-                                    Urgent
-                                </option>
-
-                            </select>
-
-                        </div>
-
-                        <!-- Department -->
-
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Department
-                            </label>
-
-                            <select v-model="departmentFilter" @change="handleDepartmentChange"
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
-
-                                <option value="">
-                                    All Departments
-                                </option>
-
-                                <option v-for="organization in organizations" :key="organization.id"
-                                    :value="String(organization.id)">
-                                    {{ organization.name }}
-                                </option>
-
-                            </select>
-
-                        </div>
-
-                        <!-- Export Date -->
-
-                        <div>
-
-                            <label class="mb-2 block text-sm font-medium text-slate-700">
-                                Date
-                            </label>
-
-                            <select v-model="exportDateFilter" @change="handleExportDateChange"
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
-
-                                <option value="">
-                                    All Dates
-                                </option>
-
-                                <option value="today">
-                                    Today
-                                </option>
-
-                                <option value="week">
-                                    This Week
-                                </option>
-
-                                <option value="month">
-                                    This Month
-                                </option>
-
-                                <option value="year">
-                                    This Year
-                                </option>
-
-                            </select>
-
-                        </div>
-
+                <!-- Search and quick actions -->
+                <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div class="relative min-w-0 flex-1">
+                        <label for="concern-search" class="sr-only">Search concerns</label>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true">
+                            <circle cx="10.8" cy="10.8" r="6.8" />
+                            <path stroke-linecap="round" d="m16 16 4.2 4.2" />
+                        </svg>
+                        <input
+                            id="concern-search"
+                            v-model="search"
+                            @input="handleSearchInput"
+                            type="search"
+                            placeholder="Search concern number, title, or description..."
+                            class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm outline-none shadow-sm transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15"
+                        />
                     </div>
 
-                    <!-- Export -->
-
-                    <div class="mt-4 flex justify-end border-t border-slate-100 pt-4">
-
-                        <button type="button" @click="openExportModal" :disabled="exporting"
-                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
-
-                            <svg v-if="!exporting" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
-
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4" />
-
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 21h14" />
-
+                    <div class="flex shrink-0 items-center gap-2">
+                        <button
+                            type="button"
+                            :aria-expanded="showFilterPanel"
+                            aria-controls="concern-filter-panel"
+                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-700/20"
+                            :class="showFilterPanel || activeFilterCount
+                                ? 'border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100'
+                                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'"
+                            @click="showFilterPanel = !showFilterPanel"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M7 12h10m-7 6h4" />
                             </svg>
-
-                            <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                stroke-width="1.8" stroke="currentColor" class="h-5 w-5 animate-spin">
-
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 9 9" />
-
-                            </svg>
-
-                            <span v-if="!exporting">
-                                Export to Excel
-                            </span>
-
-                            <span v-else>
-                                Exporting...
-                            </span>
-
+                            <span>Filters</span>
+                            <span v-if="activeFilterCount" class="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-900 px-1 text-[10px] font-bold text-white">{{ activeFilterCount }}</span>
                         </button>
 
+                        <button
+                            type="button"
+                            @click="openExportModal"
+                            :disabled="exporting"
+                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 shadow-sm transition hover:border-blue-300 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-700/20 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <svg v-if="!exporting" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
+                            </svg>
+                            <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5 animate-spin" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 9 9" />
+                            </svg>
+                            <span>{{ exporting ? 'Exporting…' : 'Export' }}</span>
+                        </button>
                     </div>
-
                 </div>
+
+                <Transition
+                    enter-active-class="transition duration-200 ease-out"
+                    enter-from-class="-translate-y-1 opacity-0"
+                    enter-to-class="translate-y-0 opacity-100"
+                    leave-active-class="transition duration-150 ease-in"
+                    leave-from-class="translate-y-0 opacity-100"
+                    leave-to-class="-translate-y-1 opacity-0"
+                >
+                    <section v-if="showFilterPanel" id="concern-filter-panel" class="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-900">Filter concerns</h3>
+                                <p class="mt-0.5 text-xs text-slate-500">Choose one or more filters to narrow the list.</p>
+                            </div>
+                            <button v-if="activeFilterCount" type="button" class="cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold text-blue-800 transition hover:bg-blue-50" @click="clearAllFilters">
+                                Clear filters
+                            </button>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Status</span>
+                                <select v-model="statusDropdownValue" @change="handleStatusChange" class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15">
+                                    <option value="">All statuses</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="on_hold">On Hold</option>
+                                    <option value="resolved">Resolved</option>
+                                    <option value="closed">Closed</option>
+                                    <option value="late_response">Late Response</option>
+                                </select>
+                            </label>
+
+                            <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Priority</span>
+                                <select v-model="priorityFilter" @change="handlePriorityChange" class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15">
+                                    <option value="">All priorities</option>
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                    <option value="urgent">Urgent</option>
+                                </select>
+                            </label>
+
+                            <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Department</span>
+                                <select v-model="departmentFilter" @change="handleDepartmentChange" class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15">
+                                    <option value="">All departments</option>
+                                    <option v-for="organization in organizations" :key="organization.id" :value="String(organization.id)">{{ organization.name }}</option>
+                                </select>
+                            </label>
+
+                            <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date created</span>
+                                <select v-model="exportDateFilter" @change="handleExportDateChange" class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15">
+                                    <option value="">All dates</option>
+                                    <option value="today">Today</option>
+                                    <option value="week">This week</option>
+                                    <option value="month">This month</option>
+                                    <option value="year">This year</option>
+                                </select>
+                            </label>
+                        </div>
+                    </section>
+                </Transition>
 
                 <!-- Concerns Table -->
 
-                <div v-if="lateResponseFilter && !trashView" class="mb-4 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div v-if="lateResponseFilter && !trashView" class="mb-4 flex flex-col gap-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-start gap-3">
-                        <span class="mt-0.5 text-amber-700" aria-hidden="true">⏱</span>
+                        <span class="mt-0.5 text-rose-700" aria-hidden="true">⏱</span>
                         <div>
                             <p class="text-sm font-semibold text-amber-950">Late response concerns</p>
                             <p class="mt-0.5 text-xs leading-5 text-amber-900">Pending concerns with no response from the assigned organization within four hours.</p>
@@ -1811,15 +1755,12 @@ onUnmounted(() => {
 
                                 <colgroup>
 
-                                    <col class="w-[30%]" />
-
-                                    <col class="w-[20%]" />
-
+                                    <col class="w-[29%]" />
+                                    <col class="w-[17%]" />
+                                    <col class="w-[16%]" />
+                                    <col class="w-[10%]" />
                                     <col class="w-[12%]" />
-
-                                    <col class="w-[14%]" />
-
-                                    <col class="w-[24%]" />
+                                    <col class="w-[16%]" />
 
                                 </colgroup>
 
@@ -1846,6 +1787,10 @@ onUnmounted(() => {
                                                 <span class="text-sm" aria-hidden="true">{{ sortIndicator('assigned_to')
                                                 }}</span>
                                             </button>
+                                        </th>
+
+                                        <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            Created By
                                         </th>
 
                                         <th
@@ -1952,6 +1897,17 @@ onUnmounted(() => {
                                                 }}
                                             </p>
 
+                                        </td>
+
+                                        <!-- Created By -->
+
+                                        <td class="px-4 py-4">
+                                            <p class="truncate text-sm font-medium text-slate-700" :title="concern.created_by_name || '-'">
+                                                {{ concern.created_by_name || '-' }}
+                                            </p>
+                                            <p v-if="concern.creator_organization_name" class="mt-1 truncate text-xs text-slate-500" :title="concern.creator_organization_name">
+                                                {{ concern.creator_organization_name }}
+                                            </p>
                                         </td>
 
                                         <!-- Priority -->
