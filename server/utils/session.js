@@ -94,6 +94,28 @@ export async function getSessionUser(event) {
   return rows[0]
 }
 
+export async function isSessionRevoked(event) {
+  const token = getCookie(event, SESSION_COOKIE_NAME)
+
+  if (!token) {
+    return false
+  }
+
+  const tokenHash = hashSessionToken(token)
+  const [rows] = await db.query(
+    `
+    SELECT id
+    FROM user_sessions
+    WHERE session_token_hash = ?
+      AND revoked_at IS NOT NULL
+    LIMIT 1
+    `,
+    [tokenHash]
+  )
+
+  return rows.length > 0
+}
+
 export async function destroySession(event) {
   const token = getCookie(event, SESSION_COOKIE_NAME)
 

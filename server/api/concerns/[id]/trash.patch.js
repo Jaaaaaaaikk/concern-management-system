@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (!["admin", "user"].includes(currentUser.role_name)) {
+  if (!["concern_handler", "requestor"].includes(currentUser.role_name)) {
     throw createError({
       statusCode: 403,
       statusMessage: "Only organization admins or users can trash concerns.",
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
   const concern = rows[0];
   const isCreator = Number(concern.created_by) === Number(currentUser.id);
   const isCreatorOrganizationAdmin =
-    currentUser.role_name === "admin" &&
+    currentUser.role_name === "concern_handler" &&
     currentUser.organization_id != null &&
     Number(currentUser.organization_id) === Number(concern.creator_organization_id);
 

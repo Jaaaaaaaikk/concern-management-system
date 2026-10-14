@@ -119,10 +119,14 @@ async function loadData() {
     errorMessage.value = ''
 
     try {
-        await Promise.all([
-            loadCurrentUser(),
-            loadOrganizations()
-        ])
+        await loadCurrentUser()
+
+        if (!['superadmin', 'system_admin'].includes(currentUser.value?.role_name)) {
+            await navigateTo('/dashboard')
+            return
+        }
+
+        await loadOrganizations()
     } catch (error) {
         errorMessage.value =
             error?.data?.statusMessage ||
@@ -503,7 +507,7 @@ onMounted(() => {
             </div>
 
 
-            <nav class="flex-1 space-y-1 px-3 py-4">
+            <nav class="sidebar-navigation flex-1 space-y-1 px-3 py-4">
 
                 <NuxtLink to="/dashboard"
                     :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
@@ -512,14 +516,14 @@ onMounted(() => {
                     <span>Dashboard</span>
                 </NuxtLink>
 
-                <NuxtLink to="/users"
+                <NuxtLink v-if="['superadmin', 'system_admin'].includes(currentUser?.role_name)" to="/users"
                     :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="users" />
                     <span>Manage Users</span>
                 </NuxtLink>
 
-                <NuxtLink to="/organizations"
+                <NuxtLink v-if="['superadmin', 'system_admin'].includes(currentUser?.role_name)" to="/organizations"
                     :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="organizations" />
@@ -572,7 +576,7 @@ onMounted(() => {
                     : 'translate-y-0 bg-white/30 shadow-sm'
             ]">
 
-                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-row items-center justify-between gap-3">
 
                     <div>
 
@@ -588,8 +592,10 @@ onMounted(() => {
 
 
                     <button type="button" @click="openAddModal"
-                        class="w-full cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-800 sm:w-auto">
-                        + Add Organization
+                        aria-label="Add organization"
+                        class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-900 p-0 text-sm font-medium text-white transition hover:bg-blue-800 sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5">
+                        <span aria-hidden="true" class="text-lg leading-none">+</span>
+                        <span class="hidden sm:inline">Add Organization</span>
                     </button>
 
                 </div>
@@ -613,9 +619,7 @@ onMounted(() => {
 
                 <div v-if="loading" class="rounded-xl border border-slate-300 bg-white p-8 text-center shadow-md">
 
-                    <p class="text-sm text-slate-500">
-                        Loading organizations...
-                    </p>
+                    <CodeLoadingLine label="Loading organizations..." />
 
                 </div>
 
@@ -657,6 +661,10 @@ onMounted(() => {
                                         Created
                                     </th>
 
+                                    <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                        Audit Trail
+                                    </th>
+
                                 </tr>
 
                             </thead>
@@ -666,7 +674,7 @@ onMounted(() => {
 
                                 <tr v-if="organizations.length === 0">
 
-                                    <td colspan="5" class="px-6 py-10 text-center text-sm text-slate-500">
+                                    <td colspan="6" class="px-6 py-10 text-center text-sm text-slate-500">
                                         No organizations found.
                                     </td>
 
@@ -723,6 +731,12 @@ onMounted(() => {
                                         {{ formatDate(organization.created_at) }}
                                     </td>
 
+                                    <td class="px-6 py-4 text-xs leading-5 text-slate-500">
+                                        <p><span class="font-medium text-slate-600">Created by:</span> {{ organization.created_by_name || 'Legacy / Unknown' }}</p>
+                                        <p><span class="font-medium text-slate-600">Updated:</span> {{ formatDate(organization.updated_at) }}</p>
+                                        <p><span class="font-medium text-slate-600">Updated by:</span> {{ organization.updated_by_name || '—' }}</p>
+                                    </td>
+
 
                                 </tr>
 
@@ -747,11 +761,15 @@ onMounted(() => {
                                         {{ organization.description || organization.address || 'No additional details'
                                         }}
                                     </p>
+                                    <div class="mt-2 border-t border-slate-100 pt-2 text-[11px] leading-5 text-slate-500">
+                                        <p>Created by: {{ organization.created_by_name || 'Legacy / Unknown' }}</p>
+                                        <p>Updated: {{ formatDate(organization.updated_at) }}</p>
+                                        <p>Updated by: {{ organization.updated_by_name || '—' }}</p>
+                                    </div>
                                 </div>
                                 <span
                                     class="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Edit</span>
                             </div>
-                            <p class="mt-3 text-xs font-semibold text-blue-800">Tap to edit organization →</p>
                         </button>
                     </div>
 

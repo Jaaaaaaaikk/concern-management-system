@@ -129,22 +129,22 @@ export default defineEventHandler(async (event) => {
    *
    * The user does NOT need to be the original creator.
    */
-  const isSuperadmin = currentUser.role_name === "superadmin";
+  const isGlobalCommenter = ["superadmin", "system_admin", "system_monitor"].includes(currentUser.role_name);
 
   const isCreatorOrganizationMember =
     currentOrganizationId !== null &&
     creatorOrganizationId !== null &&
     currentOrganizationId === creatorOrganizationId &&
-    ["admin", "user"].includes(currentUser.role_name);
+    ["concern_handler", "requestor"].includes(currentUser.role_name);
 
   const isAssignedOrganizationMember =
     currentOrganizationId !== null &&
     assignedOrganizationId !== null &&
     currentOrganizationId === assignedOrganizationId &&
-    ["admin", "user"].includes(currentUser.role_name);
+    ["concern_handler", "requestor"].includes(currentUser.role_name);
 
   const canComment =
-    isSuperadmin || isCreatorOrganizationMember || isAssignedOrganizationMember;
+    isGlobalCommenter || isCreatorOrganizationMember || isAssignedOrganizationMember;
 
   if (!canComment) {
     throw createError({

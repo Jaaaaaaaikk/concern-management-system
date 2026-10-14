@@ -36,23 +36,23 @@ export default defineEventHandler(async (event) => {
   }
 
   const concern = rows[0];
-  const isSuperadmin = currentUser.role_name === "superadmin";
+  const isGlobalManager = ["superadmin", "system_admin"].includes(currentUser.role_name);
   const isCreatorOrganizationAdmin =
-    currentUser.role_name === "admin" &&
+    currentUser.role_name === "concern_handler" &&
     currentUser.organization_id != null &&
     Number(currentUser.organization_id) === Number(concern.creator_organization_id);
   const isCreator =
-    currentUser.role_name === "user" &&
+    currentUser.role_name === "requestor" &&
     Number(currentUser.id) === Number(concern.created_by);
 
-  if (!isSuperadmin && !isCreatorOrganizationAdmin && !isCreator) {
+  if (!isGlobalManager && !isCreatorOrganizationAdmin && !isCreator) {
     throw createError({
       statusCode: 403,
       statusMessage: "You do not have permission to restore this concern.",
     });
   }
 
-  if (!isSuperadmin && concern.status !== "pending") {
+  if (!isGlobalManager && concern.status !== "pending") {
     throw createError({
       statusCode: 409,
       statusMessage: "Only pending concerns can be restored by organization members.",

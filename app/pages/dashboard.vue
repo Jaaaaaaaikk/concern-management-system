@@ -41,6 +41,7 @@ const selectedRange = ref('30d')
 const selectedOrganization = ref('all')
 
 const loadingRange = ref(false)
+const showMobileFilters = ref(false)
 
 const statusChartCanvas = ref(null)
 
@@ -386,8 +387,7 @@ const selectedRangeLabel = computed(() => {
 const selectedOrganizationLabel = computed(() => {
 
     if (
-        currentUser.value?.role_name !==
-        'superadmin'
+        !['superadmin', 'system_admin', 'system_monitor'].includes(currentUser.value?.role_name)
     ) {
         return ''
     }
@@ -1430,7 +1430,7 @@ onMounted(() => {
 
             <!-- Navigation -->
 
-            <nav class="flex-1 space-y-1 px-3 py-4">
+            <nav class="sidebar-navigation flex-1 space-y-1 px-3 py-4">
 
                 <NuxtLink to="/dashboard"
                     :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
@@ -1439,14 +1439,14 @@ onMounted(() => {
                     <span>Dashboard</span>
                 </NuxtLink>
 
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
+                <NuxtLink v-if="['superadmin', 'system_admin'].includes(currentUser?.role_name)" to="/users"
                     :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="users" />
                     <span>Manage Users</span>
                 </NuxtLink>
 
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
+                <NuxtLink v-if="['superadmin', 'system_admin'].includes(currentUser?.role_name)" to="/organizations"
                     :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="organizations" />
@@ -1502,22 +1502,60 @@ onMounted(() => {
                     : 'translate-y-0 bg-white/30 shadow-sm'
             ]">
 
-                <div>
+                <div class="w-full flex-1">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <h2 class="text-xl font-semibold text-slate-900">
+                                Dashboard
+                            </h2>
+                            <p class="mt-1 text-sm text-slate-500">
+                                Overview of the concern management system
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            class="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-700/20 lg:hidden"
+                            :aria-expanded="showMobileFilters"
+                            aria-controls="dashboard-mobile-filters"
+                            @click="showMobileFilters = !showMobileFilters"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M7 12h10m-7 6h4" />
+                            </svg>
+                            Filters
+                        </button>
+                    </div>
 
-                    <h2 class="text-xl font-semibold text-slate-900">
-                        Dashboard
-                    </h2>
+                    <div v-if="showMobileFilters" id="dashboard-mobile-filters" class="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:hidden">
+                        <label class="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <span class="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Date range</span>
+                            <select v-model="selectedRange" @change="changeDashboardFilter" :disabled="loadingRange" class="min-w-0 flex-1 cursor-pointer border-0 bg-transparent py-1 text-sm font-medium text-slate-700 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60">
+                                <option value="today">Today</option>
+                                <option value="7d">Last 7 Days</option>
+                                <option value="30d">Last 30 Days</option>
+                                <option value="3m">Last 3 Months</option>
+                                <option value="6m">Last 6 Months</option>
+                                <option value="year">This Year</option>
+                                <option value="all">All Time</option>
+                            </select>
+                        </label>
 
-                    <p class="mt-1 text-sm text-slate-500">
-                        Overview of the concern management system
-                    </p>
-
+                        <label v-if="['superadmin', 'system_admin', 'system_monitor'].includes(currentUser?.role_name)" class="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                            <span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">Organization</span>
+                            <select v-model="selectedOrganization" @change="changeDashboardFilter" :disabled="loadingRange" class="min-w-0 flex-1 cursor-pointer border-0 bg-transparent py-1 text-sm font-medium text-slate-700 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60">
+                                <option value="all">All Organizations</option>
+                                <option v-for="organization in dashboardData?.organizationOptions || []" :key="organization.id" :value="String(organization.id)">
+                                    {{ organization.name }}
+                                </option>
+                            </select>
+                        </label>
+                    </div>
                 </div>
 
 
                 <!-- Dashboard Filters -->
 
-                <div class="flex flex-wrap items-center justify-end gap-3">
+                <div class="hidden flex-wrap items-center justify-end gap-3 lg:flex">
 
                     <!-- Date Range -->
 
@@ -1566,7 +1604,7 @@ onMounted(() => {
 
                     <!-- Organization -->
 
-                    <div v-if="currentUser?.role_name === 'superadmin'" class="flex items-center gap-3">
+                    <div v-if="['superadmin', 'system_admin', 'system_monitor'].includes(currentUser?.role_name)" class="flex items-center gap-3">
 
                         <label for="dashboard-organization" class="hidden text-sm font-medium text-slate-600 xl:block">
                             Organization
@@ -1610,9 +1648,7 @@ onMounted(() => {
 
                 <div v-if="loading" class="rounded-xl border border-slate-300 bg-white p-10 text-center shadow-md">
 
-                    <p class="text-sm text-slate-500">
-                        Loading dashboard...
-                    </p>
+                    <CodeLoadingLine label="Loading dashboard..." />
 
                 </div>
 
@@ -1636,7 +1672,7 @@ onMounted(() => {
                                 Showing data for
                                 {{ selectedRangeLabel.toLowerCase() }}
 
-                                <template v-if="currentUser?.role_name === 'superadmin'">
+                                <template v-if="['superadmin', 'system_admin', 'system_monitor'].includes(currentUser?.role_name)">
                                     · {{ selectedOrganizationLabel }}
                                 </template>
 
@@ -1656,28 +1692,28 @@ onMounted(() => {
 
                     <!-- Summary Cards -->
 
-                    <div data-scroll-reveal class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                    <div data-scroll-reveal class="grid grid-cols-3 gap-2 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-6">
 
                         <!-- Total -->
 
                         <NuxtLink to="/concerns"
-                            class="group rounded-xl border border-slate-200 bg-white p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300">
-                            <div class="flex items-start justify-between gap-3">
-                                <p class="text-sm font-semibold text-slate-700">Total Concerns</p>
-                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition group-hover:bg-slate-200" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                            class="group rounded-xl border border-slate-200 bg-white p-2 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300 sm:p-5">
+                            <div class="flex items-start justify-between gap-1 sm:gap-3">
+                                <p class="text-[11px] font-semibold leading-tight text-slate-700 sm:text-sm">Total Concerns</p>
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition group-hover:bg-slate-200 sm:h-9 sm:w-9 sm:rounded-xl" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5 sm:h-5 sm:w-5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12m-12 5.25h12m-12 5.25h12M3.75 6.75h.008v.008H3.75V6.75Zm0 5.25h.008v.008H3.75V12Zm0 5.25h.008v.008H3.75v-.008Z" />
                                     </svg>
                                 </span>
                             </div>
 
-                            <p class="mt-2 text-3xl font-bold text-slate-900">
+                            <p class="mt-1 text-xl font-bold text-slate-900 sm:mt-2 sm:text-3xl">
                                 {{
                                     dashboardData?.summary?.total ?? 0
                                 }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-slate-500 transition group-hover:text-slate-700">
+                            <p class="mt-2 hidden text-xs font-medium text-slate-500 transition group-hover:text-slate-700 sm:block">
                                 View all concerns
                             </p>
                         </NuxtLink>
@@ -1691,21 +1727,21 @@ onMounted(() => {
                                 status: 'pending'
                             }
                         }"
-                            class="group rounded-xl border border-yellow-200 bg-yellow-50/60 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-yellow-300 hover:bg-yellow-50 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-200">
-                            <div class="flex items-start justify-between gap-3">
-                                <p class="text-sm font-semibold text-yellow-950">Pending</p>
-                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-yellow-100 text-yellow-800 transition group-hover:bg-yellow-200" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                            class="group rounded-xl border border-yellow-200 bg-yellow-50/60 p-2 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-yellow-300 hover:bg-yellow-50 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-yellow-200 sm:p-5">
+                            <div class="flex items-start justify-between gap-1 sm:gap-3">
+                                <p class="text-[11px] font-semibold leading-tight text-yellow-950 sm:text-sm">Pending</p>
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-yellow-100 text-yellow-800 transition group-hover:bg-yellow-200 sm:h-9 sm:w-9 sm:rounded-xl" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5 sm:h-5 sm:w-5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75h9A2.25 2.25 0 0 1 18.75 6v15l-6.75-3.75L5.25 21V6A2.25 2.25 0 0 1 7.5 3.75Z" />
                                     </svg>
                                 </span>
                             </div>
 
-                            <p class="mt-2 text-3xl font-bold text-yellow-700">
+                            <p class="mt-1 text-xl font-bold text-yellow-700 sm:mt-2 sm:text-3xl">
                                 {{ getStatusTotal('pending') }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-yellow-800 transition group-hover:text-yellow-950">
+                            <p class="mt-2 hidden text-xs font-medium text-yellow-800 transition group-hover:text-yellow-950 sm:block">
                                 View pending concerns
                             </p>
                         </NuxtLink>
@@ -1719,21 +1755,21 @@ onMounted(() => {
                                 status: 'in_progress'
                             }
                         }"
-                            class="group rounded-xl border border-blue-200 bg-blue-50/60 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-200">
-                            <div class="flex items-start justify-between gap-3">
-                                <p class="text-sm font-semibold text-blue-900">In Progress</p>
-                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 text-blue-700 transition group-hover:bg-blue-200" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                            class="group rounded-xl border border-blue-200 bg-blue-50/60 p-2 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-200 sm:p-5">
+                            <div class="flex items-start justify-between gap-1 sm:gap-3">
+                                <p class="text-[11px] font-semibold leading-tight text-blue-900 sm:text-sm">In Progress</p>
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 transition group-hover:bg-blue-200 sm:h-9 sm:w-9 sm:rounded-xl" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5 sm:h-5 sm:w-5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h3l2.25-6 4.5 12 2.25-6h3" />
                                     </svg>
                                 </span>
                             </div>
 
-                            <p class="mt-2 text-3xl font-bold text-blue-600">
+                            <p class="mt-1 text-xl font-bold text-blue-600 sm:mt-2 sm:text-3xl">
                                 {{ getStatusTotal('in_progress') }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-blue-700 transition group-hover:text-blue-900">
+                            <p class="mt-2 hidden text-xs font-medium text-blue-700 transition group-hover:text-blue-900 sm:block">
                                 View in-progress concerns
                             </p>
                         </NuxtLink>
@@ -1747,21 +1783,21 @@ onMounted(() => {
                                 status: 'resolved'
                             }
                         }"
-                            class="group rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-200">
-                            <div class="flex items-start justify-between gap-3">
-                                <p class="text-sm font-semibold text-emerald-900">Resolved</p>
-                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 transition group-hover:bg-emerald-200" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                            class="group rounded-xl border border-emerald-200 bg-emerald-50/60 p-2 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:p-5">
+                            <div class="flex items-start justify-between gap-1 sm:gap-3">
+                                <p class="text-[11px] font-semibold leading-tight text-emerald-900 sm:text-sm">Resolved</p>
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 transition group-hover:bg-emerald-200 sm:h-9 sm:w-9 sm:rounded-xl" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5 sm:h-5 sm:w-5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="m5.25 12.75 4.5 4.5 9-10.5" />
                                     </svg>
                                 </span>
                             </div>
 
-                            <p class="mt-2 text-3xl font-bold text-green-600">
+                            <p class="mt-1 text-xl font-bold text-green-600 sm:mt-2 sm:text-3xl">
                                 {{ getStatusTotal('resolved') }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-emerald-700 transition group-hover:text-emerald-900">
+                            <p class="mt-2 hidden text-xs font-medium text-emerald-700 transition group-hover:text-emerald-900 sm:block">
                                 View resolved concerns
                             </p>
                         </NuxtLink>
@@ -1775,21 +1811,21 @@ onMounted(() => {
                                 status: 'closed'
                             }
                         }"
-                            class="group rounded-xl border border-slate-300 bg-slate-50 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300">
-                            <div class="flex items-start justify-between gap-3">
-                                <p class="text-sm font-semibold text-slate-800">Closed</p>
-                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-200 text-slate-700 transition group-hover:bg-slate-300" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                            class="group rounded-xl border border-slate-300 bg-slate-50 p-2 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-100 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-300 sm:p-5">
+                            <div class="flex items-start justify-between gap-1 sm:gap-3">
+                                <p class="text-[11px] font-semibold leading-tight text-slate-800 sm:text-sm">Closed</p>
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-slate-700 transition group-hover:bg-slate-300 sm:h-9 sm:w-9 sm:rounded-xl" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5 sm:h-5 sm:w-5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 10.5V7.875a4.5 4.5 0 0 1 9 0V10.5m-11.25 0h13.5v10.125H5.25V10.5Z" />
                                     </svg>
                                 </span>
                             </div>
 
-                            <p class="mt-2 text-3xl font-bold text-slate-600">
+                            <p class="mt-1 text-xl font-bold text-slate-600 sm:mt-2 sm:text-3xl">
                                 {{ getStatusTotal('closed') }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-slate-600 transition group-hover:text-slate-800">
+                            <p class="mt-2 hidden text-xs font-medium text-slate-600 transition group-hover:text-slate-800 sm:block">
                                 View closed concerns
                             </p>
                         </NuxtLink>
@@ -1802,23 +1838,23 @@ onMounted(() => {
                                 late_response: '1'
                             }
                         }"
-                            class="group cursor-pointer rounded-xl border border-rose-300 bg-rose-50 p-5 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-rose-400 hover:bg-rose-100 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-rose-300">
-                            <div class="flex items-start justify-between gap-3">
-                                <p class="text-sm font-semibold text-rose-950">
+                            class="group cursor-pointer rounded-xl border border-rose-300 bg-rose-50 p-2 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-rose-400 hover:bg-rose-100 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-rose-300 sm:p-5">
+                            <div class="flex items-start justify-between gap-1 sm:gap-3">
+                                <p class="text-[11px] font-semibold leading-tight text-rose-950 sm:text-sm">
                                     Late Response
                                 </p>
-                                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-200/70 text-rose-800 transition group-hover:bg-rose-300/70" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-rose-200/70 text-rose-800 transition group-hover:bg-rose-300/70 sm:h-9 sm:w-9 sm:rounded-xl" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5 sm:h-5 sm:w-5">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75v5.25l3.25 1.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                                     </svg>
                                 </span>
                             </div>
 
-                            <p class="mt-2 text-3xl font-bold text-rose-800">
+                            <p class="mt-1 text-xl font-bold text-rose-800 sm:mt-2 sm:text-3xl">
                                 {{ dashboardData?.summary?.lateResponses ?? 0 }}
                             </p>
 
-                            <p class="mt-2 text-xs font-medium text-rose-700 transition group-hover:text-rose-950">
+                            <p class="mt-2 hidden text-xs font-medium text-rose-700 transition group-hover:text-rose-950 sm:block">
                                 View late responses
                             </p>
                         </NuxtLink>

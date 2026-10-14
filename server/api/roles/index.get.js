@@ -1,8 +1,8 @@
 import db from '../../utils/db.js'
-import { requireRole } from '../../utils/require-auth.js'
+import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
 
 export default defineEventHandler(async (event) => {
-  await requireRole(event, ['superadmin'])
+  const currentUser = await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
 
   const [rows] = await db.query(`
     SELECT
@@ -12,8 +12,19 @@ export default defineEventHandler(async (event) => {
     ORDER BY id ASC
   `)
 
+  if (currentUser.role_name === 'system_monitor') {
+    return {
+      success: true,
+      roles: []
+    }
+  }
+
+  const roles = currentUser.role_name === 'system_admin'
+    ? rows.filter((role) => ['concern_handler', 'requestor'].includes(role.name))
+    : rows
+
   return {
     success: true,
-    roles: rows
+    roles
   }
 })

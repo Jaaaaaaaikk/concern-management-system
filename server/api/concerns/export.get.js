@@ -35,9 +35,9 @@ export default defineEventHandler(async (event) => {
    * Can see all concerns.
    */
 
-  if (currentUser.role_name === "superadmin") {
+  if (["superadmin", "system_admin", "system_monitor"].includes(currentUser.role_name)) {
     // No role-based filter.
-  } else if (currentUser.role_name === "admin") {
+  } else if (currentUser.role_name === "concern_handler") {
     /*
      * ADMIN
      *
@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
       currentUser.organization_id,
       currentUser.organization_id,
     );
-  } else if (currentUser.role_name === "user") {
+  } else if (currentUser.role_name === "requestor") {
     /*
      * REGULAR USER
      *

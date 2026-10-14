@@ -1,5 +1,29 @@
 @import "tailwindcss";
 
+.sidebar-navigation > a,
+.mobile-navigation > a {
+	position: relative;
+	transition: transform 180ms ease, color 180ms ease, background-color 180ms ease;
+}
+
+.sidebar-navigation > a:hover,
+.mobile-navigation > a:hover {
+	z-index: 1;
+	transform: scale(1.025);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sidebar-navigation > a,
+	.mobile-navigation > a {
+		transition: none;
+	}
+
+	.sidebar-navigation > a:hover,
+	.mobile-navigation > a:hover {
+		transform: none;
+	}
+}
+
 html.has-scroll-reveal [data-scroll-reveal] {
 	opacity: 0;
 	transform: translateY(24px);

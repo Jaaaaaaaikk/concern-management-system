@@ -1,10 +1,10 @@
 import db from '../../utils/db.js'
 
-import { requireRole } from '../../utils/require-auth.js'
+import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
 
 export default defineEventHandler(async (event) => {
 
-    await requireRole(event, ['superadmin'])
+    await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
 
     const queryParams = getQuery(event)
 
@@ -86,6 +86,11 @@ export default defineEventHandler(async (event) => {
             u.status,
             u.last_login_at,
             u.created_at,
+            u.updated_at,
+            u.created_by,
+            u.updated_by,
+            CONCAT(creator.first_name, ' ', creator.last_name) AS created_by_name,
+            CONCAT(updater.first_name, ' ', updater.last_name) AS updated_by_name,
             r.id AS role_id,
             r.name AS role_name,
             o.id AS organization_id,
@@ -95,6 +100,10 @@ export default defineEventHandler(async (event) => {
             ON r.id = u.role_id
         LEFT JOIN organizations o
             ON o.id = u.organization_id
+        LEFT JOIN users creator
+            ON creator.id = u.created_by
+        LEFT JOIN users updater
+            ON updater.id = u.updated_by
         WHERE u.deleted_at IS NULL
         ORDER BY u.created_at DESC
         LIMIT ? OFFSET ?

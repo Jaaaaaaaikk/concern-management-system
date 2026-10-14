@@ -33,7 +33,9 @@ export default defineEventHandler(async (event) => {
 
   let selectedOrganizationId = null;
 
-  if (role === "superadmin") {
+  const isGlobalDashboardRole = ["superadmin", "system_admin", "system_monitor"].includes(role)
+
+  if (isGlobalDashboardRole) {
     if (requestedOrganizationId !== "all" && requestedOrganizationId !== "") {
       const parsedOrganizationId = Number(requestedOrganizationId);
 
@@ -121,7 +123,7 @@ export default defineEventHandler(async (event) => {
 
   const concernParams = [];
 
-  if (role === "superadmin") {
+  if (isGlobalDashboardRole) {
     if (selectedOrganizationId) {
       concernWhere = `
                 WHERE (

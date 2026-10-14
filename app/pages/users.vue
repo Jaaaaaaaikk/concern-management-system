@@ -361,11 +361,19 @@ const isSuperadminRole = computed(() => {
             Number(form.value.role_id)
     )
 
-    return selectedRole?.name === 'superadmin'
+    return ['superadmin', 'system_admin'].includes(selectedRole?.name)
 
 })
 
 const isEditSuperadminRole = computed(() => {
+
+    if (
+        editingUser.value &&
+        isCurrentUser(editingUser.value) &&
+        Number(editForm.value.role_id) === Number(currentUser.value?.role_id)
+    ) {
+        return ['superadmin', 'system_admin'].includes(currentUser.value?.role_name)
+    }
 
     const selectedRole = roles.value.find(
         role =>
@@ -373,8 +381,16 @@ const isEditSuperadminRole = computed(() => {
             Number(editForm.value.role_id)
     )
 
-    return selectedRole?.name === 'superadmin'
+    return ['superadmin', 'system_admin'].includes(selectedRole?.name)
 
+})
+
+const creatableRoles = computed(() => {
+    if (currentUser.value?.role_name === 'system_admin') {
+        return roles.value.filter(role => ['concern_handler', 'requestor'].includes(role.name))
+    }
+
+    return roles.value.filter(role => role.name !== 'superadmin')
 })
 
 function openCreateModal() {
@@ -475,6 +491,11 @@ async function createUser() {
 }
 
 function openEditModal(user) {
+
+    if (!canEditUser(user)) {
+        showToast('System Administrators cannot edit Superadmin or System Administrator accounts.', 'error')
+        return
+    }
 
     errorMessage.value = ''
 
@@ -768,6 +789,29 @@ function isCurrentUser(user) {
 
 }
 
+function canEditUser(user) {
+    return !(
+        currentUser.value?.role_name === 'system_admin' &&
+        !isCurrentUser(user) &&
+        ['superadmin', 'system_admin'].includes(user.role_name)
+    )
+}
+
+function formatAuditDate(value) {
+    if (!value) return '—'
+
+    const date = new Date(value)
+    return Number.isNaN(date.getTime())
+        ? '—'
+        : date.toLocaleString('en-PH', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        })
+}
+
 function fullName(user) {
 
     return [
@@ -843,7 +887,7 @@ onMounted(() => {
 
             </div>
 
-            <nav class="flex-1 space-y-1 px-3 py-4">
+            <nav class="sidebar-navigation flex-1 space-y-1 px-3 py-4">
 
                 <NuxtLink to="/dashboard"
                     :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
@@ -852,14 +896,14 @@ onMounted(() => {
                     <span>Dashboard</span>
                 </NuxtLink>
 
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
+                <NuxtLink v-if="['superadmin', 'system_admin'].includes(currentUser?.role_name)" to="/users"
                     :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="users" />
                     <span>Manage Users</span>
                 </NuxtLink>
 
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
+                <NuxtLink v-if="['superadmin', 'system_admin'].includes(currentUser?.role_name)" to="/organizations"
                     :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="organizations" />
@@ -914,7 +958,7 @@ onMounted(() => {
                 ]">
 
                     <!-- Header -->
-                    <div class="mb-7 flex min-h-16 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="mb-7 flex min-h-16 flex-row items-center justify-between gap-3 sm:flex-row sm:items-center sm:justify-between">
 
                         <div>
 
@@ -929,13 +973,14 @@ onMounted(() => {
                         </div>
 
                         <button type="button" @click="openCreateModal"
-                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 hover:shadow-md active:scale-[0.99]">
+                            aria-label="Add user"
+                            class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-900 p-0 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 hover:shadow-md active:scale-[0.99] sm:h-auto sm:w-auto sm:gap-2 sm:px-5 sm:py-3">
 
-                            <span class="text-lg leading-none">
+                            <span class="text-lg leading-none" aria-hidden="true">
                                 +
                             </span>
 
-                            Add User
+                            <span class="hidden sm:inline">Add User</span>
 
                         </button>
 
@@ -972,13 +1017,9 @@ onMounted(() => {
                             User List
                         </h3>
 
-                        <p v-if="loading" class="mt-1 flex items-center gap-2 text-xs text-slate-400">
-
-                            <span class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-slate-300"></span>
-
-                            Loading users...
-
-                        </p>
+                        <div v-if="loading" class="mt-2">
+                            <CodeLoadingLine label="Loading users..." />
+                        </div>
 
                         <p v-else class="mt-1 text-xs text-slate-500">
 
@@ -1036,6 +1077,10 @@ onMounted(() => {
                                         Status
                                     </th>
 
+                                    <th class="whitespace-nowrap px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                        Audit Trail
+                                    </th>
+
                                 </tr>
 
                             </thead>
@@ -1043,26 +1088,30 @@ onMounted(() => {
                             <!-- Loading -->
                             <tbody v-if="loading" class="divide-y divide-slate-100">
 
-                                <tr v-for="row in 5" :key="row" class="animate-pulse">
+                                <tr v-for="row in 5" :key="row">
 
                                     <td class="px-5 py-5">
-                                        <div class="h-4 w-28 rounded bg-slate-200"></div>
+                                        <CodeSkeleton :length="8" class="h-4 w-28 rounded" />
                                     </td>
 
                                     <td class="px-5 py-5">
-                                        <div class="h-4 w-36 rounded bg-slate-200"></div>
+                                        <CodeSkeleton :length="10" class="h-4 w-36 rounded" />
                                     </td>
 
                                     <td class="px-5 py-5">
-                                        <div class="h-6 w-20 rounded-full bg-slate-200"></div>
+                                        <CodeSkeleton :length="6" class="h-6 w-20 rounded-full" />
                                     </td>
 
                                     <td class="px-5 py-5">
-                                        <div class="h-4 w-32 rounded bg-slate-200"></div>
+                                        <CodeSkeleton :length="9" class="h-4 w-32 rounded" />
                                     </td>
 
                                     <td class="px-5 py-5">
-                                        <div class="h-6 w-16 rounded-full bg-slate-200"></div>
+                                        <CodeSkeleton :length="5" class="h-6 w-16 rounded-full" />
+                                    </td>
+
+                                    <td class="px-5 py-5">
+                                        <CodeSkeleton :length="10" class="h-4 w-32 rounded" />
                                     </td>
 
                                 </tr>
@@ -1074,7 +1123,7 @@ onMounted(() => {
 
                                 <tr>
 
-                                    <td colspan="5" class="px-5 py-12 text-center">
+                                    <td colspan="6" class="px-5 py-12 text-center">
 
                                         <p class="text-sm font-medium text-slate-600">
                                             No users found.
@@ -1094,9 +1143,12 @@ onMounted(() => {
                             <tbody v-else class="divide-y divide-slate-200">
 
                                 <tr v-for="(user, index) in users" :key="user.id"
-                                    :class="index % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50 hover:bg-slate-100'"
-                                    class="cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700"
-                                    role="button" tabindex="0" @click="openEditModal(user)"
+                                    :class="[
+                                        index % 2 === 0 ? 'bg-white' : 'bg-slate-50',
+                                        canEditUser(user) ? 'cursor-pointer hover:bg-slate-50' : 'cursor-not-allowed opacity-75'
+                                    ]"
+                                    class="transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700"
+                                    role="button" :aria-disabled="!canEditUser(user)" :tabindex="canEditUser(user) ? 0 : -1" @click="openEditModal(user)"
                                     @keydown="handleUserRowKeydown($event, user)">
 
                                     <!-- Username -->
@@ -1153,6 +1205,13 @@ onMounted(() => {
 
                                     </td>
 
+                                    <!-- Audit Trail -->
+                                    <td class="px-4 py-4 text-xs leading-5 text-slate-500">
+                                        <p><span class="font-medium text-slate-600">Created by:</span> {{ user.created_by_name || 'Legacy / Unknown' }}</p>
+                                        <p><span class="font-medium text-slate-600">Updated:</span> {{ formatAuditDate(user.updated_at) }}</p>
+                                        <p><span class="font-medium text-slate-600">Updated by:</span> {{ user.updated_by_name || '—' }}</p>
+                                    </td>
+
                                 </tr>
 
                             </tbody>
@@ -1164,7 +1223,8 @@ onMounted(() => {
                     <!-- Compact touch-friendly user cards -->
                     <div v-if="!loading && users.length" class="space-y-3 p-3 md:hidden">
                         <button v-for="user in users" :key="user.id" type="button" @click="openEditModal(user)"
-                            class="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/40 focus:outline-none focus:ring-2 focus:ring-blue-700">
+                            :disabled="!canEditUser(user)"
+                            class="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-700 disabled:cursor-not-allowed disabled:opacity-75 enabled:cursor-pointer enabled:hover:border-blue-300 enabled:hover:bg-blue-50/40">
                             <div class="flex items-start gap-3">
                                 <UserAvatar :name="fullName(user) || user.username" :photo-url="user.profile_photo" />
                                 <div class="min-w-0 flex-1">
@@ -1175,9 +1235,12 @@ onMounted(() => {
                                             </p>
                                             <p class="mt-0.5 truncate text-xs text-slate-500">@{{ user.username }}</p>
                                         </div>
-                                        <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                                            :class="statusClass(user.status)">{{ user.status === 'active' ? 'Active' :
-                                                'Inactive' }}</span>
+                                        <div class="flex shrink-0 flex-col items-end gap-1">
+                                            <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                                                :class="statusClass(user.status)">{{ user.status === 'active' ? 'Active' :
+                                                    'Inactive' }}</span>
+                                            <span class="text-[10px] font-semibold" :class="canEditUser(user) ? 'text-blue-800' : 'text-slate-400'">{{ canEditUser(user) ? 'Edit →' : 'Restricted' }}</span>
+                                        </div>
                                     </div>
                                     <div class="mt-3 flex flex-wrap gap-2">
                                         <span
@@ -1187,7 +1250,11 @@ onMounted(() => {
                                             class="max-w-full truncate rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{{
                                                 user.organization_name || 'No organization' }}</span>
                                     </div>
-                                    <p class="mt-3 text-xs font-semibold text-blue-800">Tap to edit account →</p>
+                                    <div class="mt-3 border-t border-slate-100 pt-2 text-[11px] leading-5 text-slate-500">
+                                        <p>Created by: {{ user.created_by_name || 'Legacy / Unknown' }}</p>
+                                        <p>Updated: {{ formatAuditDate(user.updated_at) }}</p>
+                                        <p>Updated by: {{ user.updated_by_name || '—' }}</p>
+                                    </div>
                                 </div>
                             </div>
                         </button>
@@ -1248,12 +1315,13 @@ onMounted(() => {
         </main>
 
         <!-- Create User Modal -->
-        <CreateUserModal :show="showModal" :form="form" :roles="roles" :organizations="organizations"
+        <CreateUserModal :show="showModal" :form="form" :roles="creatableRoles" :organizations="organizations"
             :is-superadmin-role="isSuperadminRole" :saving="saving" @close="closeModal" @submit="createUser"
             @role-change="handleRoleChange" />
 
         <!-- Edit User Modal -->
         <EditUserModal :show="showEditModal" :form="editForm" :roles="roles" :organizations="organizations"
+            :current-user-role="currentUser?.role_name"
             :is-current-user="editingUser ? isCurrentUser(editingUser) : false"
             :is-superadmin-role="isEditSuperadminRole" :updating="updating" @close="closeEditModal" @submit="updateUser"
             @role-change="handleEditRoleChange" @status-toggle="requestEditUserStatusChange" />
@@ -1326,3 +1394,4 @@ onMounted(() => {
     </div>
 
 </template>
+

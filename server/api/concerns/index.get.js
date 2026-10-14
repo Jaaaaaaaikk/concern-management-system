@@ -60,6 +60,7 @@ export default defineEventHandler(async (event) => {
 
     const sortColumns = {
         title: 'c.title',
+        created_by: 'CONCAT(u.first_name, " ", u.last_name)',
         assigned_to: 'assigned_org.name',
         priority: `CASE c.priority
             WHEN 'low' THEN 1
@@ -109,7 +110,7 @@ export default defineEventHandler(async (event) => {
      * Can see all concerns.
      */
 
-    if (currentUser.role_name === 'superadmin') {
+    if (['superadmin', 'system_admin', 'system_monitor'].includes(currentUser.role_name)) {
 
         // No role-based filter.
 
@@ -125,7 +126,7 @@ export default defineEventHandler(async (event) => {
      * 3. Concerns assigned to their organization
      */
 
-    else if (currentUser.role_name === 'admin') {
+    else if (currentUser.role_name === 'concern_handler') {
 
         conditions.push(`
             (
@@ -155,7 +156,7 @@ export default defineEventHandler(async (event) => {
      * organization, but they cannot manage their status.
      */
 
-    else if (currentUser.role_name === 'user') {
+    else if (currentUser.role_name === 'requestor') {
 
         conditions.push(`
             (
@@ -181,11 +182,11 @@ export default defineEventHandler(async (event) => {
     }
 
     if (trashView) {
-        if (currentUser.role_name === 'admin') {
+        if (currentUser.role_name === 'concern_handler') {
             conditions.push('u.organization_id = ?')
             params.push(currentUser.organization_id)
             conditions.push("c.status = 'pending'")
-        } else if (currentUser.role_name === 'user') {
+        } else if (currentUser.role_name === 'requestor') {
             conditions.push('c.created_by = ?')
             params.push(currentUser.id)
             conditions.push("c.status = 'pending'")

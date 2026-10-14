@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({
@@ -10,9 +10,249 @@ const showPassword = ref(false)
 const username = ref('')
 const password = ref('')
 const loading = ref(false)
-const isNavigating = ref(false)
+const loginContent = ref(null)
 const { showToast } = useToast()
 const currentYear = new Date().getFullYear()
+let scrambleTimer = null
+let scrambleObserver = null
+let scrambleElapsed = 0
+let scrambleStartedAt = 0
+let scrambleIsInViewport = false
+let scrambleWords = []
+let scrambleRoot = null
+let scrambleInterval = 75
+let scrambleSymbols = ''
+let scrambleDuration = 1000
+let scrambleInitialDuration = 450
+let scrambleIsComplete = false
+let scrambleCardAnimationStarted = false
+
+function updateScramble() {
+    const elapsed = scrambleElapsed + (performance.now() - scrambleStartedAt)
+    let unfinished = 0
+
+    scrambleWords.forEach((wordCharacters) => {
+        wordCharacters.forEach((character) => {
+            const revealAt = scrambleInitialDuration +
+                character.revealProgress * (scrambleDuration - scrambleInitialDuration)
+
+            if (elapsed >= revealAt) {
+                character.originalGlyph.classList.add('login-scramble-locked')
+                character.originalGlyph.style.opacity = '1'
+                character.scrambledGlyph.remove()
+                return
+            }
+
+            unfinished += 1
+            character.scrambledGlyph.textContent = scrambleSymbols[
+                Math.floor(Math.random() * scrambleSymbols.length)
+            ]
+        })
+    })
+
+    if (!unfinished) {
+        scrambleIsComplete = true
+        window.clearInterval(scrambleTimer)
+        scrambleTimer = null
+    }
+}
+
+function pauseScramble() {
+    if (scrambleTimer) {
+        scrambleElapsed += performance.now() - scrambleStartedAt
+        scrambleStartedAt = 0
+        window.clearInterval(scrambleTimer)
+        scrambleTimer = null
+    }
+
+    scrambleRoot?.classList.add('login-scramble-paused')
+}
+
+function resumeScramble() {
+    if (
+        !scrambleIsInViewport ||
+        document.visibilityState !== 'visible' ||
+        !scrambleRoot
+    ) {
+        return
+    }
+
+    scrambleRoot.classList.remove('login-scramble-paused')
+
+    if (scrambleIsComplete || scrambleTimer) {
+        return
+    }
+
+    if (!scrambleCardAnimationStarted) {
+        scrambleRoot.classList.add('login-card-zoom')
+        scrambleCardAnimationStarted = true
+    }
+
+    scrambleStartedAt = performance.now()
+    scrambleTimer = window.setInterval(updateScramble, scrambleInterval)
+}
+
+function handleDocumentVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+        resumeScramble()
+    } else {
+        pauseScramble()
+    }
+}
+
+function scrambleLoginText() {
+    const root = loginContent.value
+
+    if (!root) {
+        return
+    }
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        root.classList.remove('login-scramble-pending')
+        return
+    }
+
+    const textNodes = []
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            if (!node.nodeValue?.trim()) {
+                return NodeFilter.FILTER_REJECT
+            }
+
+            // Leave the reactive submit button text under Vue's control.
+            if (node.parentElement?.closest('button, script, style, [aria-hidden="true"]')) {
+                return NodeFilter.FILTER_REJECT
+            }
+
+            return NodeFilter.FILTER_ACCEPT
+        }
+    })
+
+    while (walker.nextNode()) {
+        textNodes.push(walker.currentNode)
+    }
+
+    const words = []
+    const randomSymbols = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*+-=?'
+
+    for (const textNode of textNodes) {
+        const pieces = textNode.nodeValue.match(/\s+|[^\s]+/g) || []
+        const fragment = document.createDocumentFragment()
+
+        for (const piece of pieces) {
+            if (/^\s+$/.test(piece)) {
+                fragment.append(document.createTextNode(piece))
+                continue
+            }
+
+            // Keep each word intact so scrambling never introduces a new line break inside it.
+            const word = document.createElement('span')
+            word.style.display = 'inline-block'
+            word.style.whiteSpace = 'nowrap'
+            const wordCharacters = []
+
+            for (const original of piece) {
+                const slot = document.createElement('span')
+                slot.style.position = 'relative'
+                slot.style.display = 'inline-block'
+
+                const originalGlyph = document.createElement('span')
+                originalGlyph.textContent = original
+                originalGlyph.style.opacity = '0'
+                slot.append(originalGlyph)
+
+                const scrambledGlyph = document.createElement('span')
+                scrambledGlyph.textContent = randomSymbols[Math.floor(Math.random() * randomSymbols.length)]
+                scrambledGlyph.setAttribute('aria-hidden', 'true')
+                scrambledGlyph.style.position = 'absolute'
+                scrambledGlyph.style.inset = '0'
+                scrambledGlyph.style.overflow = 'hidden'
+                scrambledGlyph.style.whiteSpace = 'nowrap'
+                scrambledGlyph.className = 'login-scramble-glyph'
+                slot.append(scrambledGlyph)
+                word.append(slot)
+
+                wordCharacters.push({ originalGlyph, scrambledGlyph, revealProgress: 0 })
+            }
+
+            const revealOrder = wordCharacters.map((_, index) => index)
+
+            for (let index = revealOrder.length - 1; index > 0; index--) {
+                const randomIndex = Math.floor(Math.random() * (index + 1))
+                const currentRevealOrder = revealOrder[index]
+                revealOrder[index] = revealOrder[randomIndex]
+                revealOrder[randomIndex] = currentRevealOrder
+            }
+
+            const wordLength = wordCharacters.length
+            const earlyCharacterCount = Math.max(wordLength - 3, 0)
+            const finalThreeRevealProgress = [0.2, 0.35, 1]
+
+            wordCharacters.forEach((character, index) => {
+                const revealRank = revealOrder[index]
+
+                if (wordLength >= 4 && revealRank >= earlyCharacterCount) {
+                    character.revealProgress = finalThreeRevealProgress[revealRank - earlyCharacterCount]
+                    return
+                }
+
+                if (wordLength >= 4) {
+                    character.revealProgress = 0.15 * (revealRank + 1) / earlyCharacterCount
+                    return
+                }
+
+                const shortWordRevealProgress = {
+                    1: [1],
+                    2: [0.35, 1],
+                    3: [0.15, 0.35, 1]
+                }
+
+                character.revealProgress = shortWordRevealProgress[wordLength][revealRank]
+            })
+
+            words.push(wordCharacters)
+            fragment.append(word)
+        }
+
+        textNode.replaceWith(fragment)
+    }
+
+    if (!words.length) {
+        root.classList.remove('login-scramble-pending')
+        return
+    }
+
+    root.classList.remove('login-scramble-pending')
+
+    scrambleRoot = root
+    scrambleWords = words
+    scrambleSymbols = randomSymbols
+    scrambleInterval = window.matchMedia('(max-width: 767px)').matches ? 110 : 75
+    scrambleDuration = 1000
+    scrambleInitialDuration = 450
+    scrambleIsComplete = false
+    scrambleCardAnimationStarted = false
+
+    document.addEventListener('visibilitychange', handleDocumentVisibilityChange)
+    scrambleObserver = new IntersectionObserver(([entry]) => {
+        scrambleIsInViewport = entry.isIntersecting && entry.intersectionRatio > 0
+
+        if (scrambleIsInViewport) {
+            resumeScramble()
+        } else {
+            pauseScramble()
+        }
+    }, { threshold: 0 })
+    scrambleObserver.observe(root)
+}
+
+onMounted(scrambleLoginText)
+
+onBeforeUnmount(() => {
+    pauseScramble()
+    scrambleObserver?.disconnect()
+    document.removeEventListener('visibilitychange', handleDocumentVisibilityChange)
+})
 
 const headers = import.meta.server
     ? useRequestHeaders(['cookie'])
@@ -51,8 +291,6 @@ async function login() {
         })
 
         showToast('You have signed in successfully.')
-        isNavigating.value = true
-        await new Promise(resolve => setTimeout(resolve, 450))
         await navigateTo('/dashboard')
     } catch (error) {
         if (error?.statusCode === 403) {
@@ -73,20 +311,18 @@ async function login() {
 </script>
 
 <template>
-    <main
-        :class="{ 'login-page-exit': isNavigating }"
-        class="relative flex min-h-screen items-start justify-center overflow-hidden bg-[#eef3f1] px-4 py-8 sm:px-6 lg:items-center lg:px-8">
+    <main class="relative flex min-h-screen items-start justify-center overflow-hidden bg-[#eef3f1] px-4 py-8 sm:px-6 lg:items-center lg:px-8">
 
         <div class="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-blue-100/70 blur-3xl"></div>
         <div class="pointer-events-none absolute -bottom-32 -right-16 h-96 w-96 rounded-full bg-teal-100/70 blur-3xl">
         </div>
 
-        <section
-            class="relative flex w-full max-w-6xl flex-col-reverse overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_90px_-35px_rgba(15,57,52,0.42)] lg:min-h-[650px] lg:flex-row">
+        <section ref="loginContent"
+            class="login-scramble-pending relative flex w-full max-w-6xl flex-col-reverse overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_90px_-35px_rgba(15,57,52,0.42)] lg:min-h-[650px] lg:flex-row">
 
             <!-- LEFT CARD -->
             <div
-                class="login-left flex w-full flex-col justify-center px-7 py-10 sm:px-12 sm:py-12 lg:w-[48%] lg:px-14">
+                class="flex w-full flex-col justify-center px-7 py-10 sm:px-12 sm:py-12 lg:w-[48%] lg:px-14">
 
                 <div class="mb-10 flex items-center gap-3">
 
@@ -222,7 +458,7 @@ async function login() {
 
             <!-- RIGHT CARD -->
             <div
-                class="login-right relative flex min-h-[230px] w-full flex-col overflow-hidden bg-blue-950 sm:min-h-[300px] lg:min-h-0 lg:w-[52%]">
+                class="relative flex min-h-[230px] w-full flex-col overflow-hidden bg-blue-950 sm:min-h-[300px] lg:min-h-0 lg:w-[52%]">
 
                 <img src="/images/felcris-building.jpg" alt="Felcris building overlooking the coastline"
                     class="h-auto w-full object-contain object-center" />
@@ -255,66 +491,66 @@ async function login() {
     </main>
 </template>
 
-
-<style scoped>
-/* LEFT CARD SLIDE-IN */
-.login-left {
-    animation: slideFromLeft 0.8s ease-out both;
+<style>
+.login-scramble-pending {
+    visibility: hidden;
 }
 
-
-/* RIGHT CARD SLIDE-IN */
-.login-right {
-    animation: slideFromRight 0.8s ease-out both;
+.login-scramble-glyph {
+    color: color-mix(in srgb, currentColor 78%, #2563eb);
 }
 
-.login-page-exit {
-    animation: loginZoomOut 450ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+.login-scramble-locked {
+    animation: login-letter-lock 220ms ease-out both;
+}
+
+@keyframes login-letter-lock {
+    0% {
+        opacity: 0;
+        transform: translateY(-1px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 767px) {
+    .login-scramble-locked {
+        animation-duration: 160ms;
+    }
+}
+
+.login-scramble-paused,
+.login-scramble-paused .login-scramble-glyph,
+.login-scramble-paused .login-scramble-locked {
+    animation-play-state: paused;
+}
+
+.login-card-zoom {
+    animation: login-card-zoom 800ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
     transform-origin: center;
 }
 
-
-/* LEFT SIDE */
-@keyframes slideFromLeft {
-    from {
-        opacity: 0;
-        transform: translateX(-80px);
+@keyframes login-card-zoom {
+    0% {
+        transform: scale(1.025);
     }
 
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-
-/* RIGHT SIDE */
-@keyframes slideFromRight {
-    from {
-        opacity: 0;
-        transform: translateX(80px);
+    24% {
+        transform: scale(1.025);
     }
 
-    to {
-        opacity: 1;
-        transform: translateX(0);
+    100% {
+        transform: scale(1);
     }
 }
 
-@keyframes loginZoomOut {
-    to {
-        opacity: 0;
-        transform: scale(1.06);
-    }
-}
-
-
-/* REDUCE ANIMATION IF USER PREFERS REDUCED MOTION */
 @media (prefers-reduced-motion: reduce) {
-
-    .login-left,
-    .login-right,
-    .login-page-exit {
+    .login-scramble-glyph,
+    .login-scramble-locked,
+    .login-card-zoom {
         animation: none;
     }
 }

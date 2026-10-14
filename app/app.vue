@@ -1,10 +1,15 @@
 <script setup>
 const isNavigating = ref(false)
+const isSessionRevoked = ref(false)
+const revokedProgress = ref(0)
+const route = useRoute()
+const currentUser = useState('current-user', () => null)
 let showTimer
 let hideTimer
 let removeBeforeEach
 let removeAfterEach
 let removeOnError
+let revokedTimer = null
 
 function finishNavigation() {
   clearTimeout(showTimer)
@@ -16,8 +21,69 @@ function finishNavigation() {
   }
 }
 
+function startRevokedRedirect() {
+  if (isSessionRevoked.value) {
+    return
+  }
+
+  isSessionRevoked.value = true
+  revokedProgress.value = 0
+
+  if (route.query.revoked === '1') {
+    const query = { ...route.query }
+    delete query.revoked
+    useRouter().replace({
+      path: route.path,
+      query,
+      hash: route.hash
+    })
+  }
+
+  revokedTimer = setInterval(() => {
+    revokedProgress.value = Math.min(100, revokedProgress.value + 8)
+
+    if (revokedProgress.value >= 100) {
+      clearInterval(revokedTimer)
+      revokedTimer = null
+      navigateTo('/login').finally(() => {
+        isSessionRevoked.value = false
+        revokedProgress.value = 0
+      })
+    }
+  }, 90)
+}
+
+function showRevokedSessionOverlay() {
+  if (isSessionRevoked.value) {
+    return
+  }
+
+  startRevokedRedirect()
+}
+
 onMounted(() => {
   const router = useRouter()
+
+  if (route.query.revoked === '1') {
+    startRevokedRedirect()
+  }
+
+  const nuxtApp = useNuxtApp()
+  const originalFetch = nuxtApp.$fetch
+
+  nuxtApp.$fetch = (...args) => {
+    return originalFetch(...args).catch((error) => {
+      const statusCode = Number(error?.statusCode ?? error?.response?.status ?? 0)
+
+      const statusMessage = error?.data?.statusMessage ?? error?.statusMessage
+
+      if (statusCode === 401 && statusMessage === 'SESSION_REVOKED') {
+        showRevokedSessionOverlay()
+      }
+
+      throw error
+    })
+  }
 
   removeBeforeEach = router.beforeEach(() => {
     clearTimeout(showTimer)
@@ -26,13 +92,23 @@ onMounted(() => {
       isNavigating.value = true
     }, 120)
   })
-  removeAfterEach = router.afterEach(finishNavigation)
+  removeAfterEach = router.afterEach((to) => {
+    if (to.query.revoked === '1') {
+      startRevokedRedirect()
+    }
+
+    finishNavigation()
+  })
   removeOnError = router.onError(finishNavigation)
 })
 
 onBeforeUnmount(() => {
   clearTimeout(showTimer)
   clearTimeout(hideTimer)
+  if (revokedTimer) {
+    clearInterval(revokedTimer)
+    revokedTimer = null
+  }
   removeBeforeEach?.()
   removeAfterEach?.()
   removeOnError?.()
@@ -41,6 +117,51 @@ onBeforeUnmount(() => {
 
 <template>
   <NuxtPage />
+  <HelpGuideModal :current-user="currentUser" />
+  <Transition
+    enter-active-class="transition duration-200 ease-out"
+    enter-from-class="opacity-0"
+    enter-to-class="opacity-100"
+    leave-active-class="transition duration-150 ease-in"
+    leave-from-class="opacity-100"
+    leave-to-class="opacity-0"
+  >
+    <div
+      v-if="isSessionRevoked"
+      class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/75 backdrop-blur-sm"
+    >
+      <div class="flex w-full max-w-sm flex-col items-center rounded-2xl border border-slate-200 bg-white/95 px-7 py-6 shadow-2xl">
+        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-700">
+          <svg
+            class="h-8 w-8 animate-[spin_1s_linear_infinite]"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 0 1 14.9-4.7L18.5 9.5A6 6 0 0 0 6 12h-2Zm2 0a8 8 0 0 1 14.9 4.7L18.5 14.5A6 6 0 0 0 6 12h-2Z"></path>
+          </svg>
+        </div>
+
+        <p class="text-lg font-semibold text-slate-900">Session revoked</p>
+        <p class="mt-1 text-center text-sm text-slate-500">Your session has been terminated. You are being returned to the login screen.</p>
+
+        <div class="mt-5 w-full">
+          <div class="mb-2 flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.18em] text-slate-500">
+            <span>Redirecting</span>
+            <span>{{ revokedProgress }}%</span>
+          </div>
+          <div class="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+            <div
+              class="h-full rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 transition-all duration-75 ease-linear"
+              :style="{ width: `${revokedProgress}%` }"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Transition>
   <Transition
     enter-active-class="nav-loader-enter-active"
     leave-active-class="nav-loader-leave-active"
@@ -53,24 +174,24 @@ onBeforeUnmount(() => {
       aria-label="Loading the next page"
     >
       <div class="pointer-events-auto flex items-center gap-3 rounded-2xl border border-blue-900/15 bg-white px-4 py-3 shadow-xl shadow-blue-950/15">
-      <span class="relative flex h-12 w-14 shrink-0 items-center justify-center text-blue-800">
+      <span class="relative flex h-12 w-14 shrink-0 items-center justify-center text-orange-500">
         <svg
           class="h-10 w-14"
-          viewBox="0 0 32 24"
+          viewBox="0 0 64 48"
           fill="none"
-          stroke="currentColor"
-          stroke-width="1.7"
-          stroke-linecap="round"
-          stroke-linejoin="round"
           aria-hidden="true"
         >
           <g class="loading-cat-body">
-            <path d="M8 12.5c1.2-2 3.1-3 6.2-3h4.2a4.4 4.4 0 0 1 4.2 3.2l.8 2.8H9.2L8 12.5Z" fill="currentColor" stroke="none" />
-            <path d="M18.5 10.1 19 6.6l3 2.3a4.1 4.1 0 0 1 2.8 3.9v1.1h-5.3" fill="currentColor" stroke="none" />
-            <path d="m19 6.7 2.5-.3-.2 2.8m-1.5 3.2h.01" />
-            <path class="loading-cat-tail" d="M8.6 12.5c-2.8-.2-3-3.7-5.4-3.5-1.3.1-1.5 1.4-.8 2" />
-            <path class="loading-cat-leg loading-cat-leg-back" d="m11 15.2-.8 3.3 2.2 1.2m1.1-4.5-.4 3.4 2 1.1" />
-            <path class="loading-cat-leg loading-cat-leg-front" d="m18 15.2.6 3.3 2.2.8m1.1-4.1 1.1 3.1 2.3.3" />
+            <ellipse cx="31" cy="29" rx="15" ry="9" fill="currentColor" />
+            <path d="M37 20L39 10L46 16L53 13L54 24C54 30 50 34 45 34H42C37 34 34 29 37 20Z" fill="currentColor" />
+            <circle cx="48" cy="22" r="1.5" fill="white" />
+          </g>
+          <path class="loading-cat-tail" d="M14 29C9 29 7 25 9 21C11 17 15 18 17 21" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
+          <g class="loading-cat-leg loading-cat-leg-back" stroke="currentColor" stroke-width="3.5" stroke-linecap="round">
+            <path d="M23 33L20 41M30 34L28 41" />
+          </g>
+          <g class="loading-cat-leg loading-cat-leg-front" stroke="currentColor" stroke-width="3.5" stroke-linecap="round">
+            <path d="M41 33L39 41M47 32L49 40" />
           </g>
         </svg>
       </span>

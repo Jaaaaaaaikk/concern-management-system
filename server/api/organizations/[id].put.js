@@ -1,10 +1,10 @@
 import db from '../../utils/db.js'
 
-import { requireRole } from '../../utils/require-auth.js'
+import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
 
 export default defineEventHandler(async (event) => {
 
-    await requireRole(event, ['superadmin'])
+    const currentUser = await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
 
     const organizationId = Number(
         getRouterParam(event, 'id')
@@ -79,7 +79,8 @@ export default defineEventHandler(async (event) => {
                 name = ?,
                 organization_type = ?,
                 description = ?,
-                address = ?
+                address = ?,
+                updated_by = ?
             WHERE id = ?
               AND deleted_at IS NULL
             `,
@@ -88,6 +89,7 @@ export default defineEventHandler(async (event) => {
                 organizationType,
                 description,
                 address,
+                currentUser.id,
                 organizationId
             ]
         )

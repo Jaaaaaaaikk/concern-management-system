@@ -171,10 +171,17 @@ function mysqlDateTimeToLocalDate(value) {
 }
 
 /*
- * Convert a Date or date value into the local format
- * required by an HTML datetime-local input.
+ * Convert a Date or date value into a local YYYY-MM-DD value.
  */
-function localDateTimeInputValue(value = new Date()) {
+function localDateInputValue(value = new Date()) {
+    if (typeof value === 'string') {
+        const dateOnlyMatch = value.trim().match(/^(\d{4}-\d{2}-\d{2})/)
+
+        if (dateOnlyMatch) {
+            return dateOnlyMatch[1]
+        }
+    }
+
     const date = value instanceof Date
         ? value
         : new Date(value)
@@ -193,15 +200,7 @@ function localDateTimeInputValue(value = new Date()) {
         date.getDate()
     ).padStart(2, '0')
 
-    const hours = String(
-        date.getHours()
-    ).padStart(2, '0')
-
-    const minutes = String(
-        date.getMinutes()
-    ).padStart(2, '0')
-
-    return `${year}-${month}-${day}T${hours}:${minutes}`
+    return `${year}-${month}-${day}`
 }
 
 /*
@@ -237,14 +236,9 @@ function formatDateTime(value) {
 function formatDateOnly(value) {
     if (!value) return '—'
 
-    const date = new Date(value)
+    const date = mysqlDateTimeToLocalDate(value)
 
-    if (Number.isNaN(date.getTime())) {
-        const stringValue = String(value).trim()
-        const match = stringValue.match(/^\d{4}-\d{2}-\d{2}/)
-
-        return match ? match[0] : '—'
-    }
+    if (!date) return '—'
 
     return date.toLocaleDateString('en-PH', {
         year: 'numeric',
@@ -358,7 +352,7 @@ function parseDate(value) {
 
 function commitmentStartFromRemarks(remarks) {
     const match = String(remarks || '').match(
-        /(?:commitment start|scheduled start(?: date\/time)?|target resolution date):\s*(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?)/i
+        /(?:commitment start(?: date)?|scheduled start(?: date(?:\/time)?)?|target resolution date):\s*(\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)/i
     )
 
     return match ? parseDate(match[1]) : null
@@ -367,7 +361,7 @@ function commitmentStartFromRemarks(remarks) {
 function historyRemarksWithoutCommitmentStart(history) {
     return String(history?.remarks || '')
         .replace(
-            /\n?\s*(?:commitment start|scheduled start(?: date\/time)?|target resolution date):\s*\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?\s*/i,
+            /\n?\s*(?:commitment start(?: date)?|scheduled start(?: date(?:\/time)?)?|target resolution date):\s*\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?\s*/i,
             ''
         )
         .trim()
@@ -475,44 +469,18 @@ function getConcernDuration(concern) {
     }
 
     if (
-        elapsedMilliseconds === 0 &&
+        elapsedMilliseconds <= 0 &&
         (!activeSince || currentTime.value.getTime() < activeSince.getTime())
     ) {
         return 'Not started'
     }
 
-    const totalMinutes =
-        Math.floor(
-            elapsedMilliseconds / 60000
-        )
-
-    const days =
-        Math.floor(totalMinutes / 1440)
-
-    const hours =
-        Math.floor((totalMinutes % 1440) / 60)
-
-    const minutes =
-        totalMinutes % 60
-
-    const parts = []
-
-    if (days > 0) {
-        parts.push(`${days}d`)
+    if (elapsedMilliseconds <= 0) {
+        return 'Not started'
     }
 
-    if (hours > 0) {
-        parts.push(`${hours}h`)
-    }
-
-    if (
-        minutes > 0 ||
-        parts.length === 0
-    ) {
-        parts.push(`${minutes}m`)
-    }
-
-    return parts.join(' ')
+    const days = Math.floor(elapsedMilliseconds / 86400000)
+    return `${days} day${days === 1 ? '' : 's'}`
 }
 
 function attachmentUrl(path) {
@@ -557,17 +525,12 @@ function isConcernCompleted() {
  * after the assigned organization resolves it.
  */
 function isCreatorOrganizationAdmin() {
-    return Boolean(
-        props.currentUser &&
-        selectedConcern.value &&
-        props.currentUser.role_name === 'admin' &&
+    if (!props.currentUser || !selectedConcern.value) return false
+
+    return props.currentUser.role_name === 'concern_handler' &&
         props.currentUser.organization_id != null &&
         selectedConcern.value.creator_organization_id != null &&
-        Number(
-            selectedConcern.value.creator_organization_id
-        ) ===
-        Number(props.currentUser.organization_id)
-    )
+        Number(props.currentUser.organization_id) === Number(selectedConcern.value.creator_organization_id)
 }
 
 /*
@@ -578,7 +541,7 @@ function isAssignedOrganizationMember() {
     return Boolean(
         props.currentUser &&
         selectedConcern.value &&
-        ['admin', 'user'].includes(
+        ['concern_handler', 'requestor'].includes(
             props.currentUser.role_name
         ) &&
         props.currentUser.organization_id != null &&
@@ -599,7 +562,7 @@ function isCreatorOrganizationMember() {
     return Boolean(
         props.currentUser &&
         selectedConcern.value &&
-        ['admin', 'user'].includes(
+        ['concern_handler', 'requestor'].includes(
             props.currentUser.role_name
         ) &&
         props.currentUser.organization_id != null &&
@@ -615,7 +578,7 @@ function isAssignedAdmin() {
     return Boolean(
         props.currentUser &&
         selectedConcern.value &&
-        props.currentUser.role_name === 'admin' &&
+        props.currentUser.role_name === 'concern_handler' &&
         props.currentUser.organization_id != null &&
         selectedConcern.value.assigned_organization_id != null &&
         Number(props.currentUser.organization_id) ===
@@ -639,11 +602,8 @@ function canEditOriginalAttachments() {
         return false
     }
 
-    return (
-        props.currentUser.role_name === 'superadmin' ||
-        Number(selectedConcern.value.created_by) ===
-        Number(props.currentUser.id)
-    )
+    return props.currentUser.role_name === 'superadmin' ||
+        Number(selectedConcern.value.created_by) === Number(props.currentUser.id)
 }
 
 function canComment() {
@@ -662,7 +622,7 @@ function canComment() {
         return false
     }
 
-    if (props.currentUser.role_name === 'superadmin') {
+    if (['superadmin', 'system_admin', 'system_monitor'].includes(props.currentUser.role_name)) {
         return true
     }
 
@@ -682,7 +642,7 @@ function canTrashConcern() {
         return false
     }
 
-    if (props.currentUser.role_name === 'user') {
+    if (props.currentUser.role_name === 'requestor') {
         return Number(selectedConcern.value.created_by) === Number(props.currentUser.id)
     }
 
@@ -701,7 +661,7 @@ function canRestoreTrashedConcern() {
         return false
     }
 
-    if (props.currentUser?.role_name === 'superadmin') {
+    if (['superadmin', 'system_admin'].includes(props.currentUser?.role_name)) {
         return true
     }
 
@@ -709,12 +669,12 @@ function canRestoreTrashedConcern() {
         return false
     }
 
-    if (props.currentUser?.role_name === 'admin') {
+    if (props.currentUser?.role_name === 'concern_handler') {
         return Number(props.currentUser.organization_id) ===
             Number(selectedConcern.value.creator_organization_id)
     }
 
-    return props.currentUser?.role_name === 'user' &&
+    return props.currentUser?.role_name === 'requestor' &&
         Number(props.currentUser.id) === Number(selectedConcern.value.created_by)
 }
 
@@ -803,7 +763,7 @@ async function restoreConcern() {
 
 async function permanentlyDeleteConcern() {
     if (
-        props.currentUser?.role_name !== 'superadmin' ||
+        !['superadmin', 'system_admin'].includes(props.currentUser?.role_name) ||
         !isTrashedConcern() ||
         updatingTrash.value
     ) {
@@ -976,7 +936,7 @@ function canCloseConcern() {
     return Boolean(
         props.currentUser &&
         selectedConcern.value &&
-        props.currentUser.role_name === 'admin' &&
+        props.currentUser.role_name === 'concern_handler' &&
         selectedConcern.value.status === 'resolved' &&
         isCreatorOrganizationAdmin()
     )
@@ -1091,10 +1051,9 @@ async function loadConcernDetails() {
         selectedStatus.value =
             response.concern?.status || ''
 
-        targetCommitmentAt.value =
-            mysqlDateTimeToLocalDate(
-                response.concern?.target_commitment_at
-            )
+        targetCommitmentAt.value = mysqlDateTimeToLocalDate(
+            response.concern?.target_commitment_at
+        )
 
         statusRemarks.value = ''
 
@@ -1145,10 +1104,9 @@ async function refreshConcernDetails() {
         selectedStatus.value =
             response.concern?.status || ''
 
-        targetCommitmentAt.value =
-            mysqlDateTimeToLocalDate(
-                response.concern?.target_commitment_at
-            )
+        targetCommitmentAt.value = mysqlDateTimeToLocalDate(
+            response.concern?.target_commitment_at
+        )
 
     } catch (error) {
         showToast(
@@ -1955,7 +1913,7 @@ async function updateConcernStatus() {
 
     /*
      * Moving into In Progress requires a
-    * recipient's committed start date and time.
+    * recipient's committed start date.
      */
     const movingToInProgress = isAssignedAdmin() &&
         targetStatus === 'in_progress' &&
@@ -1966,7 +1924,7 @@ async function updateConcernStatus() {
         !targetCommitmentAt.value
     ) {
         showToast(
-            'Please set the committed start date and time before moving the concern to In Progress.',
+            'Please set the committed start date before moving the concern to In Progress.',
             'error'
         )
 
@@ -1980,13 +1938,11 @@ async function updateConcernStatus() {
         movingToInProgress &&
         targetCommitmentAt.value
     ) {
-        const selectedDate = localDateTimeInputValue(
-            targetCommitmentAt.value
-        ).slice(0, 10)
+        const selectedDate = localDateInputValue(targetCommitmentAt.value)
 
-        const today = localDateTimeInputValue(
+        const today = localDateInputValue(
             minimumCommitmentDate()
-        ).slice(0, 10)
+        )
 
         if (selectedDate < today) {
             showToast(
@@ -2068,7 +2024,7 @@ async function updateConcernStatus() {
         if (movingToInProgress) {
             formData.append(
                 'target_commitment_at',
-                localDateTimeInputValue(targetCommitmentAt.value)
+                targetCommitmentAt.value
             )
         }
 
@@ -2185,27 +2141,27 @@ onUnmounted(() => {
 
             <!-- Header -->
             <div
-                class="flex shrink-0 items-center justify-between border-b border-blue-800 bg-linear-to-r from-blue-950 via-blue-900 to-slate-800 px-4 py-4 text-white sm:px-6 sm:py-5">
+                class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
 
                 <div>
 
-                    <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200">
+                    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
                         Concern Workspace
                     </p>
 
-                    <h3 class="mt-1 text-lg font-bold tracking-tight text-white sm:text-xl">
+                    <h3 class="mt-1 text-xl font-semibold text-slate-900">
                         {{ selectedConcern?.title || 'Concern Details' }}
                     </h3>
 
-                    <p class="mt-1 text-xs font-medium text-blue-100/80">
+                    <p class="mt-1 text-sm text-slate-500">
                         {{ selectedConcern?.concern_number || 'Ticket' }}
                     </p>
 
                     <div v-if="selectedConcern" class="mt-2 flex flex-wrap gap-2">
-                        <span class="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white">
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
                             {{ formatStatus(selectedConcern.status) }}
                         </span>
-                        <span class="rounded-full border border-white/15 bg-amber-300/15 px-2.5 py-1 text-[11px] font-semibold text-amber-100">
+                        <span class="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
                             {{ formatPriority(selectedConcern.priority) }} priority
                         </span>
                     </div>
@@ -2218,8 +2174,14 @@ onUnmounted(() => {
                     addingAttachments ||
                     replacingAttachmentId
                     "
-                    class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border border-white/15 bg-white/10 text-2xl text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50">
-                    ×
+                    aria-label="Close modal"
+                    class="group relative flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50">
+                    <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" aria-hidden="true"
+                        class="absolute h-6 w-6 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                    </svg>
                 </button>
 
             </div>
@@ -2574,12 +2536,12 @@ onUnmounted(() => {
                             <div>
 
                                 <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-                                    Committed Start Date &amp; Time
+                                    Committed Start Date
                                 </p>
 
                                 <p v-if="selectedConcern.target_commitment_at"
                                     class="text-sm font-medium text-slate-700">
-                                    {{ formatDate(selectedConcern.target_commitment_at) }}
+                                    {{ formatDateOnly(selectedConcern.target_commitment_at) }}
                                 </p>
 
                                 <p v-else class="text-sm text-slate-400">
@@ -2735,27 +2697,25 @@ onUnmounted(() => {
                                 <div v-if="isCommitmentDateRequired()" class="rounded-lg border border-blue-200 bg-blue-50/70 p-4">
 
                                     <label for="target-commitment-at" class="mb-2 block text-sm font-semibold text-blue-900">
-                                        Committed start date and time <span class="text-red-500">*</span>
+                                        Committed start date <span class="text-red-500">*</span>
                                     </label>
 
                                     <VueDatePicker
                                         id="target-commitment-at"
                                         v-model="targetCommitmentAt"
                                         :min-date="minimumCommitmentDate()"
-                                        :enable-time-picker="true"
-                                        :minutes-increment="1"
-                                        :clearable="false"
+                                        :time-config="{ enableTimePicker: false }"
                                         :disabled="updatingStatus"
                                         :auto-apply="true"
-                                        format="MMM d, yyyy h:mm aa"
-                                        placeholder="Choose your committed start date and time"
+                                        format="MMM d, yyyy"
+                                        placeholder="Choose your committed start date"
                                         input-class-name="!rounded-lg !border-blue-300 !py-3 !text-sm focus:!border-blue-500"
                                         menu-class-name="rounded-xl border border-slate-200 shadow-xl"
                                         class="w-full"
                                     />
 
                                     <p class="mt-2 text-xs leading-5 text-blue-800">
-                                        This is the date and time your organization commits to begin handling the concern, not a due date. Choose today or a future date. The handling timer begins at this commitment time.
+                                        This is the date your organization commits to begin handling the concern, not a due date. Choose today or a future date.
                                     </p>
 
                                 </div>
@@ -3303,7 +3263,7 @@ onUnmounted(() => {
                                     <p v-if="commitmentStartFromRemarks(history.remarks)"
                                         class="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">
                                         Committed start:
-                                        {{ formatDateTime(commitmentStartFromRemarks(history.remarks)) }}
+                                        {{ formatDateOnly(commitmentStartFromRemarks(history.remarks)) }}
                                     </p>
 
                                 <p v-if="historyRemarksWithoutCommitmentStart(history)"
@@ -3697,9 +3657,15 @@ onUnmounted(() => {
         <div class="relative flex max-h-[95vh] max-w-[95vw] flex-col items-center">
 
             <button type="button" @click="closeImageViewer"
-                class="absolute -right-2 -top-2 z-10 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white text-2xl leading-none text-slate-600 shadow-lg transition hover:bg-red-500 hover:text-white"
+                aria-label="Close image viewer"
+                class="group absolute -right-2 -top-2 z-10 flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-300 transition-colors duration-200 hover:text-red-400"
                 title="Close image">
-                ×
+                <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                    stroke="currentColor" aria-hidden="true"
+                    class="absolute h-6 w-6 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                </svg>
             </button>
 
             <img :src="selectedViewerImage.url" :alt="selectedViewerImage.name"

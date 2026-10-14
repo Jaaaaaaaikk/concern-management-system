@@ -27,12 +27,26 @@ const emit = defineEmits(['confirm', 'cancel'])
             @click.self="!props.loading && emit('cancel')"
         >
             <section
-                class="w-full max-w-md rounded-2xl border border-white/60 bg-white p-6 shadow-2xl sm:p-7"
+                class="relative w-full max-w-md rounded-2xl border border-white/60 bg-white p-6 shadow-2xl sm:p-7"
                 role="dialog"
                 aria-modal="true"
                 :aria-label="props.title"
             >
-                <div class="flex items-start gap-4">
+                <button
+                    type="button"
+                    aria-label="Close confirmation"
+                    class="group absolute right-3 top-3 flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="props.loading"
+                    @click="emit('cancel')"
+                >
+                    <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" aria-hidden="true"
+                        class="absolute h-6 w-6 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                    </svg>
+                </button>
+                <div class="flex items-start gap-4 pr-8">
                     <span
                         class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
                         :class="props.tone === 'danger' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-800'"
@@ -43,7 +57,7 @@ const emit = defineEmits(['confirm', 'cancel'])
                         </svg>
                     </span>
                     <div class="min-w-0">
-                        <h3 class="text-lg font-semibold text-slate-900">{{ props.title }}</h3>
+                        <h3 class="text-xl font-semibold text-slate-900">{{ props.title }}</h3>
                         <p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">{{ props.message }}</p>
                     </div>
                 </div>

@@ -9,7 +9,7 @@ import path from "path";
 import crypto from "crypto";
 
 export default defineEventHandler(async (event) => {
-  const currentUser = await requireRole(event, ["admin", "user"]);
+  const currentUser = await requireRole(event, ["concern_handler", "requestor"]);
 
   /*
    * Read multipart form data.

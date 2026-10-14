@@ -28,6 +28,10 @@ const props = defineProps({
         type: Boolean,
         default: false
     },
+    currentUserRole: {
+        type: String,
+        default: ''
+    },
     updating: {
         type: Boolean,
         default: false
@@ -40,6 +44,23 @@ const emit = defineEmits([
     'role-change',
     'status-toggle'
 ])
+
+const selectableRoles = computed(() => {
+    if (props.currentUserRole === 'system_admin') {
+        return (props.roles || []).filter(
+            (role) => ['concern_handler', 'requestor'].includes(role.name)
+        )
+    }
+
+    const currentSuperadminRoleId = (props.roles || []).find(
+        (role) => role.name === 'superadmin'
+    )?.id
+    const editingSuperadmin = Number(props.form.role_id) === Number(currentSuperadminRoleId)
+
+    return (props.roles || []).filter(
+        (role) => role.name !== 'superadmin' || editingSuperadmin
+    )
+})
 
 useBodyScrollLock(() => props.show)
 
@@ -122,14 +143,14 @@ onBeforeUnmount(releasePhotoPreview)
         <div class="my-auto max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
 
             <div
-                class="flex items-center justify-between border-b border-blue-800 bg-linear-to-r from-blue-950 to-blue-800 px-4 py-4 text-white sm:px-6 sm:py-5"
+                class="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5"
             >
                 <div>
-                    <h3 class="text-lg font-semibold text-white">
+                    <h3 class="text-xl font-semibold text-slate-900">
                         Edit User
                     </h3>
 
-                    <p class="mt-1 text-sm text-blue-100/80">
+                    <p class="mt-1 text-sm text-slate-500">
                         Manage profile, access, and account status.
                     </p>
                 </div>
@@ -137,9 +158,15 @@ onBeforeUnmount(releasePhotoPreview)
                 <button
                     type="button"
                     @click="emit('close')"
-                    class="cursor-pointer rounded-lg p-1 text-2xl leading-none text-blue-100 transition hover:bg-white/10 hover:text-white"
+                    aria-label="Close modal"
+                    class="group relative flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800"
                 >
-                    ×
+                    <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" aria-hidden="true"
+                        class="absolute h-6 w-6 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                    </svg>
                 </button>
             </div>
 
@@ -273,9 +300,9 @@ onBeforeUnmount(releasePhotoPreview)
 
                 </div>
 
-                <div class="grid gap-4 md:grid-cols-2">
+                <div :class="['grid gap-4', props.isCurrentUser ? 'md:grid-cols-1' : 'md:grid-cols-2']">
 
-                    <div>
+                    <div v-if="!props.isCurrentUser">
                         <label
                             class="mb-2 block text-sm font-medium text-slate-700"
                         >
@@ -293,7 +320,7 @@ onBeforeUnmount(releasePhotoPreview)
                             </option>
 
                             <option
-                                v-for="role in props.roles"
+                                v-for="role in selectableRoles"
                                 :key="role.id"
                                 :value="role.id"
                             >

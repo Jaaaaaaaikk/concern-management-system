@@ -90,14 +90,16 @@ export default defineEventHandler(async (event) => {
 
   const concern = concernRows[0];
 
-  if (concern.deleted_at && currentUser.role_name !== "superadmin") {
+  const isGlobalViewer = ["superadmin", "system_admin", "system_monitor"].includes(currentUser.role_name);
+
+  if (concern.deleted_at && !isGlobalViewer) {
     const isAuthorizedAdmin =
-      currentUser.role_name === "admin" &&
+      currentUser.role_name === "concern_handler" &&
       currentUser.organization_id != null &&
       Number(currentUser.organization_id) === Number(concern.creator_organization_id);
 
     const isAuthorizedUser =
-      currentUser.role_name === "user" &&
+      currentUser.role_name === "requestor" &&
       Number(currentUser.id) === Number(concern.created_by);
 
     if (!isAuthorizedAdmin && !isAuthorizedUser) {
@@ -118,9 +120,9 @@ export default defineEventHandler(async (event) => {
    *
    * Can view every concern.
    */
-  if (currentUser.role_name === "superadmin") {
+  if (isGlobalViewer) {
     // Allowed.
-  } else if (currentUser.role_name === "admin") {
+  } else if (currentUser.role_name === "concern_handler") {
     /*
      * ADMIN
      *
@@ -157,7 +159,7 @@ export default defineEventHandler(async (event) => {
         statusMessage: "You do not have permission to view this concern.",
       });
     }
-  } else if (currentUser.role_name === "user") {
+  } else if (currentUser.role_name === "requestor") {
     /*
      * REGULAR USER
      *
@@ -202,7 +204,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (
-    currentUser.role_name !== "superadmin" &&
+    !isGlobalViewer &&
     (
       (concern.creator_organization_id != null &&
         concern.creator_organization_deleted_at != null) ||

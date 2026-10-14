@@ -53,11 +53,18 @@ watch(() => props.show, (isShown) => {
                 </div>
                 <button
                     type="button"
-                    class="cursor-pointer rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed"
+                    class="group relative flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label="Close"
                     :disabled="props.saving"
                     @click="emit('close')"
-                >×</button>
+                >
+                    <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" aria-hidden="true"
+                        class="absolute h-6 w-6 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                    </svg>
+                </button>
             </div>
 
             <label for="category-name" class="mb-1.5 block text-sm font-medium text-slate-700">

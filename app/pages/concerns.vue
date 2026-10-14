@@ -28,9 +28,12 @@ const errorMessage = ref('')
 
 const showModal = ref(false)
 const showExportModal = ref(false)
-const showFilterPanel = ref(false)
 
 const route = useRoute()
+const showFilterPanel = ref(Boolean(
+    route.query.status ||
+    route.query.late_response
+))
 
 const search = ref('')
 
@@ -321,28 +324,48 @@ function formatDate(value) {
     )
 }
 
+function formatDateOnly(value) {
+    const date = parseDate(value)
+
+    if (!date) {
+        return '-'
+    }
+
+    return date.toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    })
+}
+
 function parseDate(value) {
 
     if (!value) {
         return null
     }
 
-    /*
-     * MySQL DATETIME normally comes as:
-     *
-     * YYYY-MM-DD HH:mm:ss
-     *
-     * Convert the space to T so the browser
-     * consistently treats it as local time.
-     */
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime())
+            ? null
+            : new Date(value.getTime())
+    }
+
+    const stringValue = String(value).trim()
+    const dateOnlyMatch = stringValue.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+
+    if (dateOnlyMatch) {
+        const [, year, month, day] = dateOnlyMatch.map(Number)
+        const localDate = new Date(year, month - 1, day)
+
+        return localDate.getFullYear() === year &&
+            localDate.getMonth() === month - 1 &&
+            localDate.getDate() === day
+            ? localDate
+            : null
+    }
 
     const normalized =
-        typeof value === 'string'
-            ? value.replace(
-                ' ',
-                'T'
-            )
-            : value
+        stringValue.replace(' ', 'T')
 
     const date =
         new Date(normalized)
@@ -360,7 +383,7 @@ function parseDate(value) {
 
 function getScheduledStartFromRemarks(remarks) {
     const match = String(remarks || '').match(
-        /(?:commitment start|scheduled start(?: date\/time)?|target resolution date):\s*(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?)/i
+        /(?:commitment start(?: date)?|scheduled start(?: date(?:\/time)?)?|target resolution date):\s*(\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)/i
     )
 
     return match ? parseDate(match[1]) : null
@@ -414,7 +437,11 @@ function getConcernDuration(
         return 'Not started'
     }
 
-    const histories = concern.statusHistory || []
+    const histories = (concern.statusHistory || [])
+        .slice()
+        .sort((left, right) =>
+            new Date(left.created_at) - new Date(right.created_at)
+        )
     let elapsedMilliseconds = 0
     let activeSince = null
     const latestInProgressHistory = [...histories]
@@ -445,7 +472,7 @@ function getConcernDuration(
                 ) ||
                 changedAt
         } else if (
-            ['on_hold', 'resolved', 'closed'].includes(history.new_status) &&
+            ['on_hold', 'resolved', 'closed', 'cancelled'].includes(history.new_status) &&
             activeSince
         ) {
             elapsedMilliseconds += Math.max(
@@ -469,9 +496,7 @@ function getConcernDuration(
             ? parseDate(concern.resolved_at)
             : concern.status === 'in_progress'
                 ? currentTime.value
-                : concern.status === 'on_hold'
-                    ? parseDate(concern.updated_at)
-                    : null
+                : null
 
         if (start && end) {
             elapsedMilliseconds = Math.max(
@@ -481,66 +506,12 @@ function getConcernDuration(
         }
     }
 
-    if (
-        elapsedMilliseconds === 0 &&
-        activeSince &&
-        currentTime.value.getTime() < activeSince.getTime()
-    ) {
+    if (elapsedMilliseconds <= 0) {
         return 'Not started'
     }
 
-    if (
-        elapsedMilliseconds === 0 &&
-        (!activeSince || currentTime.value.getTime() < activeSince.getTime())
-    ) {
-        return 'Not started'
-    }
-
-    const totalMinutes = Math.floor(elapsedMilliseconds / 60000)
-
-    const days =
-        Math.floor(
-            totalMinutes / 1440
-        )
-
-    const hours =
-        Math.floor(
-            (
-                totalMinutes % 1440
-            ) / 60
-        )
-
-    const minutes =
-        totalMinutes % 60
-
-    const parts = []
-
-    if (
-        days > 0
-    ) {
-        parts.push(
-            `${days}d`
-        )
-    }
-
-    if (
-        hours > 0
-    ) {
-        parts.push(
-            `${hours}h`
-        )
-    }
-
-    if (
-        minutes > 0 ||
-        parts.length === 0
-    ) {
-        parts.push(
-            `${minutes}m`
-        )
-    }
-
-    return parts.join(' ')
+    const days = Math.floor(elapsedMilliseconds / 86400000)
+    return `${days} day${days === 1 ? '' : 's'}`
 }
 
 /*
@@ -1235,6 +1206,41 @@ async function loadData() {
     }
 }
 
+let handlingGuideCreateAction = false
+
+async function handleGuideCreateAction() {
+    if (route.query.guideAction !== 'create' || handlingGuideCreateAction) {
+        return
+    }
+
+    handlingGuideCreateAction = true
+
+    try {
+        if (!currentUser.value) {
+            await loadCurrentUser()
+        }
+
+        if (['concern_handler', 'requestor'].includes(currentUser.value?.role_name)) {
+            showModal.value = true
+        }
+
+        const query = { ...route.query }
+        delete query.guideAction
+        await navigateTo({ path: route.path, query }, { replace: true })
+    } finally {
+        handlingGuideCreateAction = false
+    }
+}
+
+watch(
+    () => route.query.guideAction,
+    (action) => {
+        if (action === 'create') {
+            handleGuideCreateAction()
+        }
+    }
+)
+
 /*
  * LOGOUT
  */
@@ -1278,7 +1284,11 @@ onMounted(() => {
 
     window.addEventListener('scroll', handlePageScroll, { passive: true })
 
-    loadData()
+    if (route.query.guideAction === 'create') {
+        loadData().then(handleGuideCreateAction)
+    } else {
+        loadData()
+    }
 
     durationTimer =
         setInterval(
@@ -1339,7 +1349,7 @@ onUnmounted(() => {
 
             </div>
 
-            <nav class="flex-1 space-y-1 px-3 py-4">
+            <nav class="sidebar-navigation flex-1 space-y-1 px-3 py-4">
 
                 <NuxtLink to="/dashboard" :class="$route.path === '/dashboard'
                     ? 'bg-blue-800 text-white'
@@ -1355,8 +1365,7 @@ onUnmounted(() => {
                 </NuxtLink>
 
                 <NuxtLink v-if="
-                    currentUser?.role_name ===
-                    'superadmin'
+                    ['superadmin', 'system_admin'].includes(currentUser?.role_name)
                 " to="/users" :class="$route.path === '/users'
                     ? 'bg-blue-800 text-white'
                     : 'text-blue-100/80 transition hover:bg-white hover:text-black'
@@ -1372,8 +1381,7 @@ onUnmounted(() => {
 
 
                 <NuxtLink v-if="
-                    currentUser?.role_name ===
-                    'superadmin'
+                    ['superadmin', 'system_admin'].includes(currentUser?.role_name)
                 " to="/organizations" :class="$route.path === '/organizations'
                     ? 'bg-blue-800 text-white'
                     : 'text-blue-100/80 transition hover:bg-white hover:text-black'
@@ -1413,10 +1421,7 @@ onUnmounted(() => {
 
                 </NuxtLink>
 
-                <NuxtLink v-if="
-                    currentUser?.role_name ===
-                    'superadmin'
-                " to="/login-history" :class="$route.path === '/login-history'
+                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/login-history" :class="$route.path === '/login-history'
                     ? 'bg-blue-800 text-white'
                     : 'text-blue-100/80 transition hover:bg-white hover:text-black'
                     " class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
@@ -1458,8 +1463,8 @@ onUnmounted(() => {
                     isHeaderSticky ? 'py-6 sm:py-8 lg:py-3' : 'py-6 sm:py-8'
                 ]">
 
-                    <div>
-
+                    <div class="flex min-w-0 items-start justify-between gap-3">
+                        <div class="min-w-0">
                         <h2 class="text-xl font-semibold text-slate-900">
                             Concerns
                         </h2>
@@ -1467,18 +1472,23 @@ onUnmounted(() => {
                         <p class="mt-1 text-sm text-slate-500">
                             View and manage concerns.
                         </p>
-
-                    </div>
-
-                    <div class="flex flex-col gap-2 sm:flex-row">
-                        <button v-if="['superadmin', 'admin', 'user'].includes(currentUser?.role_name)" type="button"
+                        </div>
+                        <button v-if="['superadmin', 'system_admin', 'concern_handler', 'requestor'].includes(currentUser?.role_name)" type="button"
                             @click="toggleTrashView"
-                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                            class="inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:py-2.5 sm:text-sm lg:hidden">
                             <span aria-hidden="true">{{ trashView ? '←' : '▱' }}</span>
                             {{ trashView ? 'Back to Concerns' : 'View Trash' }}
                         </button>
+                    </div>
 
-                        <button v-if="!trashView && ['admin', 'user'].includes(currentUser?.role_name)" type="button"
+                    <div class="flex flex-col gap-2 sm:flex-row">
+                        <button v-if="['superadmin', 'system_admin', 'concern_handler', 'requestor'].includes(currentUser?.role_name)" type="button"
+                            @click="toggleTrashView"
+                            class="hidden shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:py-2.5 sm:text-sm lg:inline-flex">
+                            <span aria-hidden="true">{{ trashView ? '←' : '▱' }}</span>
+                            {{ trashView ? 'Back to Concerns' : 'View Trash' }}
+                        </button>
+                        <button v-if="!trashView && ['concern_handler', 'requestor'].includes(currentUser?.role_name)" type="button"
                             @click="openCreateModal"
                             class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 hover:shadow-md active:scale-[0.99]">
                             <span class="text-lg leading-none">+</span>
@@ -1509,7 +1519,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Search and quick actions -->
-                <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div class="mb-4 flex flex-row items-center gap-2 sm:gap-3">
                     <div class="relative min-w-0 flex-1">
                         <label for="concern-search" class="sr-only">Search concerns</label>
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true">
@@ -1522,16 +1532,16 @@ onUnmounted(() => {
                             @input="handleSearchInput"
                             type="search"
                             placeholder="Search concern number, title, or description..."
-                            class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm outline-none shadow-sm transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15"
+                            class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-2 text-xs outline-none shadow-sm transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15 sm:pl-11 sm:pr-4 sm:text-sm"
                         />
                     </div>
 
-                    <div class="flex shrink-0 items-center gap-2">
+                    <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
                         <button
                             type="button"
                             :aria-expanded="showFilterPanel"
                             aria-controls="concern-filter-panel"
-                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-700/20"
+                            class="inline-flex h-11 w-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-2 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-700/20 sm:h-auto sm:w-auto sm:px-4 sm:py-3"
                             :class="showFilterPanel || activeFilterCount
                                 ? 'border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100'
                                 : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'"
@@ -1540,7 +1550,7 @@ onUnmounted(() => {
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M7 12h10m-7 6h4" />
                             </svg>
-                            <span>Filters</span>
+                            <span class="sr-only sm:not-sr-only">Filters</span>
                             <span v-if="activeFilterCount" class="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-900 px-1 text-[10px] font-bold text-white">{{ activeFilterCount }}</span>
                         </button>
 
@@ -1548,7 +1558,7 @@ onUnmounted(() => {
                             type="button"
                             @click="openExportModal"
                             :disabled="exporting"
-                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-900 shadow-sm transition hover:border-blue-300 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-700/20 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="inline-flex h-11 w-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-2 py-2 text-sm font-semibold text-blue-900 shadow-sm transition hover:border-blue-300 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-700/20 disabled:cursor-not-allowed disabled:opacity-50 sm:h-auto sm:w-auto sm:px-4 sm:py-3"
                         >
                             <svg v-if="!exporting" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
@@ -1556,7 +1566,7 @@ onUnmounted(() => {
                             <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5 animate-spin" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 9 9" />
                             </svg>
-                            <span>{{ exporting ? 'Exporting…' : 'Export' }}</span>
+                            <span class="sr-only sm:not-sr-only">{{ exporting ? 'Exporting…' : 'Export' }}</span>
                         </button>
                     </div>
                 </div>
@@ -1637,7 +1647,7 @@ onUnmounted(() => {
                             <p class="mt-0.5 text-xs leading-5 text-amber-900">Pending concerns with no response from the assigned organization within four hours.</p>
                         </div>
                     </div>
-                    <button type="button" class="cursor-pointer self-start rounded-lg border border-amber-400 bg-white px-3 py-2 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 sm:self-auto" @click="clearLateResponseFilter">Clear filter</button>
+                    <button type="button" class="cursor-pointer self-start rounded-lg border border-rose bg-white px-3 py-2 text-xs font-semibold text-amber-900 transition hover:bg-rose-100 sm:self-auto" @click="clearLateResponseFilter">Clear filter</button>
                 </div>
 
                 <div class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
@@ -1650,13 +1660,9 @@ onUnmounted(() => {
                             {{ trashView ? 'Trashed Concerns' : 'Concern List' }}
                         </h3>
 
-                        <p v-if="loading" class="mt-1 flex items-center gap-2 text-xs text-slate-400">
-
-                            <span class="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-slate-300"></span>
-
-                            Loading concerns...
-
-                        </p>
+                        <div v-if="loading" class="mt-2">
+                            <CodeLoadingLine label="Loading concerns..." />
+                        </div>
 
                         <p v-else class="mt-1 text-xs text-slate-500">
 
@@ -1684,11 +1690,11 @@ onUnmounted(() => {
 
                     <!-- Desktop Loading -->
 
-                    <div v-if="loading" class="hidden animate-pulse lg:block">
+                    <div v-if="loading" class="hidden lg:block">
 
                         <div class="grid grid-cols-6 gap-6 border-b border-slate-200 bg-slate-50 px-5 py-3">
 
-                            <div v-for="column in 6" :key="column" class="h-3 rounded bg-slate-200"></div>
+                            <CodeSkeleton v-for="column in 6" :key="column" :length="6" class="h-3 w-full rounded" />
 
                         </div>
 
@@ -1697,19 +1703,19 @@ onUnmounted(() => {
 
                             <div class="col-span-2 space-y-2">
 
-                                <div class="h-4 w-24 rounded bg-slate-200"></div>
+                                <CodeSkeleton :length="7" class="h-4 w-24 rounded" />
 
-                                <div class="h-3 w-36 rounded bg-slate-100"></div>
+                                <CodeSkeleton :length="10" class="h-3 w-36 rounded" />
 
                             </div>
 
-                            <div class="h-4 rounded bg-slate-200"></div>
+                            <CodeSkeleton :length="10" class="h-4 rounded" />
 
-                            <div class="h-6 w-16 rounded-full bg-slate-200"></div>
+                            <CodeSkeleton :length="5" class="h-6 w-16 rounded-full" />
 
-                            <div class="h-6 w-20 rounded-full bg-slate-200"></div>
+                            <CodeSkeleton :length="6" class="h-6 w-20 rounded-full" />
 
-                            <div class="h-4 w-24 rounded bg-slate-200"></div>
+                            <CodeSkeleton :length="7" class="h-4 w-24 rounded" />
 
                         </div>
 
@@ -1719,13 +1725,13 @@ onUnmounted(() => {
 
                     <div v-if="loading" class="space-y-3 p-4 lg:hidden">
 
-                        <div v-for="row in 4" :key="row" class="animate-pulse rounded-xl border border-slate-200 p-4">
+                        <div v-for="row in 4" :key="row" class="rounded-xl border border-slate-200 p-4">
 
-                            <div class="h-4 w-28 rounded bg-slate-200"></div>
+                            <CodeSkeleton :length="8" class="h-4 w-28 rounded" />
 
-                            <div class="mt-3 h-4 w-3/4 rounded bg-slate-200"></div>
+                            <CodeSkeleton :length="12" class="mt-3 h-4 w-3/4 rounded" />
 
-                            <div class="mt-4 h-3 w-1/2 rounded bg-slate-100"></div>
+                            <CodeSkeleton :length="9" class="mt-4 h-3 w-1/2 rounded" />
 
                         </div>
 
@@ -1771,7 +1777,7 @@ onUnmounted(() => {
                                         <th
                                             class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('title')"
-                                                class="inline-flex items-center gap-1.5 transition hover:text-blue-800"
+                                                class="inline-flex cursor-pointer items-center gap-1.5 transition hover:text-blue-800"
                                                 :aria-label="`Sort by concern title ${sortDirection === 'asc' ? 'descending' : 'ascending'}`">
                                                 Concern
                                                 <span class="text-sm" aria-hidden="true">{{ sortIndicator('title')
@@ -1779,24 +1785,29 @@ onUnmounted(() => {
                                             </button>
                                         </th>
 
+                                        <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            <button type="button" @click="changeSort('created_by')"
+                                                class="inline-flex cursor-pointer items-center gap-1.5 transition hover:text-blue-800">
+                                                Created By
+                                                <span class="text-sm" aria-hidden="true">{{ sortIndicator('created_by')
+                                                }}</span>
+                                            </button>
+                                        </th>
+
                                         <th
                                             class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('assigned_to')"
-                                                class="inline-flex items-center gap-1.5 transition hover:text-blue-800">
+                                                class="inline-flex cursor-pointer items-center gap-1.5 transition hover:text-blue-800">
                                                 Assigned To
                                                 <span class="text-sm" aria-hidden="true">{{ sortIndicator('assigned_to')
                                                 }}</span>
                                             </button>
                                         </th>
 
-                                        <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                            Created By
-                                        </th>
-
                                         <th
                                             class="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('priority')"
-                                                class="inline-flex items-center gap-1.5 transition hover:text-blue-800">
+                                                class="inline-flex cursor-pointer items-center gap-1.5 transition hover:text-blue-800">
                                                 Priority
                                                 <span class="text-sm" aria-hidden="true">{{ sortIndicator('priority')
                                                 }}</span>
@@ -1806,7 +1817,7 @@ onUnmounted(() => {
                                         <th
                                             class="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('status')"
-                                                class="inline-flex items-center gap-1.5 transition hover:text-blue-800">
+                                                class="inline-flex cursor-pointer items-center gap-1.5 transition hover:text-blue-800">
                                                 Status
                                                 <span class="text-sm" aria-hidden="true">{{ sortIndicator('status')
                                                 }}</span>
@@ -1816,7 +1827,7 @@ onUnmounted(() => {
                                         <th
                                             class="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                             <button type="button" @click="changeSort('target_commitment_at')"
-                                                class="inline-flex items-center gap-1.5 transition hover:text-blue-800">
+                                                class="inline-flex cursor-pointer items-center gap-1.5 transition hover:text-blue-800">
                                                 Committed Start
                                                 <span class="text-sm" aria-hidden="true">{{
                                                     sortIndicator('target_commitment_at') }}</span>
@@ -1832,8 +1843,8 @@ onUnmounted(() => {
                                         <tr v-for="(concern, index) in concerns" :key="concern.id" role="button"
                                         tabindex="0" @click="viewConcern(concern)"
                                         @keydown="handleConcernRowKeydown($event, concern)" :class="index % 2 === 0
-                                            ? (responseAttentionState(concern) ? 'bg-amber-50 hover:bg-amber-100/80' : 'bg-white hover:bg-blue-50/50')
-                                            : (responseAttentionState(concern) ? 'bg-amber-50/70 hover:bg-amber-100/80' : 'bg-slate-50 hover:bg-blue-50/70')
+                                            ? (responseAttentionState(concern) ? 'bg-rose-50 hover:bg-rose-100/80' : 'bg-white hover:bg-blue-50/50')
+                                            : (responseAttentionState(concern) ? 'bg-rose-50/70 hover:bg-rose-100/80' : 'bg-slate-50 hover:bg-blue-50/70')
                                             "
                                         class="cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700">
 
@@ -1851,7 +1862,7 @@ onUnmounted(() => {
                                                 v-if="responseAttentionState(concern)"
                                                 class="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold"
                                                 :class="responseAttentionState(concern) === 'overdue'
-                                                    ? 'border-amber-300 bg-amber-100 text-amber-900'
+                                                    ? 'border-rose-300 bg-rose-100 text-rose-900'
                                                     : 'border-rose-300 bg-rose-100 text-rose-900'"
                                                 :title="responseAttentionState(concern) === 'overdue'
                                                     ? 'The assigned organization has not responded within 4 hours.'
@@ -1884,6 +1895,17 @@ onUnmounted(() => {
 
                                         </td>
 
+                                        <!-- Created By -->
+
+                                        <td class="px-4 py-4">
+                                            <p class="truncate text-sm font-medium text-slate-700" :title="concern.created_by_name || '-'">
+                                                {{ concern.created_by_name || '-' }}
+                                            </p>
+                                            <p v-if="concern.creator_organization_name" class="mt-1 truncate text-xs text-slate-500" :title="concern.creator_organization_name">
+                                                {{ concern.creator_organization_name }}
+                                            </p>
+                                        </td>
+
                                         <!-- Assigned To -->
 
                                         <td class="px-4 py-4">
@@ -1897,17 +1919,6 @@ onUnmounted(() => {
                                                 }}
                                             </p>
 
-                                        </td>
-
-                                        <!-- Created By -->
-
-                                        <td class="px-4 py-4">
-                                            <p class="truncate text-sm font-medium text-slate-700" :title="concern.created_by_name || '-'">
-                                                {{ concern.created_by_name || '-' }}
-                                            </p>
-                                            <p v-if="concern.creator_organization_name" class="mt-1 truncate text-xs text-slate-500" :title="concern.creator_organization_name">
-                                                {{ concern.creator_organization_name }}
-                                            </p>
                                         </td>
 
                                         <!-- Priority -->
@@ -1959,7 +1970,7 @@ onUnmounted(() => {
                                             <p class="text-sm font-semibold text-slate-800">
 
                                                 {{
-                                                    formatDate(
+                                                    formatDateOnly(
                                                         concern.target_commitment_at
                                                     )
                                                 }}
@@ -2008,7 +2019,7 @@ onUnmounted(() => {
                             <article v-for="(concern, index) in concerns" :key="concern.id" role="button" tabindex="0"
                                 @click="viewConcern(concern)" @keydown="handleConcernRowKeydown($event, concern)"
                                 :class="responseAttentionState(concern)
-                                    ? 'border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100'
+                                    ? 'border-rose-300 bg-rose-50 hover:border-rose-400 hover:bg-rose-100'
                                     : index % 2 === 0
                                         ? 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
                                         : 'border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/70'"
@@ -2047,7 +2058,7 @@ onUnmounted(() => {
                                         v-if="responseAttentionState(concern)"
                                         class="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold"
                                         :class="responseAttentionState(concern) === 'overdue'
-                                            ? 'border-amber-300 bg-amber-100 text-amber-900'
+                                            ? 'border-rose-300 bg-rose-100 text-rose-900'
                                             : 'border-rose-300 bg-rose-100 text-rose-900'"
                                     >
                                         <span aria-hidden="true">⏱</span>
@@ -2094,12 +2105,29 @@ onUnmounted(() => {
                                 <div
                                     class="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-slate-100 pt-3 text-xs">
 
+                                    <!-- Created By -->
+
+                                    <div class="min-w-0">
+
+                                        <p class="text-slate-400">
+                                            Created By
+                                        </p>
+
+                                        <p class="mt-0.5 truncate font-medium text-slate-700">
+                                            {{
+                                                concern.created_by_name ||
+                                                '-'
+                                            }}
+                                        </p>
+
+                                    </div>
+
                                     <!-- Assigned To -->
 
                                     <div class="min-w-0">
 
                                         <p class="text-slate-400">
-                                            Assigned to
+                                            Assigned To
                                         </p>
 
                                         <p class="mt-0.5 truncate font-medium text-slate-700" :title="concern.organization_name ||
@@ -2130,23 +2158,6 @@ onUnmounted(() => {
 
                                     </div>
 
-                                    <!-- Created By -->
-
-                                    <div class="min-w-0">
-
-                                        <p class="text-slate-400">
-                                            Created by
-                                        </p>
-
-                                        <p class="mt-0.5 truncate font-medium text-slate-700">
-                                            {{
-                                                concern.created_by_name ||
-                                                '-'
-                                            }}
-                                        </p>
-
-                                    </div>
-
                                     <!-- Target Commitment -->
 
                                     <div class="min-w-0">
@@ -2157,7 +2168,7 @@ onUnmounted(() => {
 
                                         <p class="mt-0.5 font-medium text-slate-700">
                                             {{
-                                                formatDate(
+                                                formatDateOnly(
                                                     concern.target_commitment_at
                                                 )
                                             }}

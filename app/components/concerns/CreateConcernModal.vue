@@ -429,11 +429,11 @@ onUnmounted(() => {
             class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
 
             <!-- Header -->
-            <div class="flex items-center justify-between border-b border-blue-800 bg-linear-to-r from-blue-950 via-blue-900 to-indigo-800 px-4 py-5 text-white sm:px-6 sm:py-6">
+            <div class="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-5 sm:px-6 sm:py-6">
 
                 <div class="flex items-center gap-3">
 
-                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-blue-100 shadow-inner">
+                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-800">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                             stroke-width="1.8" stroke="currentColor" class="h-6 w-6" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -443,11 +443,11 @@ onUnmounted(() => {
 
                     <div>
 
-                    <h3 class="text-lg font-bold tracking-tight text-white">
+                    <h3 class="text-xl font-semibold text-slate-900">
                         Create Concern
                     </h3>
 
-                    <p class="mt-1 text-sm text-blue-100/80">
+                    <p class="mt-1 text-sm text-slate-500">
                         Submit a new concern for the assigned organization.
                     </p>
 
@@ -456,8 +456,14 @@ onUnmounted(() => {
                 </div>
 
                 <button type="button" @click="closeModal" :disabled="saving"
-                    class="cursor-pointer rounded-lg border border-white/15 bg-white/10 p-2 text-2xl leading-none text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50">
-                    ×
+                    aria-label="Close modal"
+                    class="group relative flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50">
+                    <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" aria-hidden="true"
+                        class="absolute h-6 w-6 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                    </svg>
                 </button>
 
             </div>

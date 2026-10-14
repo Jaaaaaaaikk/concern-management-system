@@ -1,9 +1,9 @@
 import db from '../../utils/db.js'
 import { hashPassword } from '../../utils/auth.js'
-import { requireRole } from '../../utils/require-auth.js'
+import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
 
 export default defineEventHandler(async (event) => {
-  await requireRole(event, ['superadmin'])
+  const currentUser = await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
 
   const body = await readBody(event)
 
@@ -77,9 +77,20 @@ export default defineEventHandler(async (event) => {
 
     const role = roleRows[0]
 
-    // Organization is required for admin and user accounts
+    const allowedRoleNames = currentUser.role_name === 'superadmin'
+      ? ['system_admin', 'concern_handler', 'system_monitor', 'requestor']
+      : ['concern_handler', 'requestor']
+
+    if (!allowedRoleNames.includes(role.name)) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'You cannot assign that account role.'
+      })
+    }
+
+    // All organization-level roles require an organization.
     if (
-      (role.name === 'admin' || role.name === 'user') &&
+      ['concern_handler', 'system_monitor', 'requestor'].includes(role.name) &&
       !organizationId
     ) {
       throw createError({
@@ -122,9 +133,11 @@ export default defineEventHandler(async (event) => {
         last_name,
         role_id,
         organization_id,
-        status
+        status,
+        created_by,
+        updated_by
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
       `,
       [
         username,
@@ -133,7 +146,9 @@ export default defineEventHandler(async (event) => {
         middleName,
         lastName,
         roleId,
-        organizationId
+        organizationId,
+        currentUser.id,
+        currentUser.id
       ]
     )
 

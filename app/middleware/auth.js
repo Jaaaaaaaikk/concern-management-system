@@ -17,7 +17,15 @@ export default defineNuxtRouteMiddleware(async () => {
 
     if (statusCode === 401) {
       currentUser.value = null
-      return navigateTo('/login')
+      const statusMessage = error?.data?.statusMessage ?? error?.statusMessage
+
+      if (import.meta.client && statusMessage === 'SESSION_REVOKED') {
+        await $fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+      }
+
+      const revokedQuery = statusMessage === 'SESSION_REVOKED' ? '?revoked=1' : ''
+
+      return navigateTo(`/login${revokedQuery}`)
     }
 
     throw error

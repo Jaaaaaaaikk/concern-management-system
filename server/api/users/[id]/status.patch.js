@@ -1,8 +1,8 @@
 import db from '../../../utils/db.js'
-import { requireRole } from '../../../utils/require-auth.js'
+import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../../utils/require-auth.js'
 
 export default defineEventHandler(async (event) => {
-  const currentUser = await requireRole(event, ['superadmin'])
+  const currentUser = await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
 
   const userId = Number(getRouterParam(event, 'id'))
 
@@ -21,6 +21,25 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const [targetRows] = await db.query(
+    `SELECT r.name AS role_name FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE u.id = ? AND u.deleted_at IS NULL LIMIT 1`,
+    [userId]
+  )
+
+  if (targetRows.length === 0) {
+    throw createError({ statusCode: 404, statusMessage: 'User not found.' })
+  }
+
+  if (
+    currentUser.role_name === 'system_admin' &&
+    ['superadmin', 'system_admin'].includes(targetRows[0].role_name)
+  ) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'System Administrators cannot change Superadmin or System Administrator accounts.'
+    })
+  }
+
   const body = await readBody(event)
 
   const status = body?.status
@@ -36,11 +55,11 @@ export default defineEventHandler(async (event) => {
   const [result] = await db.query(
     `
     UPDATE users
-    SET status = ?
+    SET status = ?, updated_by = ?
     WHERE id = ?
       AND deleted_at IS NULL
     `,
-    [status, userId]
+    [status, currentUser.id, userId]
   )
 
   if (result.affectedRows === 0) {

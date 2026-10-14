@@ -1,9 +1,9 @@
 import db from '../../utils/db.js'
-import { requireRole } from '../../utils/require-auth.js'
+import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
 import { hashPassword } from '../../utils/auth.js'
 
 export default defineEventHandler(async (event) => {
-  const currentUser = await requireRole(event, ['superadmin'])
+  const currentUser = await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
 
   const userId = Number(getRouterParam(event, 'id'))
 
@@ -105,7 +105,7 @@ export default defineEventHandler(async (event) => {
   */
 
   if (
-    userId === currentUser.id &&
+    Number(userId) === Number(currentUser.id) &&
     Number(roleId) !== Number(currentUser.role_id)
   ) {
     throw createError({
@@ -124,12 +124,15 @@ export default defineEventHandler(async (event) => {
   const [userRows] = await db.query(
     `
     SELECT
-      id,
-      username,
-      password_hash
+      users.id,
+      users.username,
+      users.password_hash,
+      users.role_id,
+      r.name AS role_name
     FROM users
-    WHERE id = ?
-      AND deleted_at IS NULL
+    INNER JOIN roles r ON r.id = users.role_id
+    WHERE users.id = ?
+      AND users.deleted_at IS NULL
     LIMIT 1
     `,
     [userId]
@@ -139,6 +142,22 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 404,
       statusMessage: 'User not found.'
+    })
+  }
+
+  const existingUser = userRows[0]
+  const protectedRoleNames = ['superadmin', 'system_admin']
+
+  const editingOwnAccount = Number(userId) === Number(currentUser.id)
+
+  if (
+    currentUser.role_name === 'system_admin' &&
+    !editingOwnAccount &&
+    protectedRoleNames.includes(existingUser.role_name)
+  ) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'System Administrators cannot edit Superadmin or other System Administrator accounts.'
     })
   }
 
@@ -193,6 +212,33 @@ export default defineEventHandler(async (event) => {
 
   const role = roleRows[0]
 
+  const retainingOwnSystemAdminRole =
+    editingOwnAccount &&
+    currentUser.role_name === 'system_admin' &&
+    existingUser.role_name === 'system_admin' &&
+    Number(roleId) === Number(existingUser.role_id)
+
+  if (
+    currentUser.role_name === 'system_admin' &&
+    !['concern_handler', 'requestor'].includes(role.name) &&
+    !retainingOwnSystemAdminRole
+  ) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'System Administrators can assign only Concern Handler or Requestor roles.'
+    })
+  }
+
+  if (
+    role.name === 'superadmin' &&
+    !(currentUser.role_name === 'superadmin' && existingUser.role_name === 'superadmin' && Number(roleId) === Number(existingUser.role_id))
+  ) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Superadmin cannot be assigned through user editing.'
+    })
+  }
+
   /*
   |--------------------------------------------------------------------------
   | Superadmin does not need an organization
@@ -201,18 +247,18 @@ export default defineEventHandler(async (event) => {
 
   let finalOrganizationId = organizationId
 
-  if (role.name === 'superadmin') {
+  if (['superadmin', 'system_admin'].includes(role.name)) {
     finalOrganizationId = null
   }
 
   /*
   |--------------------------------------------------------------------------
-  | Admin and User require an organization
+  | Organization-level roles require an organization
   |--------------------------------------------------------------------------
   */
 
   if (
-    (role.name === 'admin' || role.name === 'user') &&
+    ['concern_handler', 'system_monitor', 'requestor'].includes(role.name) &&
     !finalOrganizationId
   ) {
     throw createError({
@@ -275,7 +321,8 @@ export default defineEventHandler(async (event) => {
         middle_name = ?,
         last_name = ?,
         role_id = ?,
-        organization_id = ?
+        organization_id = ?,
+        updated_by = ?
       WHERE id = ?
         AND deleted_at IS NULL
       `,
@@ -287,6 +334,7 @@ export default defineEventHandler(async (event) => {
         lastName,
         roleId,
         finalOrganizationId,
+        currentUser.id,
         userId
       ]
     )
@@ -309,7 +357,8 @@ export default defineEventHandler(async (event) => {
         middle_name = ?,
         last_name = ?,
         role_id = ?,
-        organization_id = ?
+        organization_id = ?,
+        updated_by = ?
       WHERE id = ?
         AND deleted_at IS NULL
       `,
@@ -320,6 +369,7 @@ export default defineEventHandler(async (event) => {
         lastName,
         roleId,
         finalOrganizationId,
+        currentUser.id,
         userId
       ]
     )

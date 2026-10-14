@@ -79,7 +79,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (
-    currentUser.role_name !== 'superadmin' &&
+    !['superadmin', 'system_admin'].includes(currentUser.role_name) &&
     Number(currentUser.id) !== userId
   ) {
     throw createError({
@@ -151,6 +151,20 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  if (currentUser.role_name === 'system_admin' && Number(userId) !== Number(currentUser.id)) {
+    const [targetRoles] = await db.query(
+      `SELECT r.name AS role_name FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE u.id = ? LIMIT 1`,
+      [userId]
+    )
+
+    if (['superadmin', 'system_admin'].includes(targetRoles[0]?.role_name)) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'System Administrators cannot update privileged account photos.'
+      })
+    }
+  }
+
   const previousPhoto = users[0].profile_photo
   let newPhoto = null
   let newFilePath = null
@@ -168,11 +182,11 @@ export default defineEventHandler(async (event) => {
     await db.query(
       `
       UPDATE users
-      SET profile_photo = ?
+      SET profile_photo = ?, updated_by = ?
       WHERE id = ?
         AND deleted_at IS NULL
       `,
-      [newPhoto, userId]
+      [newPhoto, currentUser.id, userId]
     )
   } catch (error) {
     if (newFilePath) {

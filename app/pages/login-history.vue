@@ -2,6 +2,9 @@
 
 import { useStickyHeader } from '~/composables/useStickyHeader'
 import { roleDisplayName } from '~/composables/useRoleLabel'
+import { useToast } from '~/composables/useToast'
+
+const { showToast } = useToast()
 
 definePageMeta({
     middleware: 'auth'
@@ -90,6 +93,60 @@ async function loadData() {
             'Failed to load login history.'
     } finally {
         loading.value = false
+    }
+}
+
+async function logout() {
+    try {
+        await $fetch('/api/auth/logout', {
+            method: 'POST'
+        })
+    } catch (error) {
+        // Continue to the login page even if the session is already invalid.
+    }
+
+    await navigateTo('/login')
+}
+
+const showRevokeModal = ref(false)
+const sessionToRevoke = ref(null)
+const revokingSessionId = ref(null)
+
+function requestRevokeSession(session) {
+    if (!session || session.session_status !== 'active') {
+        return
+    }
+
+    sessionToRevoke.value = session
+    showRevokeModal.value = true
+}
+
+async function confirmRevokeSession() {
+    if (!sessionToRevoke.value || revokingSessionId.value) {
+        return
+    }
+
+    revokingSessionId.value = sessionToRevoke.value.id
+
+    try {
+        await $fetch('/api/auth/login-history/revoke', {
+            method: 'POST',
+            body: {
+                session_id: sessionToRevoke.value.id
+            }
+        })
+
+        showToast('Session revoked successfully.')
+        showRevokeModal.value = false
+        sessionToRevoke.value = null
+        await loadLoginHistory()
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage || error?.statusMessage || 'Unable to revoke this session.',
+            'error'
+        )
+    } finally {
+        revokingSessionId.value = null
     }
 }
 
@@ -243,13 +300,21 @@ async function goToNextPage() {
     }
 }
 
-onMounted(() => {
-    loadData()
-})
+onMounted(loadData)
 </script>
 
 <template>
     <div class="min-h-screen bg-slate-100">
+        <ConfirmActionModal
+            :show="showRevokeModal"
+            title="Revoke this active session?"
+            :message="`This will immediately sign out the user for session #${sessionToRevoke?.id ?? ''}. They will need to log in again.`"
+            confirm-label="Revoke session"
+            :loading="Boolean(revokingSessionId)"
+            tone="danger"
+            @cancel="showRevokeModal = false; sessionToRevoke = null"
+            @confirm="confirmRevokeSession"
+        />
         <aside class="fixed inset-y-0 left-0 z-40 hidden h-screen w-64 flex-col bg-blue-950 text-white lg:flex">
             <div class="px-6 py-5">
                 <div>
@@ -258,7 +323,7 @@ onMounted(() => {
                 </div>
             </div>
 
-            <nav class="flex-1 space-y-1 px-3 py-4">
+            <nav class="sidebar-navigation flex-1 space-y-1 px-3 py-4">
                 <NuxtLink to="/dashboard"
                     :class="$route.path === '/dashboard' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
@@ -266,14 +331,14 @@ onMounted(() => {
                     <span>Dashboard</span>
                 </NuxtLink>
 
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/users"
+                <NuxtLink v-if="['superadmin', 'system_admin'].includes(currentUser?.role_name)" to="/users"
                     :class="$route.path === '/users' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="users" />
                     <span>Manage Users</span>
                 </NuxtLink>
 
-                <NuxtLink v-if="currentUser?.role_name === 'superadmin'" to="/organizations"
+                <NuxtLink v-if="['superadmin', 'system_admin'].includes(currentUser?.role_name)" to="/organizations"
                     :class="$route.path === '/organizations' ? 'bg-blue-800 text-white' : 'text-blue-100/80 transition hover:bg-white hover:text-black'"
                     class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium">
                     <NavIcon name="organizations" />
@@ -305,12 +370,12 @@ onMounted(() => {
             </nav>
 
             <div class="p-4">
-                <UserProfileControl :current-user="currentUser" />
+                <UserProfileControl :current-user="currentUser" @logout="logout" />
             </div>
         </aside>
 
         <main class="flex min-h-screen flex-col lg:ml-64">
-            <MobileNavigation :current-user="currentUser" />
+            <MobileNavigation :current-user="currentUser" @logout="logout" />
 
             <header :class="[
                 'border-b border-slate-200 px-4 py-5 backdrop-blur-md transition-[transform,opacity,background-color,box-shadow,padding] duration-300 ease-out sm:px-6 lg:px-8',
@@ -334,32 +399,31 @@ onMounted(() => {
                     {{ errorMessage }}
                 </div>
 
-                <div v-if="loading" class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
-                    <div class="p-8 text-center text-sm text-slate-500">
-                        Loading login history...
-                    </div>
-                </div>
-
-                <div v-else class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
+                <div class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
                     <div class="border-b border-slate-200 bg-slate-50/80 p-3 sm:p-4">
-                        <div class="grid grid-cols-2 gap-2 rounded-xl bg-slate-200/70 p-1">
-                            <button type="button" @click="selectSessionView('active')" :class="sessionView === 'active'
-                                ? 'bg-white text-blue-900 shadow-sm ring-1 ring-blue-100 cursor-pointer'
-                                : 'text-slate-600 hover:text-slate-900 cursor-pointer'"
-                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition">
-                                <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-                                Active now
-                                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">{{
-                                    sessionCounts.active }}</span>
-                            </button>
-                            <button type="button" @click="selectSessionView('history')" :class="sessionView === 'history'
-                                ? 'bg-white text-blue-900 shadow-sm ring-1 ring-blue-100'
-                                : 'text-slate-600 hover:text-slate-900 cursor-pointer'"
-                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition">
-                                Session history
-                                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{{
-                                    sessionCounts.history }}</span>
-                            </button>
+                        <div class="rounded-xl bg-slate-200/70 p-1">
+                            <div class="relative grid grid-cols-2">
+                                <span
+                                    aria-hidden="true"
+                                    class="absolute inset-y-0 left-0 w-1/2 rounded-lg bg-white shadow-sm ring-1 ring-blue-100 transition-transform duration-300 ease-in-out motion-reduce:transition-none"
+                                    :class="sessionView === 'history' ? 'translate-x-full' : 'translate-x-0'"
+                                ></span>
+                                <button type="button" @click="selectSessionView('active')"
+                                    :class="sessionView === 'active' ? 'text-blue-900' : 'text-slate-600 hover:text-slate-900'"
+                                    class="relative z-10 flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition-colors">
+                                    <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                                    Active now
+                                    <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">{{
+                                        sessionCounts.active }}</span>
+                                </button>
+                                <button type="button" @click="selectSessionView('history')"
+                                    :class="sessionView === 'history' ? 'text-blue-900' : 'text-slate-600 hover:text-slate-900'"
+                                    class="relative z-10 flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition-colors">
+                                    Session history
+                                    <span class="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-700">{{
+                                        sessionCounts.history }}</span>
+                                </button>
+                            </div>
                         </div>
                         <p class="px-1 pt-3 text-xs text-slate-500">
                             {{ sessionView === 'active'
@@ -368,73 +432,140 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full text-left">
-                            <thead class="bg-slate-50">
-                                <tr class="border-b border-slate-200">
-                                    <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        User</th>
-                                    <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Role</th>
-                                    <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Organization</th>
-                                    <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Status</th>
-                                    <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Login</th>
-                                    <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                        Expires</th>
-                                </tr>
-                            </thead>
-
-                            <tbody v-if="sessions.length === 0" class="divide-y divide-slate-100">
-                                <tr>
-                                    <td colspan="6" class="px-5 py-12 text-center text-sm text-slate-500">
-                                        No login sessions found.
-                                    </td>
-                                </tr>
-                            </tbody>
-
-                            <tbody v-else class="divide-y divide-slate-200">
-                                <tr v-for="(session, index) in sessions" :key="session.id"
-                                    :class="index % 2 === 0 ? 'bg-white' : 'bg-slate-50'"
-                                    class="transition hover:bg-blue-50/60">
-                                    <td class="px-5 py-4">
-                                        <p class="text-sm font-semibold text-slate-800">{{ session.full_name }}</p>
-                                        <p class="mt-1 text-xs text-slate-500">{{ session.username }}</p>
-                                    </td>
-
-                                    <td class="px-5 py-4 text-sm text-slate-600">
-                                        <span
-                                            class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                                            {{ roleDisplayName(session.role_name) }}
-                                        </span>
-                                    </td>
-
-                                    <td class="px-5 py-4 text-sm text-slate-600">
-                                        {{ session.organization_name || '-' }}
-                                    </td>
-
-                                    <td class="px-5 py-4">
-                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-                                            :class="sessionStatusClass(session.session_status)">
-                                            {{ statusLabel(session.session_status) }}
-                                        </span>
-                                    </td>
-
-                                    <td class="px-5 py-4 text-sm text-slate-600">
-                                        {{ formatDate(session.login_at) }}
-                                    </td>
-
-                                    <td class="px-5 py-4 text-sm text-slate-600">
-                                        {{ formatDate(session.expires_at) }}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div v-if="loading" class="p-8 text-center">
+                        <CodeLoadingLine label="Loading login history..." />
                     </div>
 
-                    <div v-if="totalPages > 1"
+                    <div v-else class="">
+                        <div class="hidden overflow-x-auto lg:block">
+                            <table class="min-w-full text-left">
+                                <thead class="bg-slate-50">
+                                    <tr class="border-b border-slate-200">
+                                        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            User</th>
+                                        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            Role</th>
+                                        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            Organization</th>
+                                        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            Status</th>
+                                        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            Login</th>
+                                        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            Expires</th>
+                                        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                            Action</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody v-if="sessions.length === 0" class="divide-y divide-slate-100">
+                                    <tr>
+                                        <td colspan="7" class="px-5 py-12 text-center text-sm text-slate-500">
+                                            No login sessions found.
+                                        </td>
+                                    </tr>
+                                </tbody>
+
+                                <tbody v-else class="divide-y divide-slate-200">
+                                    <tr v-for="(session, index) in sessions" :key="session.id"
+                                        :class="index % 2 === 0 ? 'bg-white' : 'bg-slate-50'"
+                                        class="transition hover:bg-blue-50/60">
+                                        <td class="px-5 py-4">
+                                            <p class="text-sm font-semibold text-slate-800">{{ session.full_name }}</p>
+                                            <p class="mt-1 text-xs text-slate-500">{{ session.username }}</p>
+                                        </td>
+
+                                        <td class="px-5 py-4 text-sm text-slate-600">
+                                            <span
+                                                class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                                {{ roleDisplayName(session.role_name) }}
+                                            </span>
+                                        </td>
+
+                                        <td class="px-5 py-4 text-sm text-slate-600">
+                                            {{ session.organization_name || '-' }}
+                                        </td>
+
+                                        <td class="px-5 py-4">
+                                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+                                                :class="sessionStatusClass(session.session_status)">
+                                                {{ statusLabel(session.session_status) }}
+                                            </span>
+                                        </td>
+
+                                        <td class="px-5 py-4 text-sm text-slate-600">
+                                            {{ formatDate(session.login_at) }}
+                                        </td>
+
+                                        <td class="px-5 py-4 text-sm text-slate-600">
+                                            {{ formatDate(session.expires_at) }}
+                                        </td>
+
+                                        <td v-if="session.session_status === 'active'" class="px-5 py-4">
+                                            <button
+                                                type="button"
+                                                class="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                                                @click="requestRevokeSession(session)"
+                                            >
+                                                Revoke
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div v-if="sessions.length === 0" class="px-4 py-10 text-center text-sm text-slate-500 lg:hidden">
+                            No login sessions found.
+                        </div>
+
+                        <div v-else class="space-y-3 p-3 lg:hidden">
+                            <article v-for="session in sessions" :key="session.id"
+                                class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-semibold text-slate-800">{{ session.full_name }}</p>
+                                        <p class="mt-1 text-xs text-slate-500">{{ session.username }}</p>
+                                    </div>
+                                    <span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium"
+                                        :class="sessionStatusClass(session.session_status)">
+                                        {{ statusLabel(session.session_status) }}
+                                    </span>
+                                </div>
+
+                                <div class="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-xs text-slate-600">
+                                    <div>
+                                        <p class="text-slate-400">Role</p>
+                                        <p class="mt-1 font-medium text-slate-700">{{ roleDisplayName(session.role_name) }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-slate-400">Organization</p>
+                                        <p class="mt-1 font-medium text-slate-700">{{ session.organization_name || '-' }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-slate-400">Login</p>
+                                        <p class="mt-1 font-medium text-slate-700">{{ formatDate(session.login_at) }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-slate-400">Expires</p>
+                                        <p class="mt-1 font-medium text-slate-700">{{ formatDate(session.expires_at) }}</p>
+                                    </div>
+                                </div>
+
+                                <div v-if="session.session_status === 'active'" class="mt-4 flex justify-end">
+                                    <button
+                                        type="button"
+                                        class="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                                        @click="requestRevokeSession(session)"
+                                    >
+                                        Revoke
+                                    </button>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+
+                    <div v-if="!loading && totalPages > 1"
                         class="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                         <p class="text-xs text-slate-500">
                             Showing {{ showingFrom }}-{{ showingTo }} of {{ totalSessions }} sessions
@@ -469,3 +600,4 @@ onMounted(() => {
         </main>
     </div>
 </template>
+

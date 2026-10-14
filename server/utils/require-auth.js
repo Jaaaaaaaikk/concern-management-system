@@ -1,5 +1,16 @@
 import { getSessionUser } from './session.js'
 
+export const SYSTEM_MANAGEMENT_ROLES = ['superadmin', 'system_admin']
+export const GLOBAL_CONCERN_ROLES = ['superadmin', 'system_admin', 'system_monitor']
+
+export function canManageSystem(user) {
+  return SYSTEM_MANAGEMENT_ROLES.includes(user?.role_name)
+}
+
+export function canViewAllConcerns(user) {
+  return GLOBAL_CONCERN_ROLES.includes(user?.role_name)
+}
+
 export async function requireAuth(event) {
   const user = await getSessionUser(event)
 

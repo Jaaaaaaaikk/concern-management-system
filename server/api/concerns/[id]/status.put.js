@@ -167,13 +167,13 @@ export default defineEventHandler(async (event) => {
       : null;
 
   const isCreatorOrganizationAdmin =
-    userRole === "admin" &&
+    userRole === "concern_handler" &&
     userOrganizationId !== null &&
     creatorOrganizationId !== null &&
     userOrganizationId === creatorOrganizationId;
 
   const isAssignedOrganizationAdmin =
-    userRole === "admin" &&
+    userRole === "concern_handler" &&
     userOrganizationId !== null &&
     assignedOrganizationId !== null &&
     userOrganizationId === assignedOrganizationId;
@@ -301,16 +301,16 @@ export default defineEventHandler(async (event) => {
   * RECIPIENT COMMITMENT START (target_commitment_at)
    * ---------------------------------------------------------
    *
-   * Expected frontend value:
-   * YYYY-MM-DDTHH:mm
+  * Expected frontend value:
+  * YYYY-MM-DD
    *
    * MySQL DATETIME value:
-   * YYYY-MM-DD HH:mm:ss
+  * YYYY-MM-DD 00:00:00
    *
     * The recipient's committed start date cannot be before today.
    *
-   * No UTC conversion is performed because this value
-   * represents a local date and time, not a UTC instant.
+  * It is stored at local midnight because the chosen value
+  * represents a calendar date, not a UTC instant.
    * ---------------------------------------------------------
    */
 
@@ -326,70 +326,63 @@ export default defineEventHandler(async (event) => {
       throw createError({
         statusCode: 400,
         statusMessage:
-          "A committed start date and time is required before moving the concern to In Progress.",
+          "A committed start date is required before moving the concern to In Progress.",
       });
     }
+  }
 
-    const normalizedDateTime = String(targetCommitmentAt)
+  if (movingToInProgress || targetCommitmentAt) {
+    const normalizedDate = String(targetCommitmentAt)
       .trim()
       .replace("T", " ");
 
-    const match = normalizedDateTime.match(
-      /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/,
+    // Accept legacy date-time values during migration, but persist date-only values at midnight.
+    const match = normalizedDate.match(
+      /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2})(?::(\d{2}))?)?$/,
     );
 
     if (!match) {
       throw createError({
         statusCode: 400,
         statusMessage:
-          "Enter a valid commitment date and time.",
+          "Enter a valid commitment date.",
       });
     }
 
-    const [
-      ,
-      yearText,
-      monthText,
-      dayText,
-      hourText,
-      minuteText,
-    ] = match;
+    const [, yearText, monthText, dayText, hourText = "00", minuteText = "00", secondText = "00"] = match;
 
     const year = Number(yearText);
     const month = Number(monthText);
     const day = Number(dayText);
     const hour = Number(hourText);
     const minute = Number(minuteText);
+    const second = Number(secondText);
 
     const parsedDate = new Date(
       year,
       month - 1,
       day,
-      hour,
-      minute,
+      0,
+      0,
       0,
       0,
     );
 
-    const isValidDateTime =
+    const isValidDate =
       parsedDate.getFullYear() === year &&
       parsedDate.getMonth() === month - 1 &&
       parsedDate.getDate() === day &&
-      parsedDate.getHours() === hour &&
-      parsedDate.getMinutes() === minute;
+      hour >= 0 && hour <= 23 &&
+      minute >= 0 && minute <= 59 &&
+      second >= 0 && second <= 59;
 
-    if (!isValidDateTime) {
+    if (!isValidDate) {
       throw createError({
         statusCode: 400,
         statusMessage:
-          "The commitment date and time is invalid.",
+          "The commitment date is invalid.",
       });
     }
-
-    /*
-      * Allow today (including a selected time already passed)
-      * or a future calendar date. Earlier days are rejected.
-     */
 
     const now = new Date();
 
@@ -409,64 +402,16 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    targetCommitmentAt =
-      `${yearText}-${monthText}-${dayText} ` +
-      `${hourText}:${minuteText}:00`;
+    targetCommitmentAt = `${yearText}-${monthText}-${dayText} 00:00:00`;
 
-    historyRemarks = [
-      remarks,
-      `Commitment start: ${targetCommitmentAt}`,
-    ]
-      .filter(Boolean)
-      .join("\n");
-  } else if (targetCommitmentAt) {
-    /*
-     * Validate an optional value without changing its
-     * intended local date/time.
-     */
-
-    const normalizedDateTime = String(targetCommitmentAt)
-      .trim()
-      .replace("T", " ");
-
-    const match = normalizedDateTime.match(
-      /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/,
-    );
-
-    if (!match) {
-      throw createError({
-        statusCode: 400,
-        statusMessage:
-          "Invalid commitment date and time.",
-      });
+    if (movingToInProgress) {
+      historyRemarks = [
+        remarks,
+        `Commitment start: ${yearText}-${monthText}-${dayText}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
     }
-
-    const [, y, m, d, h, min] = match;
-
-    const parsedDate = new Date(
-      Number(y),
-      Number(m) - 1,
-      Number(d),
-      Number(h),
-      Number(min),
-    );
-
-    if (
-      parsedDate.getFullYear() !== Number(y) ||
-      parsedDate.getMonth() !== Number(m) - 1 ||
-      parsedDate.getDate() !== Number(d) ||
-      parsedDate.getHours() !== Number(h) ||
-      parsedDate.getMinutes() !== Number(min)
-    ) {
-      throw createError({
-        statusCode: 400,
-        statusMessage:
-          "The commitment date and time is invalid.",
-      });
-    }
-
-    targetCommitmentAt =
-      `${y}-${m}-${d} ${h}:${min}:00`;
   }
 
   /*

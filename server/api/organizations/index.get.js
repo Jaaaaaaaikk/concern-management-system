@@ -57,16 +57,23 @@ export default defineEventHandler(async (event) => {
 
         const [rows] = await db.query(`
             SELECT
-                id,
-                name,
-                organization_type,
-                description,
-                address,
-                status,
-                created_at
-                        FROM organizations
-                        WHERE deleted_at IS NULL
-            ORDER BY name ASC
+                organizations.id,
+                organizations.name,
+                organizations.organization_type,
+                organizations.description,
+                organizations.address,
+                organizations.status,
+                organizations.created_at,
+                organizations.updated_at,
+                organizations.created_by,
+                organizations.updated_by,
+                CONCAT(creator.first_name, ' ', creator.last_name) AS created_by_name,
+                CONCAT(updater.first_name, ' ', updater.last_name) AS updated_by_name
+            FROM organizations
+            LEFT JOIN users creator ON creator.id = organizations.created_by
+            LEFT JOIN users updater ON updater.id = organizations.updated_by
+            WHERE organizations.deleted_at IS NULL
+            ORDER BY organizations.name ASC
         `)
 
         return {
@@ -122,16 +129,23 @@ export default defineEventHandler(async (event) => {
 
     const [rows] = await db.query(`
         SELECT
-            id,
-            name,
-            organization_type,
-            description,
-            address,
-            status,
-            created_at
+            organizations.id,
+            organizations.name,
+            organizations.organization_type,
+            organizations.description,
+            organizations.address,
+            organizations.status,
+            organizations.created_at,
+            organizations.updated_at,
+            organizations.created_by,
+            organizations.updated_by,
+            CONCAT(creator.first_name, ' ', creator.last_name) AS created_by_name,
+            CONCAT(updater.first_name, ' ', updater.last_name) AS updated_by_name
         FROM organizations
-        WHERE ${organizationWhere}
-        ORDER BY name ASC
+        LEFT JOIN users creator ON creator.id = organizations.created_by
+        LEFT JOIN users updater ON updater.id = organizations.updated_by
+        WHERE organizations.deleted_at IS NULL
+        ORDER BY organizations.name ASC
         LIMIT ? OFFSET ?
     `, [
         limit,

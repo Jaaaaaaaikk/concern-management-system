@@ -1,9 +1,9 @@
 
 import db from '../../utils/db.js'
-import { requireRole } from '../../utils/require-auth.js'
+import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
 
 export default defineEventHandler(async (event) => {
-    await requireRole(event, ['superadmin'])
+    const currentUser = await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
 
     const body = await readBody(event)
 
@@ -35,15 +35,19 @@ export default defineEventHandler(async (event) => {
                 organization_type,
                 description,
                 address,
-                status
+                status,
+                created_by,
+                updated_by
             )
-            VALUES (?, ?, ?, ?, 'active')
+            VALUES (?, ?, ?, ?, 'active', ?, ?)
             `,
             [
                 name,
                 organizationType,
                 description,
-                address
+                address,
+                currentUser.id,
+                currentUser.id
             ]
         )
 
