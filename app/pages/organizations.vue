@@ -36,6 +36,19 @@ const editForm = ref({
 
 const editingOrganization = ref(null)
 
+const hasOrganizationEditChanges = computed(() => {
+    const organization = editingOrganization.value
+
+    if (!organization) {
+        return false
+    }
+
+    return editForm.value.name !== (organization.name || '') ||
+        editForm.value.organization_type !== (organization.organization_type || '') ||
+        editForm.value.description !== (organization.description || '') ||
+        editForm.value.address !== (organization.address || '')
+})
+
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalOrganizations = ref(0)
@@ -376,6 +389,11 @@ async function updateOrganization() {
         return
     }
 
+    if (!hasOrganizationEditChanges.value) {
+        showToast('There are no changes to save.', 'info')
+        return
+    }
+
     updating.value = true
     errorMessage.value = ''
 
@@ -449,6 +467,8 @@ function organizationTypeLabel(type) {
 // --------------------------------------------------
 
 async function logout() {
+    currentUser.value = null
+
     try {
         await $fetch(
             '/api/auth/logout',
@@ -591,9 +611,9 @@ onMounted(() => {
                     </div>
 
 
-                    <button type="button" @click="openAddModal"
+                    <button type="button" data-tour="organizations-add" @click="openAddModal"
                         aria-label="Add organization"
-                        class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-900 p-0 text-sm font-medium text-white transition hover:bg-blue-800 sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5">
+                        class="primary-action-button inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-linear-to-r from-emerald-600 to-teal-600 p-0 text-sm font-semibold text-white shadow-md shadow-emerald-950/15 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.03] hover:from-emerald-700 hover:to-teal-700 hover:shadow-lg hover:shadow-emerald-950/25 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200 motion-reduce:transition-none sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5">
                         <span aria-hidden="true" class="text-lg leading-none">+</span>
                         <span class="hidden sm:inline">Add Organization</span>
                     </button>
@@ -626,7 +646,7 @@ onMounted(() => {
 
                 <!-- Table -->
 
-                <div v-else class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
+                <div v-else data-tour="organizations-list" class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
 
                     <div class="hidden overflow-x-auto lg:block">
 
@@ -857,7 +877,7 @@ onMounted(() => {
 
         <!-- Edit Organization Modal -->
 
-        <EditOrganizationModal :show="showEditModal" :form="editForm" :updating="updating" @close="closeEditModal"
+        <EditOrganizationModal :show="showEditModal" :form="editForm" :has-changes="hasOrganizationEditChanges" :updating="updating" @close="closeEditModal"
             @submit="updateOrganization" />
 
     </div>

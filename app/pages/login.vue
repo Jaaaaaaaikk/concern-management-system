@@ -427,7 +427,7 @@ async function login() {
 
                     <!-- LOGIN BUTTON -->
                     <button type="submit" :disabled="loading"
-                        class="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-900 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-900/15 transition hover:bg-white hover:text-black focus:outline-none focus:ring-4 focus:ring-blue-800/20 disabled:cursor-not-allowed disabled:opacity-60">
+                        class="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-900 px-5 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-900/15 transition duration-200 hover:scale-[1.02] hover:bg-white hover:text-black active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-blue-800/20 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100">
 
                         <svg v-if="loading" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none"
                             viewBox="0 0 24 24" aria-hidden="true">
@@ -450,7 +450,8 @@ async function login() {
                 </p>
 
                 <p class="mt-2 text-xs leading-5 text-slate-400">
-                    © {{ currentYear }} Felcris Hotels &amp; Resorts Corporation. All rights reserved. · ICT Department
+                    © {{ currentYear }} Felcris Hotels &amp; Resorts Corporation. All rights reserved. ·
+                    <NuxtLink to="/ict-team" class="font-medium text-blue-800 transition-colors hover:text-teal-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">ICT Department</NuxtLink>
                 </p>
 
             </div>
@@ -461,7 +462,7 @@ async function login() {
                 class="relative flex min-h-[230px] w-full flex-col overflow-hidden bg-blue-950 sm:min-h-[300px] lg:min-h-0 lg:w-[52%]">
 
                 <img src="/images/felcris-building.jpg" alt="Felcris building overlooking the coastline"
-                    class="h-auto w-full object-contain object-center" />
+                    class="h-auto w-full object-contain object-center transition-transform duration-500 ease-out hover:scale-[1.03] motion-reduce:transition-none motion-reduce:hover:scale-100" />
 
                 <div class="p-6 text-white sm:p-8 lg:p-10">
 

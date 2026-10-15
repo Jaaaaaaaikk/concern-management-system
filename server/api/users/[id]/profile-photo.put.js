@@ -1,11 +1,9 @@
-import { mkdir, unlink, writeFile } from 'node:fs/promises'
-import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { readMultipartFormData } from 'h3'
 import db from '../../../utils/db.js'
+import { removeProfilePhoto, saveProfilePhoto } from '../../../utils/profile-photos.js'
 import { requireAuth } from '../../../utils/require-auth.js'
 
-const uploadDirectory = path.resolve(process.cwd(), 'public', 'uploads', 'users')
 const maxFileSize = 2 * 1024 * 1024
 
 const imageTypes = {
@@ -37,32 +35,6 @@ const imageTypes = {
       data.length >= 12 &&
       data.subarray(0, 4).toString('ascii') === 'RIFF' &&
       data.subarray(8, 12).toString('ascii') === 'WEBP'
-  }
-}
-
-async function removeStoredPhoto(photoPath) {
-  if (typeof photoPath !== 'string' || !photoPath.startsWith('/uploads/users/')) {
-    return
-  }
-
-  const filename = photoPath.slice('/uploads/users/'.length)
-
-  if (!filename || path.basename(filename) !== filename) {
-    return
-  }
-
-  const filePath = path.resolve(uploadDirectory, filename)
-
-  if (!filePath.startsWith(`${uploadDirectory}${path.sep}`)) {
-    return
-  }
-
-  try {
-    await unlink(filePath)
-  } catch (error) {
-    if (error?.code !== 'ENOENT') {
-      throw error
-    }
   }
 }
 
@@ -172,10 +144,7 @@ export default defineEventHandler(async (event) => {
   if (photo) {
     const filename = `${randomUUID()}${imageType.extension}`
     newPhoto = `/uploads/users/${filename}`
-    newFilePath = path.resolve(uploadDirectory, filename)
-
-    await mkdir(uploadDirectory, { recursive: true })
-    await writeFile(newFilePath, photo.data, { flag: 'wx' })
+    newFilePath = await saveProfilePhoto(filename, photo.data)
   }
 
   try {
@@ -191,7 +160,7 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     if (newFilePath) {
       try {
-        await unlink(newFilePath)
+        await removeProfilePhoto(newPhoto)
       } catch (cleanupError) {
         if (cleanupError?.code !== 'ENOENT') {
           console.error('Failed to clean up an unlinked profile photo:', cleanupError)
@@ -203,7 +172,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    await removeStoredPhoto(previousPhoto)
+    if (previousPhoto) await removeProfilePhoto(previousPhoto)
   } catch (error) {
     console.error('Failed to remove the replaced profile photo:', error)
   }
@@ -213,6 +182,6 @@ export default defineEventHandler(async (event) => {
     message: removePhoto
       ? 'Profile photo removed successfully.'
       : 'Profile photo updated successfully.',
-    profile_photo: newPhoto
+    profile_photo: newPhoto ? `/api/users/${userId}/profile-photo` : null
   }
 })

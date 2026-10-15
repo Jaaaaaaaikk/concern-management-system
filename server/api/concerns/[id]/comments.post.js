@@ -2,7 +2,7 @@ import db from "../../../utils/db.js";
 import { requireAuth } from "../../../utils/require-auth.js";
 import { readMultipartFormData } from "h3";
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { saveConcernUpload } from "../../../utils/concern-uploads.js";
 
 export default defineEventHandler(async (event) => {
   const currentUser = await requireAuth(event);
@@ -190,12 +190,6 @@ export default defineEventHandler(async (event) => {
   /*
    * Attachment upload directory.
    */
-  const uploadDirectory = "public/uploads/concerns";
-
-  await mkdir(uploadDirectory, {
-    recursive: true,
-  });
-
   const savedAttachments = [];
 
   /*
@@ -234,9 +228,7 @@ export default defineEventHandler(async (event) => {
       .toString(16)
       .slice(2)}${extension}`;
 
-    const filePath = `${uploadDirectory}/${uniqueName}`;
-
-    await writeFile(filePath, file.data);
+    await saveConcernUpload(uniqueName, file.data);
 
     const databasePath = `/uploads/concerns/${uniqueName}`;
 
@@ -267,7 +259,7 @@ export default defineEventHandler(async (event) => {
     savedAttachments.push({
       id: attachmentResult.insertId,
       file_name: originalName,
-      file_path: databasePath,
+      file_path: `/api/concerns/${concernId}/attachments/${attachmentResult.insertId}`,
       file_type: file.type,
       file_size: file.data.length,
     });

@@ -1,6 +1,7 @@
 <script setup>
 
 import ConfirmActionModal from '~/components/ConfirmActionModal.vue'
+import AppSelect from '~/components/AppSelect.vue'
 import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
 
 const props = defineProps({
@@ -426,10 +427,10 @@ onUnmounted(() => {
         class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6">
 
         <div
-            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+            class="create-concern-modal modal-height-adaptive my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
 
             <!-- Header -->
-            <div class="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-5 sm:px-6 sm:py-6">
+            <div class="modal-header-adaptive flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-5 sm:px-6 sm:py-6">
 
                 <div class="flex items-center gap-3">
 
@@ -457,7 +458,7 @@ onUnmounted(() => {
 
                 <button type="button" @click="closeModal" :disabled="saving"
                     aria-label="Close modal"
-                    class="group relative flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50">
+                    class="group relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50">
                     <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
                         stroke="currentColor" aria-hidden="true"
@@ -468,9 +469,9 @@ onUnmounted(() => {
 
             </div>
 
-            <form @submit.prevent="createConcern(false)" class="flex-1 overflow-y-auto">
+            <form @submit.prevent="createConcern(false)" class="min-h-0 flex-1 overflow-y-auto">
 
-                <div class="space-y-5 p-4 sm:p-6">
+                <div class="modal-form-content-adaptive modal-form-stack-adaptive create-concern-form space-y-5 p-4 sm:p-6">
 
                     <!-- Concern Title -->
                     <div>
@@ -480,7 +481,7 @@ onUnmounted(() => {
                             <span class="text-red-500">*</span>
                         </label>
 
-                        <input v-model="form.title" type="text" required placeholder="Enter concern title"
+                        <input data-tour="create-title" v-model="form.title" type="text" required placeholder="Enter concern title"
                             class="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100" />
 
                     </div>
@@ -493,13 +494,13 @@ onUnmounted(() => {
                             <span class="text-red-500">*</span>
                         </label>
 
-                        <textarea v-model="form.description" required rows="6" placeholder="Describe the concern..."
+                        <textarea data-tour="create-description" v-model="form.description" required rows="6" placeholder="Describe the concern..."
                             class="w-full resize-y rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"></textarea>
 
                     </div>
 
                     <!-- Multiple Original Images -->
-                    <div>
+                    <div data-tour="create-images">
 
                         <label class="mb-2 block text-sm font-medium text-slate-700">
                             Attach Images
@@ -563,7 +564,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Concern Type / Assigned To -->
-                    <div class="rounded-xl border border-blue-100 bg-blue-50/50 p-4 sm:p-5">
+                    <div data-tour="create-routing" class="rounded-xl border border-blue-100 bg-blue-50/50 p-4 sm:p-5">
 
                         <div class="mb-4">
                             <h4 class="text-sm font-semibold text-slate-800">Request routing</h4>
@@ -580,18 +581,17 @@ onUnmounted(() => {
                                 <span class="text-red-500">*</span>
                             </label>
 
-                            <select v-model="form.concern_type_id" required
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
-
-                                <option value="" disabled>
-                                    Select concern type
-                                </option>
-
-                                <option v-for="type in concernTypes" :key="type.id" :value="type.id">
-                                    {{ type.name }}
-                                </option>
-
-                            </select>
+                            <AppSelect
+                                v-model="form.concern_type_id"
+                                aria-label="Concern type"
+                                name="concern_type_id"
+                                placeholder="Select concern type"
+                                :required="true"
+                                :options="[
+                                    { label: 'Select concern type', value: '', disabled: true },
+                                    ...concernTypes.map(type => ({ label: type.name, value: type.id }))
+                                ]"
+                            />
 
                         </div>
 
@@ -603,19 +603,18 @@ onUnmounted(() => {
                                 <span class="text-red-500">*</span>
                             </label>
 
-                            <select v-model="form.assigned_organization_id" required :disabled="availableOrganizations.length === 0"
-                                class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
-
-                                <option value="" disabled>
-                                    {{ availableOrganizations.length ? 'Select organization' : 'No Admin Facilities organization is available' }}
-                                </option>
-
-                                <option v-for="organization in availableOrganizations" :key="organization.id"
-                                    :value="organization.id">
-                                    {{ organization.name }}
-                                </option>
-
-                            </select>
+                            <AppSelect
+                                v-model="form.assigned_organization_id"
+                                aria-label="Assigned organization"
+                                name="assigned_organization_id"
+                                :placeholder="availableOrganizations.length ? 'Select organization' : 'No Admin Facilities organization is available'"
+                                :required="true"
+                                :disabled="availableOrganizations.length === 0"
+                                :options="[
+                                    { label: availableOrganizations.length ? 'Select organization' : 'No Admin Facilities organization is available', value: '', disabled: true },
+                                    ...availableOrganizations.map(organization => ({ label: organization.name, value: organization.id }))
+                                ]"
+                            />
 
                             <p v-if="currentUser?.role_name !== 'superadmin' && currentUser?.organization_id" class="mt-1 text-xs text-slate-500">
                                 {{ availableOrganizations.length && availableOrganizations.every(organization => organization.organization_type === 'admin_facilities') && props.organizations.find(organization => Number(organization.id) === Number(currentUser.organization_id))?.organization_type !== 'admin_facilities'
@@ -637,26 +636,18 @@ onUnmounted(() => {
                             <span class="text-red-500">*</span>
                         </label>
 
-                        <select v-model="form.priority" required
-                            class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100">
-
-                            <option value="low">
-                                Low
-                            </option>
-
-                            <option value="medium">
-                                Medium
-                            </option>
-
-                            <option value="high">
-                                High
-                            </option>
-
-                            <option value="urgent">
-                                Urgent
-                            </option>
-
-                        </select>
+                        <AppSelect
+                            v-model="form.priority"
+                            aria-label="Priority"
+                            name="priority"
+                            :required="true"
+                            :options="[
+                                { label: 'Low', value: 'low' },
+                                { label: 'Medium', value: 'medium' },
+                                { label: 'High', value: 'high' },
+                                { label: 'Urgent', value: 'urgent' }
+                            ]"
+                        />
 
                     </div>
 
@@ -664,12 +655,12 @@ onUnmounted(() => {
                     <div class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
 
                         <button type="button" @click="closeModal" :disabled="saving"
-                            class="w-full cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+                            class="secondary-hover-button w-full cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
                             Cancel
                         </button>
 
-                        <button type="submit" :disabled="saving"
-                            class="w-full cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+                        <button data-tour="create-submit" type="submit" :disabled="saving"
+                            class="primary-action-button w-full cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
 
                             {{
                                 saving

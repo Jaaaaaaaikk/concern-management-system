@@ -114,7 +114,12 @@ export default defineEventHandler(async (event) => {
 
     return {
         success: true,
-        users: rows,
+        users: rows.map((user) => ({
+            ...user,
+            profile_photo: user.profile_photo
+                ? `/api/users/${user.id}/profile-photo`
+                : null
+        })),
         pagination: {
             page,
             limit,

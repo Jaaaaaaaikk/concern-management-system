@@ -53,7 +53,7 @@ watch(() => props.show, (isShown) => {
                 </div>
                 <button
                     type="button"
-                    class="group relative flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="group relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label="Close"
                     :disabled="props.saving"
                     @click="emit('close')"
@@ -95,13 +95,13 @@ watch(() => props.show, (isShown) => {
             <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button
                     type="button"
-                    class="cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="props.saving"
                     @click="emit('close')"
                 >Cancel</button>
                 <button
                     type="submit"
-                    class="cursor-pointer rounded-lg bg-blue-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
+                    class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
                     :disabled="props.saving"
                 >{{ props.saving ? 'Creating…' : 'Create category' }}</button>
             </div>

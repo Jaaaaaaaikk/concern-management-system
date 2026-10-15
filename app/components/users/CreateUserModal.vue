@@ -2,6 +2,7 @@
 
 import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
 import { roleDisplayName } from '~/composables/useRoleLabel'
+import AppSelect from '~/components/AppSelect.vue'
 
 const props = defineProps({
 
@@ -83,12 +84,12 @@ watch(() => props.show, (isShown) => {
     >
 
         <div
-            class="my-auto max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]"
+            class="modal-height-adaptive my-auto max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]"
         >
 
             <!-- Header -->
             <div
-                class="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-5 sm:px-6 sm:py-6"
+                class="modal-header-adaptive flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-5 sm:px-6 sm:py-6"
             >
 
                 <div class="flex items-center gap-3">
@@ -119,7 +120,7 @@ watch(() => props.show, (isShown) => {
                     type="button"
                     @click="emit('close')"
                     aria-label="Close modal"
-                    class="group relative flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800"
+                    class="group relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800"
                 >
                     <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
@@ -134,7 +135,7 @@ watch(() => props.show, (isShown) => {
             <!-- Form -->
             <form
                 @submit.prevent="requestSubmit"
-                class="space-y-5 px-4 py-5 sm:px-6 sm:py-6"
+                class="modal-form-content-adaptive modal-form-stack-adaptive modal-compact-fields space-y-5 px-4 py-5 sm:px-6 sm:py-6"
             >
 
                 <!-- Username / Password -->
@@ -252,26 +253,18 @@ watch(() => props.show, (isShown) => {
                             <span class="text-red-500">*</span>
                         </label>
 
-                        <select
+                        <AppSelect
                             v-model="props.form.role_id"
+                            aria-label="Role"
+                            name="role_id"
+                            placeholder="Select role"
+                            :required="true"
+                            :options="[
+                                { label: 'Select role', value: '', disabled: true },
+                                ...selectableRoles.map(role => ({ label: roleDisplayName(role.name), value: role.id }))
+                            ]"
                             @change="emit('role-change')"
-                            required
-                            class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
-                        >
-
-                            <option value="" disabled>
-                                Select role
-                            </option>
-
-                            <option
-                                v-for="role in selectableRoles"
-                                :key="role.id"
-                                :value="role.id"
-                            >
-                                {{ roleDisplayName(role.name) }}
-                            </option>
-
-                        </select>
+                        />
 
                     </div>
 
@@ -295,32 +288,18 @@ watch(() => props.show, (isShown) => {
                             </span>
                         </label>
 
-                        <select
+                        <AppSelect
                             v-model="props.form.organization_id"
+                            aria-label="Organization"
+                            name="organization_id"
+                            :placeholder="props.isSuperadminRole ? 'Not applicable' : 'Select organization'"
                             :disabled="props.isSuperadminRole"
                             :required="!props.isSuperadminRole"
-                            class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-                        >
-
-                            <option value="">
-
-                                {{
-                                    props.isSuperadminRole
-                                        ? 'Not applicable'
-                                        : 'Select organization'
-                                }}
-
-                            </option>
-
-                            <option
-                                v-for="organization in props.organizations"
-                                :key="organization.id"
-                                :value="organization.id"
-                            >
-                                {{ organization.name }}
-                            </option>
-
-                        </select>
+                            :options="[
+                                { label: props.isSuperadminRole ? 'Not applicable' : 'Select organization', value: '', disabled: !props.isSuperadminRole },
+                                ...props.organizations.map(organization => ({ label: organization.name, value: organization.id }))
+                            ]"
+                        />
 
                     </div>
 
@@ -328,22 +307,13 @@ watch(() => props.show, (isShown) => {
 
                 <!-- Footer -->
                 <div
-                    class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end"
+                    class="flex justify-end border-t border-slate-200 pt-5"
                 >
-
-                    <button
-                        type="button"
-                        @click="emit('close')"
-                        :disabled="props.saving"
-                        class="w-full cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                    >
-                        Cancel
-                    </button>
 
                     <button
                         type="submit"
                         :disabled="props.saving"
-                        class="w-full cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                        class="primary-action-button w-full cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                     >
 
                         {{

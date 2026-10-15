@@ -86,6 +86,7 @@ onMounted(async () => {
             <div v-if="currentUser" class="relative shrink-0" @keydown.esc="isProfileExpanded = false">
                 <button
                     type="button"
+                    data-tour="profile-menu-toggle"
                     class="group flex cursor-pointer items-center rounded-full focus:outline-none"
                     :aria-expanded="isProfileExpanded"
                     aria-controls="mobile-profile-details"
@@ -118,8 +119,9 @@ onMounted(async () => {
                 >
                     <div
                         v-if="isProfileExpanded"
+                        data-tour="profile-menu-mobile"
                         id="mobile-profile-details"
-                        class="absolute right-0 top-full z-50 mt-2 w-60 max-w-[calc(100vw-1.5rem)] origin-top-right rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
+                        class="absolute right-0 top-full z-50 mt-2 w-44 max-w-[calc(100vw-1.5rem)] origin-top-right rounded-xl border border-slate-200 bg-white p-2 shadow-xl sm:w-60"
                     >
                         <UserProfileControl
                             :current-user="currentUser"

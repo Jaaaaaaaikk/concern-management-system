@@ -2,11 +2,8 @@ import db from "../../utils/db.js";
 
 import { requireRole } from "../../utils/require-auth.js";
 
-import fs from "fs/promises";
-
-import path from "path";
-
 import crypto from "crypto";
+import { removeConcernUpload, saveConcernUpload } from "../../utils/concern-uploads.js";
 
 export default defineEventHandler(async (event) => {
   const currentUser = await requireRole(event, ["concern_handler", "requestor"]);
@@ -320,24 +317,7 @@ export default defineEventHandler(async (event) => {
 
     const concernId = result.insertId;
 
-    /*
-     * Create upload directory
-     *
-     * public/uploads/concerns
-     */
-
     if (imageFiles.length > 0) {
-      const uploadDirectory = path.join(
-        process.cwd(),
-        "public",
-        "uploads",
-        "concerns",
-      );
-
-      await fs.mkdir(uploadDirectory, {
-        recursive: true,
-      });
-
       /*
        * Determine extension based
        * on MIME type.
@@ -365,26 +345,14 @@ export default defineEventHandler(async (event) => {
 
         const fileName = `concern-${concernId}-${randomName}${extension}`;
 
-        const savedFilePath = path.join(uploadDirectory, fileName);
+        const databaseFilePath = `/uploads/concerns/${fileName}`;
+        await saveConcernUpload(fileName, imageFile.data);
+        savedFilePaths.push(databaseFilePath);
 
         /*
-         * Write image to disk.
+         * Keep the legacy-shaped path in the database; API responses expose
+         * only the authenticated download URL.
          */
-
-        await fs.writeFile(savedFilePath, imageFile.data);
-
-        /*
-         * Remember the physical file
-         * for cleanup if needed.
-         */
-
-        savedFilePaths.push(savedFilePath);
-
-        /*
-         * Public path used by browser.
-         */
-
-        const filePath = `/uploads/concerns/${fileName}`;
 
         /*
          * Save attachment information.
@@ -406,7 +374,7 @@ export default defineEventHandler(async (event) => {
             concernId,
             currentUser.id,
             imageFile.filename || fileName,
-            filePath,
+            databaseFilePath,
             imageFile.type,
             imageFile.data.length,
           ],
@@ -440,7 +408,7 @@ export default defineEventHandler(async (event) => {
 
     for (const savedFilePath of savedFilePaths) {
       try {
-        await fs.unlink(savedFilePath);
+        await removeConcernUpload(savedFilePath);
       } catch (fileError) {
         console.error("Failed to remove uploaded image:", fileError);
       }

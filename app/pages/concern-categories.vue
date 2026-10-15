@@ -130,8 +130,12 @@ function formatDate(date) {
 }
 
 async function logout() {
+    currentUser.value = null
+
     try {
         await $fetch('/api/auth/logout', { method: 'POST' })
+    } catch (error) {
+        // Clear the client session even if the server session already expired.
     } finally {
         await navigateTo('/login')
     }
@@ -171,7 +175,7 @@ onMounted(loadData)
                         <h2 class="text-xl font-semibold text-slate-900">Concern Categories</h2>
                         <p class="mt-1 text-sm text-slate-500">Manage the categories available when submitting concerns.</p>
                     </div>
-                    <button type="button" aria-label="Add category" class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-900 p-0 text-sm font-medium text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2 sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5" @click="openCreateModal">
+                    <button type="button" data-tour="categories-add" aria-label="Add category" class="primary-action-button inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-900 p-0 text-sm font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2 sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5" @click="openCreateModal">
                         <span aria-hidden="true" class="text-lg leading-none">+</span>
                         <span class="hidden sm:inline">Add Category</span>
                     </button>
@@ -194,7 +198,7 @@ onMounted(loadData)
                 <div v-if="loading" class="rounded-xl border border-slate-300 bg-white p-8 text-center shadow-md">
                     <CodeLoadingLine label="Loading concern categories..." />
                 </div>
-                <div v-else class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
+                <div v-else data-tour="categories-list" class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
                     <div class="border-b border-slate-200 px-5 py-4 sm:px-6">
                         <h3 class="font-semibold text-slate-900">Category list</h3>
                         <p class="mt-1 text-sm text-slate-500">Inactive categories are hidden from new concern submissions. Existing concerns remain unchanged.</p>
@@ -212,7 +216,7 @@ onMounted(loadData)
                                     <p class="mt-2 text-xs text-slate-400">Added {{ formatDate(category.created_at) }}</p>
                                 </div>
                             </div>
-                            <button type="button" :disabled="updatingId === category.id" class="shrink-0 cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 sm:text-sm" :class="category.status === 'active' ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-blue-200 text-blue-800 hover:bg-blue-50'" @click="toggleCategory(category)">{{ updatingId === category.id ? 'Saving…' : category.status === 'active' ? 'Remove' : 'Restore' }}</button>
+                            <button type="button" :disabled="updatingId === category.id" class="secondary-hover-button shrink-0 cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 sm:text-sm" :class="category.status === 'active' ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-blue-200 text-blue-800 hover:bg-blue-50'" @click="toggleCategory(category)">{{ updatingId === category.id ? 'Saving…' : category.status === 'active' ? 'Remove' : 'Restore' }}</button>
                         </article>
                     </div>
                     <div v-else class="px-6 py-12 text-center">

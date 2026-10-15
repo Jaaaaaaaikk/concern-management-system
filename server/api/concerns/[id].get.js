@@ -346,6 +346,9 @@ export default defineEventHandler(async (event) => {
 
     return {
       ...comment,
+      profile_photo: comment.profile_photo
+        ? `/api/users/${comment.user_id}/profile-photo`
+        : null,
       attachments: attachmentsForComment,
     };
   });
@@ -432,15 +435,31 @@ export default defineEventHandler(async (event) => {
 
     return {
       ...history,
-      attachments: attachmentsForHistory,
+      attachments: attachmentsForHistory.map((attachment) => ({
+        ...attachment,
+        file_path: `/api/concerns/${concernId}/status-attachments/${attachment.id}`,
+      })),
     };
   });
+
+  const secureConcernAttachments = attachments.map((attachment) => ({
+    ...attachment,
+    file_path: `/api/concerns/${concernId}/attachments/${attachment.id}`,
+  }));
+
+  const secureComments = commentsWithAttachments.map((comment) => ({
+    ...comment,
+    attachments: comment.attachments.map((attachment) => ({
+      ...attachment,
+      file_path: `/api/concerns/${concernId}/attachments/${attachment.id}`,
+    })),
+  }));
 
   return {
     success: true,
     concern,
-    attachments,
-    comments: commentsWithAttachments,
+    attachments: secureConcernAttachments,
+    comments: secureComments,
     statusHistory,
   };
 });

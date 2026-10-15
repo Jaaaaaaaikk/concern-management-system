@@ -5,6 +5,7 @@ import {
     registerables
 } from 'chart.js'
 import { watch } from 'vue'
+import AppSelect from '~/components/AppSelect.vue'
 import { useToast } from '~/composables/useToast'
 import { useStickyHeader } from '~/composables/useStickyHeader'
 
@@ -1352,6 +1353,8 @@ function cleanupScrollReveal() {
 
 async function logout() {
 
+    currentUser.value = null
+
     try {
 
         await $fetch(
@@ -1361,15 +1364,12 @@ async function logout() {
             }
         )
 
-        await navigateTo('/login')
-
     } catch (error) {
 
-        console.error(
-            'Logout error:',
-            error
-        )
+        // Continue to login even if the session is already invalid.
     }
+
+    await navigateTo('/login')
 }
 
 
@@ -1514,6 +1514,7 @@ onMounted(() => {
                         </div>
                         <button
                             type="button"
+                            data-tour="dashboard-mobile-filters-toggle"
                             class="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-700/20 lg:hidden"
                             :aria-expanded="showMobileFilters"
                             aria-controls="dashboard-mobile-filters"
@@ -1529,25 +1530,39 @@ onMounted(() => {
                     <div v-if="showMobileFilters" id="dashboard-mobile-filters" class="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:hidden">
                         <label class="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
                             <span class="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Date range</span>
-                            <select v-model="selectedRange" @change="changeDashboardFilter" :disabled="loadingRange" class="min-w-0 flex-1 cursor-pointer border-0 bg-transparent py-1 text-sm font-medium text-slate-700 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60">
-                                <option value="today">Today</option>
-                                <option value="7d">Last 7 Days</option>
-                                <option value="30d">Last 30 Days</option>
-                                <option value="3m">Last 3 Months</option>
-                                <option value="6m">Last 6 Months</option>
-                                <option value="year">This Year</option>
-                                <option value="all">All Time</option>
-                            </select>
+                            <AppSelect
+                                v-model="selectedRange"
+                                aria-label="Date range"
+                                compact
+                                data-tour="dashboard-range"
+                                :disabled="loadingRange"
+                                :options="[
+                                    { label: 'Today', value: 'today' },
+                                    { label: 'Last 7 Days', value: '7d' },
+                                    { label: 'Last 30 Days', value: '30d' },
+                                    { label: 'Last 3 Months', value: '3m' },
+                                    { label: 'Last 6 Months', value: '6m' },
+                                    { label: 'This Year', value: 'year' },
+                                    { label: 'All Time', value: 'all' }
+                                ]"
+                                @change="changeDashboardFilter"
+                            />
                         </label>
 
                         <label v-if="['superadmin', 'system_admin', 'system_monitor'].includes(currentUser?.role_name)" class="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
                             <span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">Organization</span>
-                            <select v-model="selectedOrganization" @change="changeDashboardFilter" :disabled="loadingRange" class="min-w-0 flex-1 cursor-pointer border-0 bg-transparent py-1 text-sm font-medium text-slate-700 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60">
-                                <option value="all">All Organizations</option>
-                                <option v-for="organization in dashboardData?.organizationOptions || []" :key="organization.id" :value="String(organization.id)">
-                                    {{ organization.name }}
-                                </option>
-                            </select>
+                            <AppSelect
+                                v-model="selectedOrganization"
+                                aria-label="Organization filter"
+                                compact
+                                data-tour="dashboard-organization"
+                                :disabled="loadingRange"
+                                :options="[
+                                    { label: 'All Organizations', value: 'all' },
+                                    ...(dashboardData?.organizationOptions || []).map(organization => ({ label: organization.name, value: String(organization.id) }))
+                                ]"
+                                @change="changeDashboardFilter"
+                            />
                         </label>
                     </div>
                 </div>
@@ -1565,39 +1580,23 @@ onMounted(() => {
                             Date Range
                         </label>
 
-                        <select id="dashboard-range" v-model="selectedRange" @change="changeDashboardFilter"
+                        <AppSelect
+                            id="dashboard-range"
+                            v-model="selectedRange"
+                            aria-label="Date range"
+                            data-tour="dashboard-range"
                             :disabled="loadingRange"
-                            class="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60">
-
-                            <option value="today">
-                                Today
-                            </option>
-
-                            <option value="7d">
-                                Last 7 Days
-                            </option>
-
-                            <option value="30d">
-                                Last 30 Days
-                            </option>
-
-                            <option value="3m">
-                                Last 3 Months
-                            </option>
-
-                            <option value="6m">
-                                Last 6 Months
-                            </option>
-
-                            <option value="year">
-                                This Year
-                            </option>
-
-                            <option value="all">
-                                All Time
-                            </option>
-
-                        </select>
+                            :options="[
+                                { label: 'Today', value: 'today' },
+                                { label: 'Last 7 Days', value: '7d' },
+                                { label: 'Last 30 Days', value: '30d' },
+                                { label: 'Last 3 Months', value: '3m' },
+                                { label: 'Last 6 Months', value: '6m' },
+                                { label: 'This Year', value: 'year' },
+                                { label: 'All Time', value: 'all' }
+                            ]"
+                            @change="changeDashboardFilter"
+                        />
 
                     </div>
 
@@ -1610,20 +1609,19 @@ onMounted(() => {
                             Organization
                         </label>
 
-                        <select id="dashboard-organization" v-model="selectedOrganization"
-                            @change="changeDashboardFilter" :disabled="loadingRange"
-                            class="max-w-[240px] cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60">
-
-                            <option value="all">
-                                All Organizations
-                            </option>
-
-                            <option v-for="organization in dashboardData?.organizationOptions || []"
-                                :key="organization.id" :value="String(organization.id)">
-                                {{ organization.name }}
-                            </option>
-
-                        </select>
+                        <AppSelect
+                            id="dashboard-organization"
+                            v-model="selectedOrganization"
+                            aria-label="Organization filter"
+                            data-tour="dashboard-organization"
+                            :disabled="loadingRange"
+                            class="max-w-60"
+                            :options="[
+                                { label: 'All Organizations', value: 'all' },
+                                ...(dashboardData?.organizationOptions || []).map(organization => ({ label: organization.name, value: String(organization.id) }))
+                            ]"
+                            @change="changeDashboardFilter"
+                        />
 
                     </div>
 

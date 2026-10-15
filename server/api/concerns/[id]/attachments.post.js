@@ -1,7 +1,7 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 
 import db from "../../../utils/db.js";
+import { removeConcernUpload, saveConcernUpload } from "../../../utils/concern-uploads.js";
 import { requireAuth } from "../../../utils/require-auth.js";
 
 export default defineEventHandler(async (event) => {
@@ -109,17 +109,6 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const uploadDirectory = path.join(
-    process.cwd(),
-    "public",
-    "uploads",
-    "concerns",
-  );
-
-  await fs.mkdir(uploadDirectory, {
-    recursive: true,
-  });
-
   const savedFiles = [];
 
   try {
@@ -138,13 +127,10 @@ export default defineEventHandler(async (event) => {
 
       const fileName = `concern-${concernId}-${randomPart}${extension}`;
 
-      const physicalPath = path.join(uploadDirectory, fileName);
-
-      await fs.writeFile(physicalPath, image.data);
+      await saveConcernUpload(fileName, image.data);
 
       savedFiles.push({
         fileName,
-        physicalPath,
         fileType: image.type,
         fileSize: image.data.length,
       });
@@ -156,7 +142,7 @@ export default defineEventHandler(async (event) => {
       await connection.beginTransaction();
 
       for (const file of savedFiles) {
-        await connection.query(
+        const [result] = await connection.query(
           `
                     INSERT INTO concern_attachments (
                         concern_id,
@@ -178,6 +164,7 @@ export default defineEventHandler(async (event) => {
             file.fileSize,
           ],
         );
+        file.id = result.insertId;
       }
 
       await connection.commit();
@@ -190,7 +177,7 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     for (const file of savedFiles) {
       try {
-        await fs.unlink(file.physicalPath);
+        await removeConcernUpload(file.fileName);
       } catch {
         // Ignore cleanup errors
       }
@@ -210,8 +197,9 @@ export default defineEventHandler(async (event) => {
         ? "Image added successfully."
         : `${savedFiles.length} images added successfully.`,
     attachments: savedFiles.map((file) => ({
+      id: file.id,
       file_name: file.fileName,
-      file_path: `/uploads/concerns/${file.fileName}`,
+      file_path: `/api/concerns/${concernId}/attachments/${file.id}`,
       file_type: file.fileType,
       file_size: file.fileSize,
     })),

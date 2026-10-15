@@ -1,6 +1,7 @@
 <script setup>
 
 import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
+import AppSelect from '~/components/AppSelect.vue'
 
 const props = defineProps({
 
@@ -61,12 +62,12 @@ watch(() => props.show, (isShown) => {
     >
 
         <div
-            class="my-auto max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]"
+            class="modal-height-adaptive my-auto max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]"
         >
 
             <!-- Header -->
             <div
-                class="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-5 sm:px-6 sm:py-6"
+                class="modal-header-adaptive flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-5 sm:px-6 sm:py-6"
             >
 
                 <div class="flex items-center gap-3">
@@ -97,7 +98,7 @@ watch(() => props.show, (isShown) => {
                     type="button"
                     @click="emit('close')"
                     aria-label="Close modal"
-                    class="group relative flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800"
+                    class="group relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800"
                 >
                     <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
@@ -112,7 +113,7 @@ watch(() => props.show, (isShown) => {
             <!-- Form -->
             <form
                 @submit.prevent="requestSubmit"
-                class="space-y-5 px-4 py-5 sm:px-6 sm:py-6"
+                class="modal-form-content-adaptive modal-form-stack-adaptive modal-compact-fields space-y-5 px-4 py-5 sm:px-6 sm:py-6"
             >
 
                 <!-- Name -->
@@ -140,16 +141,19 @@ watch(() => props.show, (isShown) => {
                     <label class="mb-2 block text-sm font-medium text-slate-700">
                         Organization type <span class="text-red-500">*</span>
                     </label>
-                    <select
+                    <AppSelect
                         v-model="props.form.organization_type"
-                        required
-                        class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
-                    >
-                        <option value="" disabled>Select organization type</option>
-                        <option value="bpo">BPO</option>
-                        <option value="tenant">Tenant</option>
-                        <option value="admin_facilities">Admin Facilities</option>
-                    </select>
+                        aria-label="Organization type"
+                        name="organization_type"
+                        placeholder="Select organization type"
+                        :required="true"
+                        :options="[
+                            { label: 'Select organization type', value: '', disabled: true },
+                            { label: 'BPO', value: 'bpo' },
+                            { label: 'Tenant', value: 'tenant' },
+                            { label: 'Admin Facilities', value: 'admin_facilities' }
+                        ]"
+                    />
                     <p class="mt-1 text-xs leading-5 text-slate-500">This determines which organizations its users can route concerns to.</p>
                 </div>
 
@@ -191,22 +195,13 @@ watch(() => props.show, (isShown) => {
 
                 <!-- Footer -->
                 <div
-                    class="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end"
+                    class="flex justify-end border-t border-slate-200 pt-5"
                 >
-
-                    <button
-                        type="button"
-                        @click="emit('close')"
-                        :disabled="props.saving"
-                        class="w-full cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                    >
-                        Cancel
-                    </button>
 
                     <button
                         type="submit"
                         :disabled="props.saving"
-                        class="w-full cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                        class="primary-action-button w-full cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                     >
 
                         {{

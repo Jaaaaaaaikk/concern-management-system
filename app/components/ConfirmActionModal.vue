@@ -46,7 +46,7 @@ const emit = defineEmits(['confirm', 'cancel'])
                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
                     </svg>
                 </button>
-                <div class="flex items-start gap-4 pr-8">
+                <div class="flex items-start gap-4">
                     <span
                         class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
                         :class="props.tone === 'danger' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-800'"
@@ -64,7 +64,7 @@ const emit = defineEmits(['confirm', 'cancel'])
                 <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                     <button
                         type="button"
-                        class="cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="props.loading"
                         @click="emit('cancel')"
                     >
@@ -73,7 +73,7 @@ const emit = defineEmits(['confirm', 'cancel'])
                     <button
                         type="button"
                         class="cursor-pointer rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
-                        :class="props.tone === 'danger' ? 'bg-red-700 hover:bg-red-800' : 'bg-blue-900 hover:bg-blue-800'"
+                        :class="props.tone === 'danger' ? 'bg-red-700 hover:bg-red-800' : 'primary-action-button bg-blue-900 hover:bg-blue-800'"
                         :disabled="props.loading"
                         @click="emit('confirm')"
                     >

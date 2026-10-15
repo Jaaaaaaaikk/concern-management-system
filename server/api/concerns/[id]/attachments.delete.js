@@ -1,4 +1,5 @@
 import db from "../../../utils/db.js";
+import { removeConcernUpload } from "../../../utils/concern-uploads.js";
 import { requireAuth } from "../../../utils/require-auth.js";
 
 export default defineEventHandler(async (event) => {
@@ -118,17 +119,8 @@ export default defineEventHandler(async (event) => {
 
   // Remove the physical file.
   if (attachment.file_path) {
-    const fs = await import("node:fs/promises");
-    const path = await import("node:path");
-
-    const oldFilePath = path.join(
-      process.cwd(),
-      "public",
-      attachment.file_path.replace(/^\/uploads\//, "uploads/"),
-    );
-
     try {
-      await fs.unlink(oldFilePath);
+      await removeConcernUpload(attachment.file_path);
     } catch {
       // Ignore if the physical file
       // no longer exists.

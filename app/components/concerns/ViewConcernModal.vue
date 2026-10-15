@@ -2,6 +2,8 @@
 
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
+import ConfirmActionModal from '~/components/ConfirmActionModal.vue'
+import AppSelect from '~/components/AppSelect.vue'
 import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
 import { roleDisplayName } from '~/composables/useRoleLabel'
 
@@ -35,12 +37,35 @@ const selectedConcern = ref(null)
 const concernComments = ref([])
 const concernAttachments = ref([])
 const concernStatusHistory = ref([])
+const activeConcernTab = ref('overview')
+const visibleCommentCount = ref(10)
+const showAllStatusHistory = ref(false)
+
+const visibleComments = computed(() =>
+    concernComments.value.slice(-visibleCommentCount.value)
+)
+
+const visibleStatusHistory = computed(() => {
+    const latestFirst = concernStatusHistory.value
+        .slice()
+        .sort((left, right) => {
+            const leftTime = parseDate(left.created_at)?.getTime() || 0
+            const rightTime = parseDate(right.created_at)?.getTime() || 0
+
+            return rightTime - leftTime
+        })
+
+    return showAllStatusHistory.value
+        ? latestFirst
+        : latestFirst.slice(0, 3)
+})
 
 const loadingConcernDetails = ref(false)
 const savingComment = ref(false)
 const updatingStatus = ref(false)
 const updatingTrash = ref(false)
 const trashConfirmation = ref('')
+const pendingConfirmation = ref(null)
 
 const newComment = ref('')
 const selectedStatus = ref('')
@@ -85,6 +110,103 @@ const selectedViewerImage = ref(null)
 
 const currentTime = ref(new Date())
 let durationTimer = null
+
+const confirmationDetails = computed(() => {
+    const action = pendingConfirmation.value
+
+    if (!action) {
+        return {
+            title: '',
+            message: '',
+            confirmLabel: 'Confirm',
+            tone: 'primary'
+        }
+    }
+
+    const details = {
+        comment: {
+            title: 'Send this comment?',
+            message: 'Your comment and any selected images will be shared with people who can access this concern.',
+            confirmLabel: 'Send comment',
+            tone: 'primary'
+        },
+        status: {
+            title: 'Confirm status update?',
+            message: `This will change the concern status to ${formatStatus(selectedStatus.value)} and share your update notes${selectedStatusImages.value.length ? ' and evidence images' : ''}.`,
+            confirmLabel: 'Update status',
+            tone: 'primary'
+        },
+        replaceAttachment: {
+            title: 'Replace this attachment?',
+            message: `The selected image will replace the current attachment${selectedReplacementImage.value?.name ? ` with “${selectedReplacementImage.value.name}”` : ''}.`,
+            confirmLabel: 'Replace image',
+            tone: 'primary'
+        },
+        addAttachments: {
+            title: 'Attach these images?',
+            message: `${selectedAdditionalImages.value.length} image${selectedAdditionalImages.value.length === 1 ? '' : 's'} will be added to this concern.`,
+            confirmLabel: 'Attach images',
+            tone: 'primary'
+        },
+        removeAttachment: {
+            title: 'Remove this attachment?',
+            message: `“${action.attachment?.file_name || 'This image'}” will be removed from the concern.`,
+            confirmLabel: 'Remove image',
+            tone: 'danger'
+        }
+    }
+
+    return details[action.type] || details.comment
+})
+
+const confirmationLoading = computed(() => {
+    const type = pendingConfirmation.value?.type
+
+    return type === 'comment'
+        ? savingComment.value
+        : type === 'status'
+            ? updatingStatus.value
+            : type === 'replaceAttachment'
+                ? Boolean(replacingAttachmentId.value)
+                : type === 'addAttachments'
+                    ? addingAttachments.value
+                    : type === 'removeAttachment'
+                        ? Boolean(deletingAttachmentId.value)
+                        : false
+})
+
+function requestConfirmation(type, details = {}) {
+    if (!confirmationLoading.value) {
+        pendingConfirmation.value = { type, ...details }
+    }
+}
+
+function cancelPendingConfirmation() {
+    if (!confirmationLoading.value) {
+        pendingConfirmation.value = null
+    }
+}
+
+async function confirmPendingAction() {
+    if (!pendingConfirmation.value || confirmationLoading.value) {
+        return
+    }
+
+    const action = pendingConfirmation.value
+    pendingConfirmation.value = null
+
+    if (action.type === 'comment') {
+        await addComment(true)
+    } else if (action.type === 'status') {
+        await updateConcernStatus(true)
+    } else if (action.type === 'replaceAttachment') {
+        await saveAttachmentReplacement(true)
+    } else if (action.type === 'addAttachments') {
+        await attachAdditionalImages(true)
+    } else if (action.type === 'removeAttachment') {
+        await removeOriginalAttachment(action.attachment, true)
+    }
+}
 
 /*
  * ---------------------------------------------------------
@@ -1038,6 +1160,9 @@ async function loadConcernDetails() {
         )
 
         selectedConcern.value = response.concern
+        activeConcernTab.value = 'overview'
+        visibleCommentCount.value = 10
+        showAllStatusHistory.value = false
 
         concernComments.value =
             response.comments || []
@@ -1146,6 +1271,9 @@ function closeViewModal() {
     concernComments.value = []
     concernAttachments.value = []
     concernStatusHistory.value = []
+    activeConcernTab.value = 'overview'
+    visibleCommentCount.value = 10
+    showAllStatusHistory.value = false
 
     selectedStatus.value = ''
     statusRemarks.value = ''
@@ -1158,11 +1286,27 @@ function closeViewModal() {
     emit('close')
 }
 
+function handleConcernTabKeydown(event) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+        return
+    }
+
+    event.preventDefault()
+    activeConcernTab.value = event.key === 'ArrowLeft' || event.key === 'Home'
+        ? 'overview'
+        : 'conversation'
+
+    nextTick(() => {
+        document.getElementById(`concern-tab-${activeConcernTab.value}`)?.focus()
+    })
+}
+
 /*
  * ---------------------------------------------------------
  * IMAGE VIEWER
  * ---------------------------------------------------------
  */
+
 
 function openImageViewer(attachment) {
     if (!attachment?.file_path) {
@@ -1172,6 +1316,19 @@ function openImageViewer(attachment) {
     selectedViewerImage.value = {
         url: attachmentUrl(attachment.file_path),
         name: attachment.file_name || 'Image'
+    }
+
+    showImageViewer.value = true
+}
+
+function openProfilePhotoViewer(comment) {
+    if (!comment?.profile_photo) {
+        return
+    }
+
+    selectedViewerImage.value = {
+        url: comment.profile_photo,
+        name: `${comment.user_name || 'User'} profile photo`
     }
 
     showImageViewer.value = true
@@ -1372,7 +1529,7 @@ function clearStatusImages() {
  * ---------------------------------------------------------
  */
 
-async function addComment() {
+async function addComment(confirmed = false) {
     if (!selectedConcern.value?.id) {
         return
     }
@@ -1395,6 +1552,11 @@ async function addComment() {
             'error'
         )
 
+        return
+    }
+
+    if (!confirmed) {
+        requestConfirmation('comment')
         return
     }
 
@@ -1563,7 +1725,7 @@ function clearReplacementImage() {
     }
 }
 
-async function saveAttachmentReplacement() {
+async function saveAttachmentReplacement(confirmed = false) {
     if (
         !selectedConcern.value?.id ||
         !editingAttachmentId.value ||
@@ -1580,6 +1742,11 @@ async function saveAttachmentReplacement() {
             'error'
         )
 
+        return
+    }
+
+    if (!confirmed) {
+        requestConfirmation('replaceAttachment')
         return
     }
 
@@ -1729,7 +1896,7 @@ function clearAdditionalImages() {
     }
 }
 
-async function attachAdditionalImages() {
+async function attachAdditionalImages(confirmed = false) {
     if (
         !selectedConcern.value?.id ||
         selectedAdditionalImages.value.length === 0
@@ -1745,6 +1912,11 @@ async function attachAdditionalImages() {
             'error'
         )
 
+        return
+    }
+
+    if (!confirmed) {
+        requestConfirmation('addAttachments')
         return
     }
 
@@ -1807,8 +1979,13 @@ async function attachAdditionalImages() {
  * ---------------------------------------------------------
  */
 
-async function removeOriginalAttachment(attachment) {
+async function removeOriginalAttachment(attachment, confirmed = false) {
     if (!canEditOriginalAttachments()) {
+        return
+    }
+
+    if (!confirmed) {
+        requestConfirmation('removeAttachment', { attachment })
         return
     }
 
@@ -1817,14 +1994,6 @@ async function removeOriginalAttachment(attachment) {
         Number(attachment.id)
     ) {
         clearReplacementImage()
-    }
-
-    const confirmed = window.confirm(
-        `Remove "${attachment.file_name}" from this concern?`
-    )
-
-    if (!confirmed) {
-        return
     }
 
     deletingAttachmentId.value = attachment.id
@@ -1868,7 +2037,7 @@ async function removeOriginalAttachment(attachment) {
  * ---------------------------------------------------------
  */
 
-async function updateConcernStatus() {
+async function updateConcernStatus(confirmed = false) {
     if (!selectedConcern.value?.id) {
         return
     }
@@ -2006,6 +2175,11 @@ async function updateConcernStatus() {
         return
     }
 
+    if (!confirmed) {
+        requestConfirmation('status')
+        return
+    }
+
     updatingStatus.value = true
 
     try {
@@ -2024,7 +2198,7 @@ async function updateConcernStatus() {
         if (movingToInProgress) {
             formData.append(
                 'target_commitment_at',
-                targetCommitmentAt.value
+                localDateInputValue(targetCommitmentAt.value)
             )
         }
 
@@ -2133,15 +2307,26 @@ onUnmounted(() => {
 
 <template>
 
+    <ConfirmActionModal
+        :show="Boolean(pendingConfirmation)"
+        :title="confirmationDetails.title"
+        :message="confirmationDetails.message"
+        :confirm-label="confirmationDetails.confirmLabel"
+        :tone="confirmationDetails.tone"
+        :loading="confirmationLoading"
+        @confirm="confirmPendingAction"
+        @cancel="cancelPendingConfirmation"
+    />
+
     <div v-if="show"
         class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6">
 
         <div
-            class="my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+            class="modal-height-adaptive my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
 
             <!-- Header -->
             <div
-                class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
+                class="modal-header-adaptive flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
 
                 <div>
 
@@ -2168,14 +2353,9 @@ onUnmounted(() => {
 
                 </div>
 
-                <button type="button" @click="closeViewModal" :disabled="savingComment ||
-                    updatingStatus ||
-                    updatingTrash ||
-                    addingAttachments ||
-                    replacingAttachmentId
-                    "
+                <button type="button" @click="closeViewModal" :disabled="savingComment || updatingStatus || updatingTrash || addingAttachments || replacingAttachmentId"
                     aria-label="Close modal"
-                    class="group relative flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50">
+                    class="group relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50">
                     <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
                         stroke="currentColor" aria-hidden="true"
@@ -2184,6 +2364,58 @@ onUnmounted(() => {
                     </svg>
                 </button>
 
+            </div>
+
+            <div v-if="selectedConcern" class="shrink-0 border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
+                <div
+                    class="flex overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm"
+                    role="tablist"
+                    aria-label="Concern sections"
+                    @keydown="handleConcernTabKeydown"
+                >
+                    <button
+                        id="concern-tab-overview"
+                        type="button"
+                        role="tab"
+                        aria-controls="concern-panel-overview"
+                        :aria-selected="activeConcernTab === 'overview'"
+                        :tabindex="activeConcernTab === 'overview' ? 0 : -1"
+                        class="flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-l-xl px-3 py-2 text-sm font-semibold transition focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-inset"
+                        :class="activeConcernTab === 'overview'
+                            ? 'bg-blue-900 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-blue-900'"
+                        @click="activeConcernTab = 'overview'"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25A1.5 1.5 0 0 1 5.25 3.75h5.25v7.5H3.75v-6Zm9.75-1.5h5.25a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5H13.5v-6Zm-9.75 10.5h5.25v6H5.25a1.5 1.5 0 0 1-1.5-1.5v-4.5Zm9.75 0h6.75v4.5a1.5 1.5 0 0 1-1.5 1.5H13.5v-6Z" />
+                        </svg>
+                        Overview
+                    </button>
+                    <button
+                        id="concern-tab-conversation"
+                        type="button"
+                        role="tab"
+                        aria-controls="concern-panel-conversation"
+                        :aria-selected="activeConcernTab === 'conversation'"
+                        :tabindex="activeConcernTab === 'conversation' ? 0 : -1"
+                        class="flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-r-xl px-3 py-2 text-sm font-semibold transition focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-inset"
+                        :class="activeConcernTab === 'conversation'
+                            ? 'bg-blue-900 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-blue-900'"
+                        @click="activeConcernTab = 'conversation'"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3.75h6m-9.75 7.5 2.6-3.12a2.25 2.25 0 0 1 1.73-.81h9.17A2.25 2.25 0 0 0 19.5 13.3V5.25A2.25 2.25 0 0 0 17.25 3h-10.5A2.25 2.25 0 0 0 4.5 5.25v14.25Z" />
+                        </svg>
+                        Conversation
+                        <span
+                            class="rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+                            :class="activeConcernTab === 'conversation' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'"
+                        >
+                            {{ concernComments.length }}
+                        </span>
+                    </button>
+                </div>
             </div>
 
             <!-- Body -->
@@ -2207,6 +2439,8 @@ onUnmounted(() => {
                 </div>
 
                 <div v-else-if="selectedConcern" class="space-y-5">
+
+                    <div v-if="activeConcernTab === 'overview'" id="concern-panel-overview" role="tabpanel" aria-labelledby="concern-tab-overview" class="space-y-5">
 
                     <!-- Pending Recipient Notice -->
                     <div v-if="
@@ -2319,7 +2553,7 @@ onUnmounted(() => {
                         </div>
                         <div class="flex shrink-0 gap-2">
                             <button v-if="canRestoreTrashedConcern()" type="button" @click="requestTrashConfirmation('restore')" :disabled="updatingTrash"
-                                class="cursor-pointer rounded-lg border border-green-300 bg-white px-3 py-2 text-xs font-semibold text-green-800 transition hover:bg-green-50 disabled:opacity-50">
+                                class="secondary-hover-button cursor-pointer rounded-lg border border-green-300 bg-white px-3 py-2 text-xs font-semibold text-green-800 transition hover:bg-green-50 disabled:opacity-50">
                                 Restore
                             </button>
                             <button v-if="currentUser?.role_name === 'superadmin'" type="button" @click="requestTrashConfirmation('purge')" :disabled="updatingTrash"
@@ -2336,7 +2570,7 @@ onUnmounted(() => {
                             </p>
                             <div class="mt-3 flex justify-end gap-2">
                                 <button type="button" @click="cancelTrashConfirmation" :disabled="updatingTrash"
-                                    class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                                    class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                                     Cancel
                                 </button>
                                 <button type="button" @click="confirmTrashAction" :disabled="updatingTrash"
@@ -2356,7 +2590,7 @@ onUnmounted(() => {
                         </p>
                         <div class="mt-3 flex justify-end gap-2">
                             <button type="button" @click="cancelTrashConfirmation" :disabled="updatingTrash"
-                                class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                                    class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                                 Cancel
                             </button>
                             <button type="button" @click="confirmTrashAction" :disabled="updatingTrash"
@@ -2627,7 +2861,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Status Update -->
-                    <div v-if="canUpdateStatus()" class="view-concern-status overflow-hidden rounded-xl border border-blue-200 bg-white shadow-md">
+                    <div v-if="canUpdateStatus()" data-tour="view-status" class="view-concern-status overflow-hidden rounded-xl border border-blue-200 bg-white shadow-md">
 
                         <div class="border-b border-blue-100 bg-blue-50/70 px-5 py-4">
 
@@ -2671,18 +2905,16 @@ onUnmounted(() => {
                                         New status
                                     </label>
 
-                                    <select id="concern-status" v-model="selectedStatus" :disabled="updatingStatus || availableStatusOptions.length === 0"
-                                        class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100">
-
-                                        <option :value="selectedConcern.status">
-                                            {{ formatStatus(selectedConcern.status) }}
-                                        </option>
-
-                                        <option v-for="option in availableStatusOptions" :key="option.value" :value="option.value">
-                                            {{ option.label }}
-                                        </option>
-
-                                    </select>
+                                    <AppSelect
+                                        id="concern-status"
+                                        v-model="selectedStatus"
+                                        :placeholder="formatStatus(selectedConcern.status)"
+                                        :disabled="updatingStatus || availableStatusOptions.length === 0"
+                                        :options="[
+                                            { label: formatStatus(selectedConcern.status), value: selectedConcern.status },
+                                            ...availableStatusOptions
+                                        ]"
+                                    />
 
                                     <p class="mt-2 text-xs text-slate-500">
                                         Choose the next status allowed for your organization.
@@ -2830,7 +3062,7 @@ onUnmounted(() => {
                             <button type="button" @click="updateConcernStatus" :disabled="updatingStatus ||
                                 selectedStatus === selectedConcern.status
                                 "
-                                class="cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50">
+                                class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50">
                                 {{
                                     updatingStatus
                                         ? 'Updating...'
@@ -2845,7 +3077,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Attachments -->
-                    <div class="view-concern-attachments rounded-xl border border-violet-100 bg-white p-5 shadow-lg shadow-violet-950/5">
+                    <div data-tour="view-attachments" class="view-concern-attachments rounded-xl border border-violet-100 bg-white p-5 shadow-lg shadow-violet-950/5">
 
                         <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 
@@ -2952,14 +3184,14 @@ onUnmounted(() => {
                             <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 
                                 <button type="button" @click="clearAdditionalImages" :disabled="addingAttachments"
-                                    class="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+                                    class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
                                     Cancel
                                 </button>
 
                                 <button type="button" @click="attachAdditionalImages" :disabled="addingAttachments ||
                                     selectedAdditionalImages.length === 0
                                     "
-                                    class="cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">
+                                    class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">
                                     {{
                                         addingAttachments
                                             ? 'Saving...'
@@ -2994,7 +3226,7 @@ onUnmounted(() => {
                                 </div>
 
                                 <button type="button" @click="clearReplacementImage" :disabled="replacingAttachmentId"
-                                    class="cursor-pointer text-xs font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                    class="secondary-hover-button cursor-pointer text-xs font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
                                     Cancel
                                 </button>
 
@@ -3027,7 +3259,7 @@ onUnmounted(() => {
                             <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 
                                 <button type="button" @click="clearReplacementImage" :disabled="replacingAttachmentId"
-                                    class="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+                                    class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
                                     Cancel
                                 </button>
 
@@ -3139,7 +3371,7 @@ onUnmounted(() => {
                                                     deletingAttachmentId === attachment.id ||
                                                     addingAttachments
                                                     "
-                                                class="flex-1 cursor-pointer rounded-md border border-slate-300 px-2 py-1.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50">
+                                                class="secondary-hover-button flex-1 cursor-pointer rounded-md border border-slate-300 px-2 py-1.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50">
                                                 Replace
                                             </button>
 
@@ -3148,7 +3380,7 @@ onUnmounted(() => {
                                                     deletingAttachmentId === attachment.id ||
                                                     addingAttachments
                                                     "
-                                                class="cursor-pointer rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                                class="secondary-hover-button cursor-pointer rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
                                                 {{
                                                     deletingAttachmentId === attachment.id
                                                         ? '...'
@@ -3178,17 +3410,23 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Status History -->
-                    <div class="view-concern-history rounded-xl border border-emerald-100 bg-white p-5 shadow-lg shadow-emerald-950/5 lg:max-h-[70vh] lg:overflow-y-auto">
+                    <div class="view-concern-history rounded-xl border border-emerald-100 bg-white p-5 shadow-lg shadow-emerald-950/5">
 
-                        <div class="mb-4">
+                        <div class="mb-4 flex items-start justify-between gap-3">
+                            <div>
 
-                            <h4 class="text-base font-semibold text-slate-800">
-                                Status History
-                            </h4>
+                                <h4 class="text-base font-semibold text-slate-800">
+                                    Status History
+                                </h4>
 
-                            <p class="mt-1 text-sm text-slate-500">
-                                Record of status changes.
-                            </p>
+                                <p class="mt-1 text-sm text-slate-500">
+                                    Record of status changes.
+                                </p>
+                            </div>
+
+                            <span v-if="concernStatusHistory.length" class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">
+                                {{ concernStatusHistory.length }} {{ concernStatusHistory.length === 1 ? 'entry' : 'entries' }}
+                            </span>
 
                         </div>
 
@@ -3199,7 +3437,7 @@ onUnmounted(() => {
 
                         <div v-else class="space-y-4">
 
-                            <div v-for="history in concernStatusHistory" :key="history.id"
+                            <div v-for="history in visibleStatusHistory" :key="history.id"
                                 class="rounded-lg border border-slate-200 bg-slate-50 p-4">
 
                                 <div class="flex flex-wrap items-center justify-between gap-3">
@@ -3351,18 +3589,34 @@ onUnmounted(() => {
 
                             </div>
 
+                            <button
+                                v-if="concernStatusHistory.length > 3"
+                                type="button"
+                                class="w-full cursor-pointer rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-xs font-semibold text-blue-800 transition hover:border-blue-200 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+                                @click="showAllStatusHistory = !showAllStatusHistory"
+                            >
+                                {{ showAllStatusHistory ? 'Show latest 3 entries' : `Show all ${concernStatusHistory.length} history entries` }}
+                            </button>
+
                         </div>
 
                     </div>
 
                     </div>
 
-                    <!-- Comments -->
-                    <div class="max-h-[70vh] overflow-y-auto rounded-xl border border-amber-100 bg-white p-5 shadow-lg shadow-amber-950/5">
+                    </div>
+
+                    <!-- Conversation -->
+                    <div v-else id="concern-panel-conversation" role="tabpanel" aria-labelledby="concern-tab-conversation" data-tour="view-comments" class="rounded-xl border border-slate-200 bg-white p-5 shadow-lg shadow-blue-950/5">
 
                         <div class="mb-5">
 
-                            <h4 class="text-base font-semibold text-slate-800">
+                            <h4 class="flex items-center gap-2 text-base font-semibold text-blue-950">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-800" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3.75h6m-9.75 7.5 2.6-3.12a2.25 2.25 0 0 1 1.73-.81h9.17A2.25 2.25 0 0 0 19.5 13.3V5.25A2.25 2.25 0 0 0 17.25 3h-10.5A2.25 2.25 0 0 0 4.5 5.25v14.25Z" />
+                                    </svg>
+                                </span>
                                 Conversation
                             </h4>
 
@@ -3388,110 +3642,88 @@ onUnmounted(() => {
                         <!-- Conversation -->
                         <div v-else class="space-y-5">
 
-                            <div v-for="comment in concernComments" :key="comment.id" class="flex" :class="Number(comment.user_id) === Number(currentUser?.id)
-                                ? 'justify-end'
-                                : 'justify-start'
-                                ">
+                            <button
+                                v-if="visibleCommentCount < concernComments.length"
+                                type="button"
+                                class="w-full cursor-pointer rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-xs font-semibold text-blue-800 transition hover:border-blue-200 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+                                @click="visibleCommentCount = Math.min(visibleCommentCount + 10, concernComments.length)"
+                            >
+                                Load {{ Math.min(10, concernComments.length - visibleCommentCount) }} earlier {{ concernComments.length - visibleCommentCount === 1 ? 'comment' : 'comments' }}
+                                <span class="ml-1 font-medium text-blue-600">({{ concernComments.length - visibleCommentCount }} remaining)</span>
+                            </button>
 
-                                <div class="max-w-[90%] sm:max-w-[78%]">
+                            <article
+                                v-for="comment in visibleComments"
+                                :key="comment.id"
+                                class="flex items-start gap-3"
+                                :class="Number(comment.user_id) === Number(currentUser?.id) ? 'flex-row-reverse' : 'flex-row'"
+                            >
+                                <button
+                                    v-if="comment.profile_photo"
+                                    type="button"
+                                    class="mt-1 shrink-0 cursor-zoom-in rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                                    :aria-label="`View ${comment.user_name || 'user'} profile photo`"
+                                    :title="`View ${comment.user_name || 'user'} profile photo`"
+                                    @click="openProfilePhotoViewer(comment)"
+                                >
+                                    <UserAvatar
+                                        :name="comment.user_name || '-'"
+                                        :photo-url="comment.profile_photo"
+                                        size="h-10 w-10 text-xs"
+                                        class="ring-2 ring-white shadow-sm"
+                                    />
+                                </button>
+                                <UserAvatar
+                                    v-else
+                                    :name="comment.user_name || '-'"
+                                    size="h-10 w-10 text-xs"
+                                    class="mt-1 ring-2 ring-white shadow-sm"
+                                />
 
-                                    <!-- Sender -->
-                                    <div class="mb-1 flex flex-wrap items-center gap-2" :class="Number(comment.user_id) === Number(currentUser?.id)
-                                        ? 'justify-end'
-                                        : 'justify-start'
-                                        ">
-
-                                        <UserAvatar :name="comment.user_name || '-'" :photo-url="comment.profile_photo"
-                                            size="h-7 w-7 text-[10px]" />
-
-                                        <p class="text-xs font-semibold text-slate-700">
-                                            {{
-                                                comment.user_name ||
-                                                '-'
-                                            }}
-                                        </p>
-
-                                        <span
-                                            class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                                            {{
-                                                roleDisplayName(comment.role_name)
-                                            }}
+                                <div
+                                    class="min-w-0 max-w-[88%] overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md sm:max-w-[78%]"
+                                    :class="Number(comment.user_id) === Number(currentUser?.id)
+                                        ? 'border-blue-200 bg-blue-50/70'
+                                        : 'border-slate-200 bg-white'"
+                                >
+                                    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-2"
+                                        :class="Number(comment.user_id) === Number(currentUser?.id)
+                                            ? 'border-blue-100 bg-blue-100/60'
+                                            : 'border-slate-100 bg-slate-50'">
+                                        <span class="text-[10px] font-medium text-slate-500">{{ formatDate(comment.created_at) }}</span>
+                                        <span class="text-slate-300" aria-hidden="true">·</span>
+                                        <span class="text-[11px] font-bold text-blue-950">{{ comment.user_name || '-' }}</span>
+                                        <span class="rounded-full bg-white/90 px-2 py-0.5 text-[9px] font-semibold text-blue-800 ring-1 ring-blue-100">
+                                            {{ roleDisplayName(comment.role_name) }}
                                         </span>
-
-                                        <span
-                                            class="max-w-[180px] truncate rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                                            {{
-                                                comment.organization_name ||
-                                                '-'
-                                            }}
+                                        <span v-if="comment.organization_name" class="max-w-40 truncate rounded-full bg-white/90 px-2 py-0.5 text-[9px] font-medium text-slate-600 ring-1 ring-slate-200" :title="comment.organization_name">
+                                            {{ comment.organization_name }}
                                         </span>
-
+                                        <template v-if="comment.updated_at && comment.updated_at !== comment.created_at">
+                                            <span class="text-slate-300" aria-hidden="true">·</span>
+                                            <span class="text-[10px] font-semibold text-slate-500">Edited {{ formatDate(comment.updated_at) }}</span>
+                                        </template>
                                     </div>
 
-                                    <!-- Message Bubble -->
-                                    <div class="rounded-2xl px-4 py-3" :class="Number(comment.user_id) === Number(currentUser?.id)
-                                        ? 'rounded-br-md bg-blue-900 text-white'
-                                        : 'rounded-bl-md bg-slate-100 text-slate-800'
-                                        ">
+                                    <div class="px-3 py-3 sm:px-4">
+                                        <p v-if="comment.comment" class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{{ comment.comment }}</p>
 
-                                        <!-- Comment Text -->
-                                        <p v-if="comment.comment"
-                                            class="whitespace-pre-wrap break-words text-sm leading-6">
-                                            {{
-                                                comment.comment
-                                            }}
-                                        </p>
-
-                                        <!-- Comment Attachments -->
-                                        <div v-if="
-                                            comment.attachments &&
-                                            comment.attachments.length > 0
-                                        " :class="comment.comment
-                                            ? 'mt-3'
-                                            : ''
-                                            " class="flex flex-wrap gap-2">
-
-                                            <button v-for="attachment in comment.attachments" :key="attachment.id"
-                                                type="button" @click="openImageViewer(attachment)"
-                                                class="group relative block h-20 w-20 cursor-pointer overflow-hidden rounded-lg border border-slate-300 bg-white transition hover:border-slate-500 hover:shadow-md sm:h-24 sm:w-24"
-                                                :title="`View ${attachment.file_name}`">
-
-                                                <img v-if="attachment.file_type?.startsWith('image/')"
-                                                    :src="attachmentUrl(attachment.file_path)"
-                                                    :alt="attachment.file_name"
-                                                    class="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
-
-                                                <div
-                                                    class="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
-
-                                                    <span
-                                                        class="text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">
-                                                        View
-                                                    </span>
-
-                                                </div>
-
+                                        <div v-if="comment.attachments?.length" :class="comment.comment ? 'mt-3' : ''" class="flex flex-wrap gap-2">
+                                            <button
+                                                v-for="attachment in comment.attachments"
+                                                :key="attachment.id"
+                                                type="button"
+                                                @click="openImageViewer(attachment)"
+                                                class="group relative block h-20 w-20 cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white transition hover:border-blue-400 hover:shadow-md sm:h-24 sm:w-24"
+                                                :title="`View ${attachment.file_name}`"
+                                            >
+                                                <img v-if="attachment.file_type?.startsWith('image/')" :src="attachmentUrl(attachment.file_path)" :alt="attachment.file_name" class="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                                                <span class="absolute inset-0 flex items-center justify-center bg-black/0 text-xs font-semibold text-white opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100">View</span>
                                             </button>
-
                                         </div>
-
                                     </div>
-
-                                    <!-- Timestamp -->
-                                    <p class="mt-1 text-[11px] text-slate-400" :class="Number(comment.user_id) === Number(currentUser?.id)
-                                        ? 'text-right'
-                                        : 'text-left'
-                                        ">
-                                        {{
-                                            formatDate(
-                                                comment.created_at
-                                            )
-                                        }}
-                                    </p>
-
                                 </div>
-
-                            </div>
+                            </article>
 
                         </div>
 
@@ -3598,7 +3830,7 @@ onUnmounted(() => {
                                         selectedCommentImages.length === 0
                                     )
                                     "
-                                    class="cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50">
+                                    class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50">
                                     {{
                                         savingComment
                                             ? 'Sending...'
@@ -3626,21 +3858,6 @@ onUnmounted(() => {
                     </div>
 
                 </div>
-
-            </div>
-
-            <!-- Footer -->
-            <div class="flex shrink-0 justify-end border-t border-slate-200 bg-white px-6 py-4">
-
-                <button type="button" @click="closeViewModal" :disabled="savingComment ||
-                    updatingStatus ||
-                    updatingTrash ||
-                    addingAttachments ||
-                    replacingAttachmentId
-                    "
-                    class="cursor-pointer rounded-lg border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50">
-                    Close
-                </button>
 
             </div>
 
@@ -3685,6 +3902,7 @@ onUnmounted(() => {
 <style scoped>
 @media (min-width: 1024px) {
     .view-concern-sections {
+        align-items: start;
         grid-template-areas:
             'main history'
             'status status'

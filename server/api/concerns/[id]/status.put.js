@@ -1,9 +1,10 @@
 
 import db from "../../../utils/db.js";
 import { requireAuth } from "../../../utils/require-auth.js";
-import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { saveConcernUpload } from "../../../utils/concern-uploads.js";
 
 export default defineEventHandler(async (event) => {
   /*
@@ -687,17 +688,6 @@ export default defineEventHandler(async (event) => {
      */
 
     if (resolvingConcern && evidenceImages.length > 0) {
-      const uploadDirectory = path.join(
-        process.cwd(),
-        "public",
-        "uploads",
-        "concerns",
-      );
-
-      await mkdir(uploadDirectory, {
-        recursive: true,
-      });
-
       for (const image of evidenceImages) {
         const originalName = image.filename || "evidence";
 
@@ -719,15 +709,9 @@ export default defineEventHandler(async (event) => {
         const fileName =
           `status-${concernId}-${randomPart}${extension}`;
 
-        const fileSystemPath = path.join(
-          uploadDirectory,
-          fileName,
-        );
+        const fileSystemPath = await saveConcernUpload(fileName, image.data);
 
-        const browserPath =
-          `/uploads/concerns/${fileName}`;
-
-        await writeFile(fileSystemPath, image.data);
+        const databaseFilePath = `/uploads/concerns/${fileName}`;
 
         savedFilePaths.push(fileSystemPath);
 
@@ -749,7 +733,7 @@ export default defineEventHandler(async (event) => {
             concernId,
             currentUser.id,
             originalName,
-            browserPath,
+            databaseFilePath,
             image.type,
             image.data.length,
           ],

@@ -1,4 +1,5 @@
 import db from "../../../utils/db.js";
+import { getConcernUploadPath, removeConcernUpload } from "../../../utils/concern-uploads.js";
 import { requireAuth } from "../../../utils/require-auth.js";
 
 export default defineEventHandler(async (event) => {
@@ -161,16 +162,13 @@ export default defineEventHandler(async (event) => {
 
   const newFileName = `concern-${concernId}-${randomName}${extension}`;
 
-  const uploadDir = "public/uploads/concerns";
-
   const fs = await import("node:fs/promises");
   const path = await import("node:path");
 
+  const uploadDir = path.dirname(getConcernUploadPath(newFileName));
   await fs.mkdir(uploadDir, { recursive: true });
-
-  const newFilePath = path.join(uploadDir, newFileName);
-
-  const publicFilePath = `/uploads/concerns/${newFileName}`;
+  const newFilePath = getConcernUploadPath(newFileName);
+  const databaseFilePath = `/uploads/concerns/${newFileName}`;
 
   try {
     // Save the new file first.
@@ -194,7 +192,7 @@ export default defineEventHandler(async (event) => {
             `,
       [
         newFileName,
-        publicFilePath,
+        databaseFilePath,
         imageFile.type,
         imageFile.data.length,
         attachmentId,
@@ -204,14 +202,8 @@ export default defineEventHandler(async (event) => {
 
     // Delete the old physical file.
     if (oldAttachment.file_path) {
-      const oldFilePath = path.join(
-        process.cwd(),
-        "public",
-        oldAttachment.file_path.replace(/^\/uploads\//, "uploads/"),
-      );
-
       try {
-        await fs.unlink(oldFilePath);
+        await removeConcernUpload(oldAttachment.file_path);
       } catch {
         // Ignore if the old physical file
         // no longer exists.
@@ -224,7 +216,7 @@ export default defineEventHandler(async (event) => {
       attachment: {
         id: attachmentId,
         file_name: newFileName,
-        file_path: publicFilePath,
+        file_path: `/api/concerns/${concernId}/attachments/${attachmentId}`,
         file_type: imageFile.type,
         file_size: imageFile.data.length,
       },

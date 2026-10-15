@@ -1,6 +1,5 @@
-import { unlink } from "node:fs/promises";
-import path from "node:path";
 import db from "./db.js";
+import { removeConcernUpload } from "./concern-uploads.js";
 
 const EXPIRY_CONDITION =
   "AND deleted_at <= DATE_SUB(NOW(), INTERVAL 30 DAY)";
@@ -75,23 +74,9 @@ export async function permanentlyDeleteTrashedConcern(
     connection.release();
   }
 
-  const uploadDirectory = path.resolve(
-    process.cwd(),
-    "public",
-    "uploads",
-    "concerns",
-  );
-
   for (const filePath of filePaths) {
-    const fileName = path.basename(String(filePath));
-    const safePath = path.resolve(uploadDirectory, fileName);
-
-    if (path.dirname(safePath) !== uploadDirectory) {
-      continue;
-    }
-
     try {
-      await unlink(safePath);
+      await removeConcernUpload(filePath);
     } catch (error) {
       if (error?.code !== "ENOENT") {
         console.error("Failed to remove purged concern upload:", error);

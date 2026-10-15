@@ -91,7 +91,14 @@ export async function getSessionUser(event) {
     return null
   }
 
-  return rows[0]
+  const user = rows[0]
+
+  return {
+    ...user,
+    profile_photo: user.profile_photo
+      ? `/api/users/${user.id}/profile-photo`
+      : null
+  }
 }
 
 export async function isSessionRevoked(event) {

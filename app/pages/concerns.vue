@@ -2,6 +2,7 @@
 
 import ViewConcernModal from '~/components/concerns/ViewConcernModal.vue'
 import CreateConcernModal from '~/components/concerns/CreateConcernModal.vue'
+import AppSelect from '~/components/AppSelect.vue'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({
@@ -1247,6 +1248,8 @@ watch(
 
 async function logout() {
 
+    currentUser.value = null
+
     try {
 
         await $fetch(
@@ -1260,7 +1263,7 @@ async function logout() {
         // Continue to login.
     }
 
-    navigateTo('/login')
+    await navigateTo('/login')
 }
 
 function updateProfilePhoto(
@@ -1475,7 +1478,7 @@ onUnmounted(() => {
                         </div>
                         <button v-if="['superadmin', 'system_admin', 'concern_handler', 'requestor'].includes(currentUser?.role_name)" type="button"
                             @click="toggleTrashView"
-                            class="inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:py-2.5 sm:text-sm lg:hidden">
+                            class="secondary-hover-button inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:py-2.5 sm:text-sm lg:hidden">
                             <span aria-hidden="true">{{ trashView ? '←' : '▱' }}</span>
                             {{ trashView ? 'Back to Concerns' : 'View Trash' }}
                         </button>
@@ -1484,13 +1487,14 @@ onUnmounted(() => {
                     <div class="flex flex-col gap-2 sm:flex-row">
                         <button v-if="['superadmin', 'system_admin', 'concern_handler', 'requestor'].includes(currentUser?.role_name)" type="button"
                             @click="toggleTrashView"
-                            class="hidden shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:py-2.5 sm:text-sm lg:inline-flex">
+                            class="secondary-hover-button hidden shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-4 sm:py-2.5 sm:text-sm lg:inline-flex">
                             <span aria-hidden="true">{{ trashView ? '←' : '▱' }}</span>
                             {{ trashView ? 'Back to Concerns' : 'View Trash' }}
                         </button>
                         <button v-if="!trashView && ['concern_handler', 'requestor'].includes(currentUser?.role_name)" type="button"
                             @click="openCreateModal"
-                            class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 hover:shadow-md active:scale-[0.99]">
+                            data-tour="create-concern"
+                            class="primary-action-button inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-linear-to-r from-emerald-600 to-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-emerald-950/15 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.03] hover:from-emerald-700 hover:to-teal-700 hover:shadow-lg hover:shadow-emerald-950/25 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200 motion-reduce:transition-none">
                             <span class="text-lg leading-none">+</span>
                             Create Concern
                         </button>
@@ -1528,6 +1532,7 @@ onUnmounted(() => {
                         </svg>
                         <input
                             id="concern-search"
+                            data-tour="concern-search"
                             v-model="search"
                             @input="handleSearchInput"
                             type="search"
@@ -1539,9 +1544,10 @@ onUnmounted(() => {
                     <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
                         <button
                             type="button"
+                            data-tour="concern-filters"
                             :aria-expanded="showFilterPanel"
                             aria-controls="concern-filter-panel"
-                            class="inline-flex h-11 w-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-2 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-700/20 sm:h-auto sm:w-auto sm:px-4 sm:py-3"
+                            class="secondary-hover-button inline-flex h-11 w-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-2 py-2 text-sm font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-700/20 sm:h-auto sm:w-auto sm:px-4 sm:py-3"
                             :class="showFilterPanel || activeFilterCount
                                 ? 'border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100'
                                 : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'"
@@ -1558,7 +1564,7 @@ onUnmounted(() => {
                             type="button"
                             @click="openExportModal"
                             :disabled="exporting"
-                            class="inline-flex h-11 w-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-2 py-2 text-sm font-semibold text-blue-900 shadow-sm transition hover:border-blue-300 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-700/20 disabled:cursor-not-allowed disabled:opacity-50 sm:h-auto sm:w-auto sm:px-4 sm:py-3"
+                            class="secondary-hover-button inline-flex h-11 w-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-2 py-2 text-sm font-semibold text-blue-900 shadow-sm transition hover:border-blue-300 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-700/20 disabled:cursor-not-allowed disabled:opacity-50 sm:h-auto sm:w-auto sm:px-4 sm:py-3"
                         >
                             <svg v-if="!exporting" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
@@ -1585,7 +1591,7 @@ onUnmounted(() => {
                                 <h3 class="text-sm font-semibold text-slate-900">Filter concerns</h3>
                                 <p class="mt-0.5 text-xs text-slate-500">Choose one or more filters to narrow the list.</p>
                             </div>
-                            <button v-if="activeFilterCount" type="button" class="cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold text-blue-800 transition hover:bg-blue-50" @click="clearAllFilters">
+                            <button v-if="activeFilterCount" type="button" class="secondary-hover-button cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold text-blue-800 transition hover:bg-blue-50" @click="clearAllFilters">
                                 Clear filters
                             </button>
                         </div>
@@ -1593,45 +1599,69 @@ onUnmounted(() => {
                         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                                 <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Status</span>
-                                <select v-model="statusDropdownValue" @change="handleStatusChange" class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15">
-                                    <option value="">All statuses</option>
-                                    <option value="pending">Pending</option>
-                                    <option value="in_progress">In Progress</option>
-                                    <option value="on_hold">On Hold</option>
-                                    <option value="resolved">Resolved</option>
-                                    <option value="closed">Closed</option>
-                                    <option value="late_response">Late Response</option>
-                                </select>
+                                <AppSelect
+                                    v-model="statusDropdownValue"
+                                    aria-label="Filter by status"
+                                    placeholder="All statuses"
+                                    :options="[
+                                        { label: 'All statuses', value: '' },
+                                        { label: 'Pending', value: 'pending' },
+                                        { label: 'In Progress', value: 'in_progress' },
+                                        { label: 'On Hold', value: 'on_hold' },
+                                        { label: 'Resolved', value: 'resolved' },
+                                        { label: 'Closed', value: 'closed' },
+                                        { label: 'Late Response', value: 'late_response' }
+                                    ]"
+                                    @change="handleStatusChange"
+                                />
                             </label>
 
                             <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                                 <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Priority</span>
-                                <select v-model="priorityFilter" @change="handlePriorityChange" class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15">
-                                    <option value="">All priorities</option>
-                                    <option value="low">Low</option>
-                                    <option value="medium">Medium</option>
-                                    <option value="high">High</option>
-                                    <option value="urgent">Urgent</option>
-                                </select>
+                                <AppSelect
+                                    v-model="priorityFilter"
+                                    aria-label="Filter by priority"
+                                    placeholder="All priorities"
+                                    :options="[
+                                        { label: 'All priorities', value: '' },
+                                        { label: 'Low', value: 'low' },
+                                        { label: 'Medium', value: 'medium' },
+                                        { label: 'High', value: 'high' },
+                                        { label: 'Urgent', value: 'urgent' }
+                                    ]"
+                                    @change="handlePriorityChange"
+                                />
                             </label>
 
                             <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                                 <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Department</span>
-                                <select v-model="departmentFilter" @change="handleDepartmentChange" class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15">
-                                    <option value="">All departments</option>
-                                    <option v-for="organization in organizations" :key="organization.id" :value="String(organization.id)">{{ organization.name }}</option>
-                                </select>
+                                <AppSelect
+                                    v-model="departmentFilter"
+                                    aria-label="Filter by department"
+                                    placeholder="All departments"
+                                    :options="[
+                                        { label: 'All departments', value: '' },
+                                        ...organizations.map(organization => ({ label: organization.name, value: String(organization.id) }))
+                                    ]"
+                                    @change="handleDepartmentChange"
+                                />
                             </label>
 
                             <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                                 <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date created</span>
-                                <select v-model="exportDateFilter" @change="handleExportDateChange" class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15">
-                                    <option value="">All dates</option>
-                                    <option value="today">Today</option>
-                                    <option value="week">This week</option>
-                                    <option value="month">This month</option>
-                                    <option value="year">This year</option>
-                                </select>
+                                <AppSelect
+                                    v-model="exportDateFilter"
+                                    aria-label="Filter by date created"
+                                    placeholder="All dates"
+                                    :options="[
+                                        { label: 'All dates', value: '' },
+                                        { label: 'Today', value: 'today' },
+                                        { label: 'This week', value: 'week' },
+                                        { label: 'This month', value: 'month' },
+                                        { label: 'This year', value: 'year' }
+                                    ]"
+                                    @change="handleExportDateChange"
+                                />
                             </label>
                         </div>
                     </section>
@@ -1647,10 +1677,10 @@ onUnmounted(() => {
                             <p class="mt-0.5 text-xs leading-5 text-amber-900">Pending concerns with no response from the assigned organization within four hours.</p>
                         </div>
                     </div>
-                    <button type="button" class="cursor-pointer self-start rounded-lg border border-rose bg-white px-3 py-2 text-xs font-semibold text-amber-900 transition hover:bg-rose-100 sm:self-auto" @click="clearLateResponseFilter">Clear filter</button>
+                    <button type="button" class="secondary-hover-button cursor-pointer self-start rounded-lg border border-rose bg-white px-3 py-2 text-xs font-semibold text-amber-900 transition hover:bg-rose-100 sm:self-auto" @click="clearLateResponseFilter">Clear filter</button>
                 </div>
 
-                <div class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
+                <div data-tour="concern-list" class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
 
                     <!-- Table Header -->
 
@@ -1840,7 +1870,7 @@ onUnmounted(() => {
 
                                 <tbody class="divide-y divide-slate-200">
 
-                                        <tr v-for="(concern, index) in concerns" :key="concern.id" role="button"
+                                        <tr v-for="(concern, index) in concerns" :key="concern.id" data-tour="concern-row" role="button"
                                         tabindex="0" @click="viewConcern(concern)"
                                         @keydown="handleConcernRowKeydown($event, concern)" :class="index % 2 === 0
                                             ? (responseAttentionState(concern) ? 'bg-rose-50 hover:bg-rose-100/80' : 'bg-white hover:bg-blue-50/50')
@@ -2016,7 +2046,7 @@ onUnmounted(() => {
 
                         <div class="space-y-3 p-3 lg:hidden">
 
-                            <article v-for="(concern, index) in concerns" :key="concern.id" role="button" tabindex="0"
+                            <article v-for="(concern, index) in concerns" :key="concern.id" data-tour="concern-row" role="button" tabindex="0"
                                 @click="viewConcern(concern)" @keydown="handleConcernRowKeydown($event, concern)"
                                 :class="responseAttentionState(concern)
                                     ? 'border-rose-300 bg-rose-50 hover:border-rose-400 hover:bg-rose-100'
@@ -2327,18 +2357,6 @@ onUnmounted(() => {
 
                                 </div>
 
-                                <button type="button" @click="closeExportModal" :disabled="exporting"
-                                    class="cursor-pointer rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50">
-
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                        stroke-width="2" stroke="currentColor" class="h-5 w-5">
-
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-
-                                    </svg>
-
-                                </button>
-
                             </div>
 
                         </div>
@@ -2421,12 +2439,12 @@ onUnmounted(() => {
                             class="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4">
 
                             <button type="button" @click="closeExportModal" :disabled="exporting"
-                                class="cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+                                class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
                                 Cancel
                             </button>
 
                             <button type="button" @click="confirmExport" :disabled="exporting"
-                                class="inline-flex min-w-[120px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">
+                                class="secondary-hover-button inline-flex min-w-[120px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">
 
                                 <svg v-if="exporting" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                     stroke-width="1.8" stroke="currentColor" class="h-4 w-4 animate-spin">

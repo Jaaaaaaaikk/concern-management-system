@@ -1,5 +1,200 @@
 @import "tailwindcss";
 
+.app-tooltip {
+	position: fixed;
+	z-index: 300;
+	max-width: min(18rem, calc(100vw - 1rem));
+	border: 1px solid rgb(255 255 255 / 12%);
+	border-radius: 0.5rem;
+	background: #0f172a;
+	padding: 0.45rem 0.65rem;
+	color: #f8fafc;
+	font-size: 0.72rem;
+	font-weight: 500;
+	line-height: 1.25rem;
+	text-align: center;
+	box-shadow: 0 8px 20px rgb(15 23 42 / 22%);
+	opacity: 0;
+	transform: translateY(-3px);
+	transition: opacity 120ms ease, transform 120ms ease;
+	pointer-events: none;
+}
+
+.app-tooltip-visible {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+@media (max-height: 800px) and (min-width: 640px) {
+	.modal-height-adaptive {
+		max-height: calc(100dvh - 1rem) !important;
+	}
+
+	.modal-header-adaptive {
+		padding-block: 0.65rem !important;
+	}
+
+	.modal-form-content-adaptive {
+		padding-block: 0.75rem !important;
+	}
+
+	.modal-form-stack-adaptive {
+		--modal-compact-gap: 0.75rem;
+	}
+
+	.modal-form-stack-adaptive > :not([hidden]) ~ :not([hidden]) {
+		margin-top: var(--modal-compact-gap) !important;
+	}
+
+	.modal-form-stack-adaptive .grid {
+		gap: 0.75rem !important;
+	}
+
+	.modal-compact-fields input:not([type="file"]),
+	.modal-compact-fields textarea,
+	.modal-compact-fields [role="combobox"] {
+		padding-block: 0.5rem;
+	}
+
+	.modal-compact-fields textarea {
+		max-height: 6rem;
+	}
+
+	.create-concern-form textarea {
+		max-height: 5.5rem;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.app-tooltip {
+		transition: none;
+		transform: none;
+	}
+}
+
+.primary-action-button {
+	background: linear-gradient(110deg, #059669, #0d9488);
+	box-shadow: 0 4px 10px rgb(6 78 59 / 15%);
+	transition: transform 200ms ease, box-shadow 200ms ease, background 200ms ease;
+}
+
+.primary-action-button:hover:not(:disabled) {
+	background: linear-gradient(110deg, #047857, #0f766e);
+	box-shadow: 0 8px 18px rgb(6 78 59 / 24%);
+	transform: translateY(-2px) scale(1.03);
+}
+
+.primary-action-button:active:not(:disabled) {
+	transform: translateY(0) scale(0.98);
+}
+
+.primary-action-button:focus-visible {
+	outline: 3px solid rgb(167 243 208 / 90%);
+	outline-offset: 2px;
+}
+
+.secondary-hover-button,
+button[aria-label^="Close"] {
+	transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.secondary-hover-button:hover:not(:disabled) {
+	transform: scale(1.02);
+}
+
+.secondary-hover-button:active:not(:disabled) {
+	transform: scale(0.99);
+}
+
+.app-select,
+.app-select-compact {
+	appearance: none;
+	background-repeat: no-repeat;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='m5 7.5 5 5 5-5' stroke='%2364758b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.app-select {
+	background-position: right 0.75rem center;
+	background-size: 1.15rem;
+	padding-right: 2.5rem;
+}
+
+.app-select-compact {
+	background-position: right 0.35rem center;
+	background-size: 1rem;
+	padding-right: 1.5rem;
+}
+
+.app-select:hover:not(:disabled),
+.app-select-compact:hover:not(:disabled) {
+	border-color: #14b8a6;
+}
+
+.app-select:focus,
+.app-select-compact:focus {
+	border-color: #0d9488;
+	box-shadow: 0 0 0 3px rgb(20 184 166 / 16%);
+	outline: none;
+}
+
+.app-select:disabled,
+.app-select-compact:disabled {
+	background-color: #f1f5f9;
+}
+
+.app-select option,
+.app-select-compact option {
+	padding: 0.55rem 0.75rem;
+	background-color: #fff;
+	color: #0f172a;
+}
+
+.app-select option:checked,
+.app-select-compact option:checked {
+	background: #0f766e linear-gradient(0deg, #0f766e 0%, #0f766e 100%);
+	color: #fff;
+}
+
+.app-select option:hover:not(:checked),
+.app-select-compact option:hover:not(:checked) {
+	background-color: #ccfbf1;
+	color: #134e4a;
+}
+
+.app-select option:disabled,
+.app-select-compact option:disabled {
+	color: #94a3b8;
+}
+
+button[aria-label^="Close"]:hover:not(:disabled) {
+	transform: scale(1.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.primary-action-button {
+		transition: none;
+	}
+
+	.primary-action-button:hover:not(:disabled),
+	.primary-action-button:active:not(:disabled) {
+		transform: none;
+	}
+
+	.secondary-hover-button,
+	.app-select,
+	.app-select-compact,
+	button[aria-label^="Close"] {
+		transition: none;
+	}
+
+	.secondary-hover-button:hover:not(:disabled),
+	.secondary-hover-button:active:not(:disabled),
+	button[aria-label^="Close"]:hover:not(:disabled) {
+		transform: none;
+	}
+}
+
 .sidebar-navigation > a,
 .mobile-navigation > a {
 	position: relative;

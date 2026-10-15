@@ -97,6 +97,8 @@ async function loadData() {
 }
 
 async function logout() {
+    currentUser.value = null
+
     try {
         await $fetch('/api/auth/logout', {
             method: 'POST'
@@ -399,7 +401,7 @@ onMounted(loadData)
                     {{ errorMessage }}
                 </div>
 
-                <div class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
+                <div data-tour="login-history-sessions" class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
                     <div class="border-b border-slate-200 bg-slate-50/80 p-3 sm:p-4">
                         <div class="rounded-xl bg-slate-200/70 p-1">
                             <div class="relative grid grid-cols-2">
@@ -504,7 +506,7 @@ onMounted(loadData)
                                         <td v-if="session.session_status === 'active'" class="px-5 py-4">
                                             <button
                                                 type="button"
-                                                class="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                                                class="secondary-hover-button cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
                                                 @click="requestRevokeSession(session)"
                                             >
                                                 Revoke
@@ -555,7 +557,7 @@ onMounted(loadData)
                                 <div v-if="session.session_status === 'active'" class="mt-4 flex justify-end">
                                     <button
                                         type="button"
-                                        class="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                                        class="secondary-hover-button cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
                                         @click="requestRevokeSession(session)"
                                     >
                                         Revoke

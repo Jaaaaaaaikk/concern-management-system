@@ -21,6 +21,7 @@ const emit = defineEmits([
 ])
 
 const showPasswordConfirmation = ref(false)
+const showPhotoPreview = ref(false)
 
 function requestPasswordConfirmation() {
     showPasswordConfirmation.value = true
@@ -53,10 +54,24 @@ function confirmPasswordChange() {
                 aria-modal="true"
                 aria-labelledby="profile-details-title"
             >
-                <div class="flex items-center gap-4 bg-gradient-to-r from-blue-950 to-blue-800 px-5 py-5 sm:px-6">
+                <div class="flex items-center gap-4 bg-linear-to-r from-blue-950 to-blue-800 px-5 py-5 sm:px-6">
+                    <button
+                        v-if="props.currentUser?.profile_photo"
+                        type="button"
+                        class="shrink-0 cursor-zoom-in rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-900"
+                        aria-label="View profile photo"
+                        @click="showPhotoPreview = true"
+                    >
+                        <UserAvatar
+                            :name="[props.currentUser?.first_name, props.currentUser?.last_name].filter(Boolean).join(' ') || props.currentUser?.username"
+                            :photo-url="props.currentUser?.profile_photo"
+                            size="h-14 w-14 text-base"
+                            class="ring-2 ring-white/80"
+                        />
+                    </button>
                     <UserAvatar
+                        v-else
                         :name="[props.currentUser?.first_name, props.currentUser?.last_name].filter(Boolean).join(' ') || props.currentUser?.username"
-                        :photo-url="props.currentUser?.profile_photo"
                         size="h-14 w-14 text-base"
                         class="ring-2 ring-white/80"
                     />
@@ -84,7 +99,7 @@ function confirmPasswordChange() {
                 </dl>
 
                 <div class="flex justify-end border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-6">
-                    <button type="button" class="cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800" @click="emit('close-profile')">Close</button>
+                    <button type="button" class="secondary-hover-button cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800" @click="emit('close-profile')">Close</button>
                 </div>
             </section>
         </div>
@@ -114,10 +129,35 @@ function confirmPasswordChange() {
                 <input id="confirm-account-password" v-model="props.passwordForm.confirm" type="password" autocomplete="new-password" minlength="8" maxlength="72" placeholder="Re-enter your new password" required class="mt-1 w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm outline-none placeholder:text-slate-400 focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15">
 
                 <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                    <button type="button" :disabled="props.changingPassword" class="cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" @click="emit('cancel-password')">Cancel</button>
-                    <button type="submit" :disabled="props.changingPassword" class="cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60">{{ props.changingPassword ? 'Saving…' : 'Update password' }}</button>
+                    <button type="button" :disabled="props.changingPassword" class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" @click="emit('cancel-password')">Cancel</button>
+                    <button type="submit" :disabled="props.changingPassword" class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60">{{ props.changingPassword ? 'Saving…' : 'Update password' }}</button>
                 </div>
             </form>
+        </div>
+
+        <div
+            v-if="showPhotoPreview && props.currentUser?.profile_photo"
+            class="fixed inset-0 z-120 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Profile photo preview"
+            @click.self="showPhotoPreview = false"
+            @keydown.esc="showPhotoPreview = false"
+        >
+            <button
+                type="button"
+                class="absolute right-4 top-4 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                aria-label="Close profile photo preview"
+                @click="showPhotoPreview = false"
+            >
+                Close
+            </button>
+            <img
+                :src="props.currentUser.profile_photo"
+                :alt="`${[props.currentUser.first_name, props.currentUser.last_name].filter(Boolean).join(' ') || props.currentUser.username || 'User'} profile photo`"
+                class="max-h-[85vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
+                @click.stop
+            />
         </div>
 
         <div
@@ -144,8 +184,8 @@ function confirmPasswordChange() {
                     </div>
                 </div>
                 <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                    <button type="button" :disabled="props.changingPassword" class="cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" @click="cancelPasswordConfirmation">Go back</button>
-                    <button type="button" :disabled="props.changingPassword" class="cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60" @click="confirmPasswordChange">{{ props.changingPassword ? 'Updating…' : 'Confirm change' }}</button>
+                    <button type="button" :disabled="props.changingPassword" class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" @click="cancelPasswordConfirmation">Go back</button>
+                    <button type="button" :disabled="props.changingPassword" class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60" @click="confirmPasswordChange">{{ props.changingPassword ? 'Updating…' : 'Confirm change' }}</button>
                 </div>
             </section>
         </div>
@@ -175,8 +215,8 @@ function confirmPasswordChange() {
                 </div>
 
                 <div class="mt-6 flex justify-end gap-2">
-                    <button type="button" class="cursor-pointer rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" @click="emit('cancel-remove-photo')">Keep photo</button>
-                    <button type="button" :disabled="props.uploading" class="cursor-pointer rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60" @click="emit('confirm-remove-photo')">Remove photo</button>
+                    <button type="button" class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" @click="emit('cancel-remove-photo')">Keep photo</button>
+                    <button type="button" :disabled="props.uploading" class="secondary-hover-button cursor-pointer rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60" @click="emit('confirm-remove-photo')">Remove photo</button>
                 </div>
             </section>
         </div>

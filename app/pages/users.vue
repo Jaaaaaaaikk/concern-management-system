@@ -385,6 +385,33 @@ const isEditSuperadminRole = computed(() => {
 
 })
 
+const hasUserEditChanges = computed(() => {
+    const user = editingUser.value
+
+    if (!user) {
+        return false
+    }
+
+    const organizationId = isEditSuperadminRole.value
+        ? null
+        : editForm.value.organization_id
+            ? Number(editForm.value.organization_id)
+            : null
+    const originalOrganizationId = user.organization_id == null
+        ? null
+        : Number(user.organization_id)
+
+    return editForm.value.username !== (user.username || '') ||
+        editForm.value.first_name !== (user.first_name || '') ||
+        editForm.value.middle_name !== (user.middle_name || '') ||
+        editForm.value.last_name !== (user.last_name || '') ||
+        Number(editForm.value.role_id) !== Number(user.role_id) ||
+        organizationId !== originalOrganizationId ||
+        Boolean(editForm.value.password.trim()) ||
+        Boolean(editForm.value.profile_photo_file) ||
+        Boolean(editForm.value.profile_photo_remove)
+})
+
 const creatableRoles = computed(() => {
     if (currentUser.value?.role_name === 'system_admin') {
         return roles.value.filter(role => ['concern_handler', 'requestor'].includes(role.name))
@@ -580,6 +607,11 @@ async function updateUser() {
 
         return
 
+    }
+
+    if (!hasUserEditChanges.value) {
+        showToast('There are no changes to save.', 'info')
+        return
     }
 
     updating.value = true
@@ -838,6 +870,8 @@ function statusClass(status) {
 
 async function logout() {
 
+    currentUser.value = null
+
     try {
 
         await $fetch('/api/auth/logout', {
@@ -972,9 +1006,9 @@ onMounted(() => {
 
                         </div>
 
-                        <button type="button" @click="openCreateModal"
+                        <button type="button" data-tour="users-add" @click="openCreateModal"
                             aria-label="Add user"
-                            class="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-blue-900 p-0 text-sm font-medium text-white shadow-sm transition hover:bg-blue-800 hover:shadow-md active:scale-[0.99] sm:h-auto sm:w-auto sm:gap-2 sm:px-5 sm:py-3">
+                            class="primary-action-button inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-linear-to-r from-emerald-600 to-teal-600 p-0 text-sm font-semibold text-white shadow-md shadow-emerald-950/15 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.03] hover:from-emerald-700 hover:to-teal-700 hover:shadow-lg hover:shadow-emerald-950/25 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200 motion-reduce:transition-none sm:h-auto sm:w-auto sm:gap-2 sm:px-5 sm:py-3">
 
                             <span class="text-lg leading-none" aria-hidden="true">
                                 +
@@ -1008,7 +1042,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Users Table -->
-                <div class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
+                <div data-tour="users-list" class="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-md">
 
                     <!-- Table Header -->
                     <div class="border-b border-slate-200 px-5 py-4">
@@ -1323,7 +1357,7 @@ onMounted(() => {
         <EditUserModal :show="showEditModal" :form="editForm" :roles="roles" :organizations="organizations"
             :current-user-role="currentUser?.role_name"
             :is-current-user="editingUser ? isCurrentUser(editingUser) : false"
-            :is-superadmin-role="isEditSuperadminRole" :updating="updating" @close="closeEditModal" @submit="updateUser"
+            :is-superadmin-role="isEditSuperadminRole" :has-changes="hasUserEditChanges" :updating="updating" @close="closeEditModal" @submit="updateUser"
             @role-change="handleEditRoleChange" @status-toggle="requestEditUserStatusChange" />
 
         <div v-if="statusConfirmation"
@@ -1373,7 +1407,7 @@ onMounted(() => {
 
                 <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                     <button type="button" :disabled="statusConfirmationLoading"
-                        class="cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         @click="closeStatusConfirmation">
                         Cancel
                     </button>

@@ -185,7 +185,7 @@ async function changePassword() {
             <button v-if="canChangePassword" type="button" class="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-xs font-semibold text-blue-800 transition hover:bg-blue-50" @click="openPasswordForm">
                 Change password
             </button>
-            <button v-if="currentUser?.profile_photo" type="button" :disabled="uploading" class="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50" @click="showRemovePhotoConfirmation = true">
+            <button v-if="currentUser?.profile_photo" type="button" :disabled="uploading" class="secondary-hover-button flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50" @click="showRemovePhotoConfirmation = true">
                 Remove photo
             </button>
             <button type="button" class="mt-1 flex min-h-9 w-full items-center gap-2 border-t border-slate-100 px-2 pt-1 text-left text-xs font-semibold text-red-700 transition hover:bg-red-50 hover:text-red-900" @click="emit('logout')">
@@ -209,11 +209,14 @@ async function changePassword() {
 
     <div
         v-else-if="currentUser"
-        class="min-w-0 overflow-hidden rounded-xl bg-blue-950 shadow-2xl shadow-black/45"
+        class="profile-control-frame relative isolate min-w-0 overflow-hidden rounded-xl p-0.5"
     >
+        <span class="profile-control-edge" aria-hidden="true"></span>
+        <div class="relative z-10 min-w-0 overflow-hidden rounded-[10px] bg-blue-950 shadow-2xl shadow-black/45">
         <button
             type="button"
-            class="group flex w-full cursor-pointer items-center gap-2.5 bg-gradient-to-r from-blue-800 via-blue-900 to-blue-950 px-3 py-3 text-left transition hover:brightness-110 focus:outline-none sm:px-3.5 sm:py-3"
+            data-tour="profile-menu-toggle"
+            class="group flex w-full cursor-pointer items-center gap-2.5 bg-linear-to-r from-blue-800 via-blue-900 to-blue-950 px-3 py-3 text-left transition hover:brightness-110 focus:outline-none sm:px-3.5 sm:py-3"
             :aria-expanded="isExpanded"
             @click="isExpanded = !isExpanded"
         >
@@ -250,6 +253,7 @@ async function changePassword() {
             <div v-if="isExpanded" class="space-y-0.5 bg-blue-950 px-2 py-2 sm:px-2.5 sm:py-2.5">
                 <button
                     type="button"
+                    data-tour="profile-menu-item"
                     class="group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-slate-300"
                     @click="showProfileDetails = true"
                 >
@@ -298,7 +302,7 @@ async function changePassword() {
                     v-if="currentUser?.profile_photo"
                     type="button"
                     :disabled="uploading"
-                    class="w-full cursor-pointer rounded-lg px-2.5 py-1 text-left text-[9px] font-medium text-rose-200 transition hover:bg-rose-500/10 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="secondary-hover-button w-full cursor-pointer rounded-lg px-2.5 py-1 text-left text-[9px] font-medium text-rose-200 transition hover:bg-rose-500/10 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="showRemovePhotoConfirmation = true"
                 >
                     Remove profile photo
@@ -335,6 +339,7 @@ async function changePassword() {
                 </button>
             </div>
         </Transition>
+        </div>
 
         <input
             :id="`profile-photo-${currentUser?.id}`"
@@ -435,6 +440,39 @@ async function changePassword() {
     .logout-runner-body,
     .logout-runner-leg,
     .logout-runner-arm {
+        animation: none;
+    }
+}
+
+.profile-control-frame {
+    background-color: #0f172a;
+}
+
+.profile-control-edge {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg 270deg,
+        rgb(255 255 255 / 45%) 292deg,
+        rgb(103 232 249 / 95%) 312deg,
+        #fff 326deg,
+        transparent 346deg 360deg
+    );
+    animation: profile-control-edge-spin 3s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes profile-control-edge-spin {
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .profile-control-edge {
         animation: none;
     }
 }

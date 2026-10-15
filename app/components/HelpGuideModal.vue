@@ -12,11 +12,12 @@ const props = defineProps({
 
 const isOpen = ref(false)
 const activeStep = ref(0)
+const isInteractiveTourActive = ref(false)
 const route = useRoute()
 useBodyScrollLock(() => isOpen.value)
 
 const isHelpAvailable = computed(() =>
-    Boolean(props.currentUser) && !['/login', '/account-deactivated'].includes(route.path)
+    Boolean(props.currentUser) && !['/login', '/account-deactivated', '/ict-team'].includes(route.path)
 )
 
 const roleName = computed(() => props.currentUser?.role_name || 'requestor')
@@ -117,21 +118,32 @@ const guideSteps = computed(() => {
 
     if (['superadmin', 'system_admin'].includes(roleName.value)) {
         steps.splice(4, 0, {
-            title: 'Manage users and organizations',
+            title: 'Manage user accounts',
             descriptionStart: 'Open ',
             emphasis: 'Manage Users',
             descriptionEnd: roleName.value === 'superadmin'
-                ? ' to maintain accounts and roles, and Manage Organizations to update participating teams. Superadmin is reserved and cannot be assigned to another account.'
-                : ' to create Concern Handler and Requestor accounts, and Manage Organizations to update teams. You may edit your own profile, but cannot edit other privileged accounts.',
+                ? ' to maintain accounts and roles. Superadmin is reserved and cannot be assigned to another account.'
+                : ' to create Concern Handler and Requestor accounts. You may edit your own profile, but cannot edit other privileged accounts.',
             art: 'team',
-            tip: 'Choose the least-privileged role that fits each user.',
+            tip: 'Choose the least-privileged role that fits each user and keep access appropriate to their job.',
             to: '/users',
             actionLabel: 'Go to Manage Users'
+        })
+
+        steps.splice(5, 0, {
+            title: 'Manage organizations',
+            descriptionStart: 'Open ',
+            emphasis: 'Manage Organizations',
+            descriptionEnd: ' to maintain participating departments, tenants, and BPO organizations.',
+            art: 'team',
+            tip: 'Keep organization names and types accurate because they control concern routing and visibility.',
+            to: '/organizations',
+            actionLabel: 'Go to Manage Organizations'
         })
     }
 
     if (roleName.value === 'superadmin') {
-        steps.splice(5, 0, {
+        steps.splice(6, 0, {
             title: 'Organize concern categories',
             descriptionStart: 'Use ',
             emphasis: 'Concern Categories',
@@ -141,7 +153,7 @@ const guideSteps = computed(() => {
             to: '/concern-categories',
             actionLabel: 'Go to Concern Categories'
         })
-        steps.splice(6, 0, {
+        steps.splice(7, 0, {
             title: 'Review and revoke sessions',
             descriptionStart: 'Open ',
             emphasis: 'Login History',
@@ -178,7 +190,90 @@ const guideSteps = computed(() => {
         actionLabel: 'Go to Dashboard and open your account menu'
     })
 
-    return steps
+    const mappedSteps = steps.map((step) => {
+        const title = step.title
+        let tourTarget = '[data-tour="concern-list"]'
+        let fallbackTarget = ''
+        let tourRoute = step.to?.split('?')[0] || '/dashboard'
+        let tourAction = ''
+
+        if (title === 'Your workspace at a glance') {
+            tourTarget = '[data-tour="dashboard-range"]'
+            tourRoute = '/dashboard'
+            tourAction = 'ensure-dashboard-filters'
+        } else if (title === 'Find and follow concerns') {
+            tourTarget = '[data-tour="concern-search"]'
+            tourRoute = '/concerns'
+        } else if (title === 'Create and route a concern') {
+            tourTarget = '[data-tour="create-concern"]'
+            tourRoute = '/concerns'
+        } else if (title === 'Concern request access' || title === 'Monitor-only concern access') {
+            tourTarget = '[data-tour="view-comments"]'
+            fallbackTarget = '[data-tour="concern-list"]'
+            tourRoute = '/concerns'
+            tourAction = 'open-first-concern-conversation'
+        } else if (title === 'Comments and status workflow') {
+            tourTarget = roleName.value === 'concern_handler'
+                ? '[data-tour="view-status"], [data-tour="view-comments"]'
+                : '[data-tour="view-comments"]'
+            if (roleName.value === 'concern_handler') {
+                fallbackTarget = '[data-tour="concern-list"]'
+            } else {
+                tourAction = 'open-first-concern-conversation'
+            }
+            tourRoute = '/concerns'
+        } else if (title === 'Add and manage concern images') {
+            tourTarget = '[data-tour="view-attachments"]'
+            fallbackTarget = '[data-tour="concern-list"]'
+            tourRoute = '/concerns'
+            tourAction = 'open-first-concern'
+        } else if (title === 'Manage user accounts') {
+            tourTarget = '[data-tour="users-list"]'
+            tourRoute = '/users'
+        } else if (title === 'Manage organizations') {
+            tourTarget = '[data-tour="organizations-list"]'
+            tourRoute = '/organizations'
+        } else if (title === 'Organize concern categories') {
+            tourTarget = '[data-tour="categories-list"]'
+            tourRoute = '/concern-categories'
+        } else if (title === 'Review and revoke sessions') {
+            tourTarget = '[data-tour="login-history-sessions"]'
+            tourRoute = '/login-history'
+        } else if (title === 'Update your account and profile') {
+            tourTarget = '[data-tour="profile-menu-item"], [data-tour="profile-menu-mobile"]'
+            tourRoute = '/dashboard'
+            tourAction = 'open-profile-menu'
+        }
+
+        return {
+            ...step,
+            tourTarget,
+            tourFallbackTarget: fallbackTarget,
+            tourRoute,
+            tourAction
+        }
+    })
+
+    const dashboardStepIndex = mappedSteps.findIndex(
+        (step) => step.title === 'Your workspace at a glance'
+    )
+
+    if (dashboardStepIndex !== -1 && ['superadmin', 'system_admin', 'system_monitor'].includes(roleName.value)) {
+        mappedSteps.splice(dashboardStepIndex + 1, 0, {
+            ...mappedSteps[dashboardStepIndex],
+            title: 'Filter dashboard by organization',
+            descriptionStart: 'When available to your role, use the ',
+            emphasis: 'organization filter',
+            descriptionEnd: ' to focus dashboard totals and charts on one participating organization or compare all organizations.',
+            tip: 'On phones and small screens, tap Filters to reveal the date-range and organization controls.',
+            tourTarget: '[data-tour="dashboard-organization"]',
+            tourFallbackTarget: '',
+            tourRoute: '/dashboard',
+            tourAction: 'ensure-dashboard-filters'
+        })
+    }
+
+    return mappedSteps
 })
 
 const currentStep = computed(() => guideSteps.value[activeStep.value] || guideSteps.value[0])
@@ -194,6 +289,11 @@ function openGuide() {
 
 function closeGuide() {
     isOpen.value = false
+}
+
+function startInteractiveTour() {
+    isOpen.value = false
+    isInteractiveTourActive.value = true
 }
 
 async function goToCurrentStep() {
@@ -243,17 +343,25 @@ watch(isHelpAvailable, (available) => {
 
 <template>
     <div class="contents">
+        <InteractiveHelpTour
+            v-model:active="isInteractiveTourActive"
+            :current-user="props.currentUser"
+            :steps="guideSteps"
+        />
+
         <button
             v-if="isHelpAvailable"
             type="button"
-            class="fixed bottom-5 right-5 z-[80] inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-blue-950 p-0 text-sm font-semibold text-white shadow-xl shadow-blue-950/25 transition duration-200 hover:-translate-y-1 hover:bg-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-300/70 sm:bottom-7 sm:right-7 sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-3"
+            class="help-guide-launcher fixed bottom-5 right-5 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-transparent bg-blue-950 p-0 text-sm font-semibold text-white shadow-xl shadow-blue-950/25 transition duration-200 hover:-translate-y-1 hover:bg-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-300/70 sm:bottom-7 sm:right-7 sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-3"
             aria-label="Open help guide"
             @click="openGuide"
         >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5" aria-hidden="true">
+            <span class="help-guide-border-spin" aria-hidden="true"></span>
+            <span class="help-guide-border-core" aria-hidden="true"></span>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="relative z-10 h-5 w-5" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9a2.25 2.25 0 1 1 3.9 1.54c-.9.92-1.65 1.36-1.65 2.71m.01 3h-.02M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
-            <span class="hidden sm:inline">Help guide</span>
+            <span class="relative z-10 hidden sm:inline">Help guide</span>
         </button>
 
         <Teleport to="body">
@@ -267,7 +375,7 @@ watch(isHelpAvailable, (available) => {
             >
                 <div
                     v-if="isOpen && currentStep"
-                    class="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
+                    class="fixed inset-0 z-100 flex items-center justify-center overflow-y-auto bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
                     @click.self="closeGuide"
                     @keydown="handleKeydown"
                 >
@@ -275,18 +383,22 @@ watch(isHelpAvailable, (available) => {
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby="help-guide-title"
-                        class="help-guide-panel relative grid max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl grid-rows-[auto_1fr] overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-2xl sm:rounded-3xl md:min-h-[490px] md:grid-cols-[0.95fr_1.05fr] md:grid-rows-1 md:overflow-hidden"
+                        class="help-guide-panel relative grid max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl grid-rows-[auto_1fr] overflow-y-auto rounded-2xl border border-transparent bg-white shadow-2xl sm:rounded-3xl md:min-h-122.5 md:grid-cols-[0.95fr_1.05fr] md:grid-rows-1 md:overflow-hidden"
                     >
                         <button
                             type="button"
                             aria-label="Close help guide"
-                            class="absolute right-3 top-3 z-50 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-blue-900/15 bg-blue-950 text-2xl leading-none text-white shadow-lg transition hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2"
+                            class="group absolute right-3 top-3 z-50 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-blue-900/15 bg-blue-950 text-3xl leading-none text-white shadow-lg transition hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:ring-offset-2"
                             @click="closeGuide"
                         >
-                            ×
+                            <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                                stroke="currentColor" aria-hidden="true"
+                                class="absolute h-6 w-6 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                            </svg>
                         </button>
-
-                        <div class="relative flex min-h-0 flex-col items-center justify-center gap-3 overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-800 p-3 sm:min-h-52 sm:gap-5 sm:p-6 md:min-h-full md:p-8">
+                        <div class="relative flex min-h-0 flex-col items-center justify-center gap-3 overflow-hidden bg-linear-to-br from-blue-950 via-blue-900 to-cyan-800 p-3 sm:min-h-52 sm:gap-5 sm:p-6 md:min-h-full md:p-8">
                             <div class="pointer-events-none absolute -left-16 -top-20 h-56 w-56 rounded-full bg-cyan-300/15 blur-3xl"></div>
                             <div class="pointer-events-none absolute -bottom-20 -right-10 h-56 w-56 rounded-full bg-blue-300/20 blur-3xl"></div>
                             <div class="guide-illustration relative z-10 w-full max-w-sm rounded-xl border border-white/20 bg-white/95 p-2.5 shadow-2xl sm:rounded-2xl sm:p-4 md:p-6" :key="currentStep.art">
@@ -437,6 +549,20 @@ watch(isHelpAvailable, (available) => {
                             </div>
 
                             <div class="mt-4 sm:mt-7">
+                                <button
+                                    type="button"
+                                    class="group mb-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-cyan-50 px-4 py-3 text-sm font-bold text-blue-950 ring-1 ring-cyan-200 transition hover:-translate-y-0.5 hover:bg-cyan-100 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2"
+                                    @click="startInteractiveTour"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5 transition-transform group-hover:rotate-12" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-6.364-2.636 1.591-1.591M5.25 12H3m2.636-6.364 1.591 1.591M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
+                                    </svg>
+                                    Start animated walkthrough
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h15m-6-6 6 6-6 6" />
+                                    </svg>
+                                </button>
+
                                 <div class="mb-3 flex items-center justify-between gap-3 sm:mb-4">
                                     <div class="flex gap-1.5" role="group" aria-label="Guide steps">
                                         <button
@@ -453,13 +579,6 @@ watch(isHelpAvailable, (available) => {
                                     <span class="text-xs font-semibold tabular-nums text-slate-400">{{ progress }}%</span>
                                 </div>
                                 <div class="flex items-center justify-between gap-2 border-t border-slate-100 pt-3 sm:gap-3 sm:pt-4">
-                                    <button
-                                        type="button"
-                                        class="cursor-pointer rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-                                        @click="closeGuide"
-                                    >
-                                        Close guide
-                                    </button>
                                     <div class="flex gap-2">
                                         <button
                                             v-if="activeStep > 0"
@@ -489,6 +608,54 @@ watch(isHelpAvailable, (available) => {
 </template>
 
 <style scoped>
+.help-guide-panel {
+    background-image:
+        linear-gradient(#fff, #fff),
+        linear-gradient(
+            115deg,
+            rgb(34 211 238 / 35%),
+            rgb(255 255 255 / 95%),
+            rgb(34 211 238 / 95%),
+            rgb(59 130 246 / 85%),
+            rgb(255 255 255 / 95%)
+        );
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    background-size: 100% 100%, 300% 300%;
+    background-position: 0 0, 0% 50%;
+    animation: help-guide-border-shine 4.5s ease-in-out infinite;
+}
+
+.help-guide-launcher {
+    isolation: isolate;
+    overflow: hidden;
+}
+
+.help-guide-border-spin {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg 270deg,
+        rgb(255 255 255 / 45%) 292deg,
+        rgb(103 232 249 / 95%) 312deg,
+        #fff 326deg,
+        transparent 346deg 360deg
+    );
+    animation: help-guide-edge-spin 3s linear infinite;
+}
+
+.help-guide-border-core {
+    position: absolute;
+    inset: 2px;
+    z-index: 1;
+    border-radius: inherit;
+    background-color: inherit;
+    pointer-events: none;
+}
+
 .guide-illustration {
     animation: guide-float-in 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
@@ -519,7 +686,30 @@ watch(isHelpAvailable, (available) => {
     }
 }
 
+@keyframes help-guide-edge-spin {
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+@keyframes help-guide-border-shine {
+    0%, 100% {
+        background-position: 0 0, 0% 50%;
+    }
+    50% {
+        background-position: 0 0, 100% 50%;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
+    .help-guide-panel {
+        animation: none;
+    }
+
+    .help-guide-border-spin {
+        animation: none;
+    }
+
     .guide-illustration {
         animation: none;
     }

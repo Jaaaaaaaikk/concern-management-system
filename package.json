@@ -16,6 +16,7 @@
     "exceljs": "^4.4.0",
     "mysql2": "^3.24.5",
     "nuxt": "^4.5.2",
+    "reka-ui": "^2.11.0",
     "vue": "^3.5.43",
     "vue-router": "^5.3.1"
   },
@@ -25,5 +26,10 @@
   },
   "allowScripts": {
     "esbuild@0.28.2": true
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
   }
 }
