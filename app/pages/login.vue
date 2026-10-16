@@ -451,7 +451,7 @@ async function login() {
 
                 <p class="mt-2 text-xs leading-5 text-slate-400">
                     © {{ currentYear }} Felcris Hotels &amp; Resorts Corporation. All rights reserved. ·
-                    <NuxtLink to="/ict-team" class="font-medium text-blue-800 transition-colors hover:text-teal-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600">ICT Department</NuxtLink>
+                    <NuxtLink to="/ict-team" aria-label="ICT Department team" class="group relative inline-block rounded-sm text-slate-400 outline-none after:absolute after:inset-x-0 after:-bottom-0.5 after:h-px after:origin-left after:scale-x-0 after:bg-slate-500 after:transition-transform after:duration-200 hover:text-slate-600 hover:after:scale-x-100 focus-visible:text-slate-600 focus-visible:ring-2 focus-visible:ring-slate-400/50">ICT Department</NuxtLink>
                 </p>
 
             </div>

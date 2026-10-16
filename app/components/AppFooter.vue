@@ -16,9 +16,10 @@ defineProps({
         <NuxtLink
             v-if="showIctTeamLink"
             to="/ict-team"
-            class="block rounded-sm font-medium text-blue-800 transition-colors hover:text-teal-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 sm:inline"
+            aria-label="ICT Department team"
+            class="group relative inline-block rounded-sm text-slate-500 outline-none after:absolute after:inset-x-0 after:-bottom-0.5 after:h-px after:origin-left after:scale-x-0 after:bg-slate-400 after:transition-transform after:duration-200 hover:text-slate-700 hover:after:scale-x-100 focus-visible:text-slate-700 focus-visible:ring-2 focus-visible:ring-slate-400/50"
         >
-            ICT Department
+            <span aria-hidden="true">ICT Department</span>
         </NuxtLink>
         <span v-else class="block sm:inline">ICT Department</span>
     </footer>
