@@ -27,6 +27,12 @@ Before running this version against an existing database, apply
 to add the nullable `users.profile_photo` column. Fresh databases created from
 `concern_management.sql` already include this column.
 
+Apply [`database/migrations/20261028_add_organization_concern_types.sql`](./database/migrations/20261028_add_organization_concern_types.sql)
+to existing databases before deploying category-based organization routing.
+The migration initially maps each active concern category to every active
+Admin Facilities organization, preserving the existing routing behavior; a
+Superadmin can then adjust each organization's supported categories.
+
 ## Development Server
 
 Start the development server on `http://localhost:3000`:
@@ -79,6 +85,17 @@ alongside the database. User profile photos are also stored privately in
 `data/uploads/users` by default (`PROFILE_PHOTO_DIR` can override this location).
 Existing profile photos are migrated from the public uploads directories on
 startup and are served only to signed-in users.
+
+### Windows database and concern-upload backups
+
+Use [`scripts/backup/Backup-ConcernManagement.ps1`](./scripts/backup/Backup-ConcernManagement.ps1)
+to create a timestamped full MariaDB database dump and a matching copy of concern
+uploads. The script requires an external `BackupRoot` and a protected MariaDB
+client options file; it never stores the database password in the script. See
+[`docs/backup-restore.md`](./docs/backup-restore.md) for path configuration,
+credential-file protection, a manual test, daily Windows Task Scheduler setup,
+retention behavior, and safe restore verification steps. Set the upload path in
+the scheduled task explicitly if this deployment uses `CONCERN_UPLOAD_DIR`.
 
 ### Login session retention
 

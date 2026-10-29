@@ -1,0 +1,201 @@
+CONCERN MANAGEMENT SYSTEM
+DAILY DATABASE + CONCERN UPLOAD BACKUP
+Windows Task Scheduler setup (2:00 AM, keep 30 days)
+
+WHAT THIS DOES
+----------------
+The PowerShell script creates one timestamped folder per run containing:
+  - A full MariaDB database dump (.sql)
+  - A copy of concern image uploads
+  - A small backup-info.txt file
+
+It removes this script's dated backup folders after they are older than 30 days.
+The backup copy of images is stored alongside the SQL dump; original uploads are
+not moved or deleted.
+
+IMPORTANT: Save backups somewhere other than the app folder and, ideally, on a
+separate drive or network/NAS/cloud storage. A backup on the same VM disk does
+not protect against loss of that VM or disk. These backups contain sensitive
+system data; restrict access or use encrypted storage.
+
+FILES IN THIS PROJECT
+---------------------
+Backup script:
+  scripts\backup\Backup-ConcernManagement.ps1
+
+Full backup/restore notes:
+  docs\backup-restore.md
+
+Before moving to the VM, copy the project and confirm the script is present.
+Do not change the script for normal path changes: supply the VM paths in the
+command below.
+
+STEP 1 - FIND THE VM PATHS
+--------------------------
+On the VM, identify:
+
+1. Project/script path. Example:
+   C:\xampp\htdocs\concern-management-system\scripts\backup\Backup-ConcernManagement.ps1
+
+2. MariaDB dump executable. Typical XAMPP path:
+   C:\xampp\mysql\bin\mysqldump.exe
+   If XAMPP was installed elsewhere, locate mysqldump.exe in that installation.
+
+3. Database name. Read DB_NAME in the app's private .env. This example uses:
+   concern_management
+
+4. Concern upload directory. By default, the script automatically uses:
+   <project folder>\data\uploads\concerns
+   For the example project path above, that is:
+   C:\xampp\htdocs\concern-management-system\data\uploads\concerns
+   If the app's .env sets CONCERN_UPLOAD_DIR to another location, use that real
+   location with -ConcernUploadsDirectory in the task command.
+
+5. Backup destination. Example:
+   E:\ConcernManagementBackups
+   Choose a folder that is NOT the project folder and NOT the original concern
+   uploads folder (nor a folder inside it). The script checks and rejects those
+   unsafe locations. The destination drive/folder must exist or be creatable by
+   the Windows account running the scheduled task.
+
+With these example paths, a run creates a folder such as:
+  E:\ConcernManagementBackups\concern-management_20261029_020000\
+      concern_management.sql
+      backup-info.txt
+      uploads\concerns\<image files>
+
+STEP 2 - PREPARE THE MARIADB OPTIONS FILE
+-----------------------------------------
+The script needs a MariaDB client options file so it can connect to MariaDB.
+This file may omit the password line if the MariaDB account currently has no
+password. Keep the file private and do not place it in the app's public folder
+or commit it to source control.
+
+For the Windows account that will run the task, create this folder:
+  %APPDATA%\ConcernManagement
+
+Create a file in that folder named:
+  backup-client.cnf
+
+Put the following in it, adjusting username, host, and port to the database
+account/connection used on the VM. If there is no database password, leave out
+the password line (or keep it empty as shown):
+
+  [client]
+  user=root
+  host=127.0.0.1
+  port=3306
+  password=
+
+If a password is configured for that MariaDB account, add it as:
+  password="YOUR_PASSWORD"
+
+Use a dedicated limited-privilege backup account rather than root for a
+production deployment where practical. The options file is read by mysqldump;
+it is not the same as the application's .env file. The same Windows account
+must be able to read this file when the scheduled task runs.
+
+Restrict file permissions. Open PowerShell as the intended task account and run:
+  icacls "$env:APPDATA\ConcernManagement\backup-client.cnf" /inheritance:r /grant:r "$($env:USERNAME):(R,W)" "SYSTEM:(F)"
+
+STEP 3 - RUN A MANUAL BACKUP TEST
+---------------------------------
+Open PowerShell as the Windows account that will own the scheduled task. Change
+the project path and backup destination below if they differ on the VM. Run:
+
+  & "C:\xampp\htdocs\concern-management-system\scripts\backup\Backup-ConcernManagement.ps1" `
+    -BackupRoot "E:\ConcernManagementBackups" `
+    -ClientOptionsFile "$env:APPDATA\ConcernManagement\backup-client.cnf" `
+    -DumpExecutable "C:\xampp\mysql\bin\mysqldump.exe" `
+    -DatabaseName "concern_management" `
+    -RetentionDays 30
+
+If uploads are stored in the default project folder, do not add
+-ConcernUploadsDirectory. If CONCERN_UPLOAD_DIR points somewhere else, add this
+parameter on a new line (use the actual directory):
+  -ConcernUploadsDirectory "D:\ConcernData\uploads\concerns"
+
+Wait for the message "Backup completed". Then inspect the newly-created folder.
+Confirm the SQL file is non-empty and the expected images are present under
+uploads\concerns. Do not schedule until this manual test succeeds.
+
+STEP 4 - CREATE THE DAILY TASK
+------------------------------
+1. Open Start, search for "Task Scheduler", and launch it.
+2. In the Actions pane, click "Create Task..." (not "Create Basic Task").
+3. General tab:
+   - Name: Concern Management Daily Backup
+   - Description: Full MariaDB dump and concern uploads; keep 30 days.
+   - Select the Windows account used in the manual test. It needs access to
+     MariaDB, the options file, app uploads, and the backup destination.
+   - Select "Run whether user is logged on or not" if suitable for your VM.
+   - Do not select "Run with highest privileges" unless your paths/permissions
+     require it.
+4. Triggers tab:
+   - Click "New..."
+   - Begin the task: "On a schedule"
+   - Settings: "Daily"
+   - Start: choose the VM's local date and set 2:00:00 AM
+   - Recur every: 1 days
+   - Ensure Enabled is checked; click OK.
+5. Actions tab:
+   - Click "New..."
+   - Action: "Start a program"
+   - Program/script: powershell.exe
+   - Add arguments: paste the following as ONE line, then replace paths/user
+     names with the actual VM values:
+
+-NoProfile -ExecutionPolicy Bypass -File "C:\xampp\htdocs\concern-management-system\scripts\backup\Backup-ConcernManagement.ps1" -BackupRoot "E:\ConcernManagementBackups" -ClientOptionsFile "C:\Users\YOUR-WINDOWS-USER\AppData\Roaming\ConcernManagement\backup-client.cnf" -DumpExecutable "C:\xampp\mysql\bin\mysqldump.exe" -DatabaseName "concern_management" -RetentionDays 30
+
+   - If the upload folder is non-default, append to that same line:
+     -ConcernUploadsDirectory "D:\ConcernData\uploads\concerns"
+   - Click OK.
+6. Conditions tab:
+   - Review power and idle options. For a VM/server, do not require the computer
+     to be idle if that might prevent the backup. Ensure the VM is running at
+     2:00 AM. Configure wake behavior only if supported/appropriate.
+7. Settings tab:
+   - Allow task to be run on demand.
+   - If the task fails, configure a retry if desired (for example, retry after
+     15 minutes, up to 2 times).
+   - Do not start a new instance if the previous backup is still running.
+   - Click OK to save. Windows may ask for the task account's Windows password;
+     enter it directly in Task Scheduler, never in the script or arguments.
+
+PATH NOTES
+----------
+- Always use the actual VM paths, not the developer computer paths.
+- Use double quotes around paths containing spaces.
+- The script discovers the project root relative to its own location, so the
+  default concern upload path follows the project when the project is moved.
+- BackupRoot is where the timestamped folders and SQL dump are created.
+- The task's ClientOptionsFile argument must use an absolute path. Task
+  Scheduler does not reliably expand %APPDATA%; use the full path, for example:
+  C:\Users\backup-runner\AppData\Roaming\ConcernManagement\backup-client.cnf
+- The task runs under its configured Windows account. Use a location and account
+  permissions that remain valid after deployment/reboot.
+
+STEP 5 - TEST TASK SCHEDULER
+----------------------------
+1. In Task Scheduler Library, find "Concern Management Daily Backup".
+2. Right-click it and choose "Run".
+3. Wait for it to finish. Check Last Run Result; 0x0 indicates success.
+4. Check the backup destination for a new timestamped folder with the SQL dump,
+   backup-info.txt, and copied images.
+5. If it fails, open the task's History tab and check the Last Run Result. Also
+   run the manual PowerShell command again under the same Windows account and
+   review the displayed error.
+
+RETENTION AND RESTORE
+---------------------
+-RetentionDays 30 means this script removes its own correctly named dated backup
+folders older than 30 days from BackupRoot after a successful backup. It does
+not remove the original upload files. Keep an additional copy on another device
+or protected remote storage; local retention is not an off-VM backup.
+
+A .sql file is a dump, not a live database. For a restore, import it into a new
+empty test database first and restore the uploads\concerns files from the SAME
+timestamped folder to the configured concern upload directory. Verify concerns,
+comments, history, and images before considering production recovery. Do not
+practice by restoring over the live database. See docs\backup-restore.md for
+more restore and safety details.

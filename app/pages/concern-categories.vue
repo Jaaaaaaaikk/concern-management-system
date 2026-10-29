@@ -12,13 +12,14 @@ const currentUser = useState('current-user', () => null)
 const isHeaderSticky = useStickyHeader()
 const { showToast } = useToast()
 const categories = ref([])
+const organizations = ref([])
 const loading = ref(true)
 const saving = ref(false)
 const updatingId = ref(null)
 const showCreateModal = ref(false)
 const categoryToToggle = ref(null)
 const errorMessage = ref('')
-const form = ref({ name: '', description: '' })
+const form = ref({ name: '', description: '', organization_ids: [] })
 
 const activeCount = computed(() =>
     categories.value.filter(category => category.status === 'active').length
@@ -38,11 +39,10 @@ async function loadData() {
             return
         }
 
-        const categoryResponse = await $fetch('/api/concern-types', {
-            cache: 'no-store',
-            query: { includeInactive: 'true' }
-        })
-        categories.value = categoryResponse.concernTypes || []
+        await Promise.all([
+            loadCategories(),
+            loadOrganizations()
+        ])
     } catch (error) {
         errorMessage.value = error?.data?.statusMessage || 'Failed to load concern categories.'
     } finally {
@@ -51,7 +51,7 @@ async function loadData() {
 }
 
 function openCreateModal() {
-    form.value = { name: '', description: '' }
+    form.value = { name: '', description: '', organization_ids: [] }
     showCreateModal.value = true
 }
 
@@ -68,7 +68,8 @@ async function createCategory() {
             method: 'POST',
             body: {
                 name: form.value.name.trim(),
-                description: form.value.description.trim()
+                description: form.value.description.trim(),
+                organization_ids: form.value.organization_ids
             }
         })
         showCreateModal.value = false
@@ -87,6 +88,14 @@ async function loadCategories() {
         query: { includeInactive: 'true' }
     })
     categories.value = response.concernTypes || []
+}
+
+async function loadOrganizations() {
+    const response = await $fetch('/api/organizations', {
+        cache: 'no-store'
+    })
+    organizations.value = (response?.organizations || [])
+        .filter(organization => organization.status === 'active')
 }
 
 function toggleCategory(category) {
@@ -213,6 +222,15 @@ onMounted(loadData)
                                         <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold" :class="category.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-200 text-slate-600'">{{ category.status === 'active' ? 'Active' : 'Inactive' }}</span>
                                     </div>
                                     <p class="mt-1 text-sm leading-5 text-slate-500">{{ category.description || 'No description provided.' }}</p>
+                                    <div class="mt-3">
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Assigned organizations</p>
+                                        <div v-if="category.assigned_organizations?.length" class="mt-1 flex flex-wrap gap-1.5">
+                                            <span v-for="organization in category.assigned_organizations" :key="organization.id" class="rounded-full border px-2.5 py-1 text-xs font-medium" :class="organization.status === 'active' ? 'border-blue-100 bg-blue-50 text-blue-800' : 'border-slate-200 bg-slate-100 text-slate-500'">
+                                                {{ organization.name }}{{ organization.status === 'active' ? '' : ' (inactive)' }}
+                                            </span>
+                                        </div>
+                                        <p v-else class="mt-1 text-xs text-amber-700">No organizations assigned</p>
+                                    </div>
                                     <p class="mt-2 text-xs text-slate-400">Added {{ formatDate(category.created_at) }}</p>
                                 </div>
                             </div>
@@ -231,6 +249,7 @@ onMounted(loadData)
             :show="showCreateModal"
             :form="form"
             :saving="saving"
+            :organizations="organizations"
             @close="closeCreateModal"
             @submit="createCategory"
         />

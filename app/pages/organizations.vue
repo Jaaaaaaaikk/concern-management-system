@@ -12,6 +12,7 @@ definePageMeta({
 const currentUser = useState('current-user', () => null)
 const isHeaderSticky = useStickyHeader()
 const organizations = ref([])
+const concernTypes = ref([])
 const loading = ref(true)
 const errorMessage = ref('')
 const { showToast } = useToast()
@@ -24,14 +25,16 @@ const createForm = ref({
     name: '',
     organization_type: '',
     description: '',
-    address: ''
+    address: '',
+    concern_type_ids: []
 })
 
 const editForm = ref({
     name: '',
     organization_type: '',
     description: '',
-    address: ''
+    address: '',
+    concern_type_ids: []
 })
 
 const editingOrganization = ref(null)
@@ -46,7 +49,9 @@ const hasOrganizationEditChanges = computed(() => {
     return editForm.value.name !== (organization.name || '') ||
         editForm.value.organization_type !== (organization.organization_type || '') ||
         editForm.value.description !== (organization.description || '') ||
-        editForm.value.address !== (organization.address || '')
+        editForm.value.address !== (organization.address || '') ||
+        JSON.stringify([...editForm.value.concern_type_ids].map(Number).sort((a, b) => a - b)) !==
+        JSON.stringify([...(organization.concern_type_ids || [])].map(Number).sort((a, b) => a - b))
 })
 
 const currentPage = ref(1)
@@ -102,6 +107,20 @@ async function loadOrganizations() {
         Number(pagination.page || 1)
 }
 
+async function loadConcernTypes() {
+    if (currentUser.value?.role_name !== 'superadmin') {
+        concernTypes.value = []
+        return
+    }
+
+    const response = await $fetch('/api/concern-types', {
+        cache: 'no-store',
+        query: { includeInactive: 'true' }
+    })
+
+    concernTypes.value = response?.concernTypes || []
+}
+
 
 // --------------------------------------------------
 // LOAD ORGANIZATIONS WITH LOADING STATE
@@ -139,7 +158,10 @@ async function loadData() {
             return
         }
 
-        await loadOrganizations()
+        await Promise.all([
+            loadOrganizations(),
+            loadConcernTypes()
+        ])
     } catch (error) {
         errorMessage.value =
             error?.data?.statusMessage ||
@@ -273,7 +295,8 @@ function resetCreateForm() {
         name: '',
         organization_type: '',
         description: '',
-        address: ''
+        address: '',
+        concern_type_ids: []
     }
 }
 
@@ -309,7 +332,10 @@ async function createOrganization() {
                     name: createForm.value.name,
                     organization_type: createForm.value.organization_type,
                     description: createForm.value.description,
-                    address: createForm.value.address
+                    address: createForm.value.address,
+                    ...(currentUser.value?.role_name === 'superadmin'
+                        ? { concern_type_ids: createForm.value.concern_type_ids }
+                        : {})
                 }
             }
         )
@@ -344,7 +370,8 @@ function resetEditForm() {
         name: '',
         organization_type: '',
         description: '',
-        address: ''
+        address: '',
+        concern_type_ids: []
     }
 
     editingOrganization.value = null
@@ -359,7 +386,8 @@ function openEditModal(organization) {
         name: organization?.name || '',
         organization_type: organization?.organization_type || '',
         description: organization?.description || '',
-        address: organization?.address || ''
+        address: organization?.address || '',
+        concern_type_ids: [...(organization?.concern_type_ids || [])].map(Number)
     }
 
     showEditModal.value = true
@@ -407,7 +435,10 @@ async function updateOrganization() {
                     name: editForm.value.name,
                     organization_type: editForm.value.organization_type,
                     description: editForm.value.description,
-                    address: editForm.value.address
+                    address: editForm.value.address,
+                    ...(currentUser.value?.role_name === 'superadmin'
+                        ? { concern_type_ids: editForm.value.concern_type_ids }
+                        : {})
                 }
             }
         )
@@ -871,13 +902,15 @@ onMounted(() => {
 
         <!-- Create Organization Modal -->
 
-        <CreateOrganizationModal :show="showCreateModal" :form="createForm" :saving="saving" @close="closeCreateModal"
+        <CreateOrganizationModal :show="showCreateModal" :form="createForm" :saving="saving" :concern-types="concernTypes"
+            :can-assign-concern-types="currentUser?.role_name === 'superadmin'" @close="closeCreateModal"
             @submit="createOrganization" />
 
 
         <!-- Edit Organization Modal -->
 
-        <EditOrganizationModal :show="showEditModal" :form="editForm" :has-changes="hasOrganizationEditChanges" :updating="updating" @close="closeEditModal"
+        <EditOrganizationModal :show="showEditModal" :form="editForm" :has-changes="hasOrganizationEditChanges" :updating="updating"
+            :concern-types="concernTypes" :can-assign-concern-types="currentUser?.role_name === 'superadmin'" @close="closeEditModal"
             @submit="updateOrganization" />
 
     </div>

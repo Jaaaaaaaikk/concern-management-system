@@ -1,6 +1,11 @@
 import db from '../../utils/db.js'
 
 import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
+import {
+    assertConcernTypesExist,
+    normalizeConcernTypeIds,
+    replaceOrganizationConcernTypes
+} from '../../utils/organization-concern-types.js'
 
 export default defineEventHandler(async (event) => {
 
@@ -31,6 +36,18 @@ export default defineEventHandler(async (event) => {
         body?.address?.trim() || null
 
     const allowedOrganizationTypes = ['bpo', 'tenant', 'admin_facilities']
+    const hasConcernTypeAssignments = Object.hasOwn(body || {}, 'concern_type_ids')
+
+    if (hasConcernTypeAssignments && currentUser.role_name !== 'superadmin') {
+        throw createError({
+            statusCode: 403,
+            statusMessage: 'Only superadmins can assign concern types to organizations.'
+        })
+    }
+
+    const concernTypeIds = hasConcernTypeAssignments
+        ? normalizeConcernTypeIds(body.concern_type_ids)
+        : []
 
     if (!name) {
 
@@ -48,9 +65,12 @@ export default defineEventHandler(async (event) => {
         })
     }
 
-    try {
+    const connection = await db.getConnection()
 
-        const [existingRows] = await db.query(
+    try {
+        await connection.beginTransaction()
+
+        const [existingRows] = await connection.query(
             `
             SELECT id
             FROM organizations
@@ -72,7 +92,7 @@ export default defineEventHandler(async (event) => {
 
         }
 
-        await db.query(
+        await connection.query(
             `
             UPDATE organizations
             SET
@@ -94,6 +114,17 @@ export default defineEventHandler(async (event) => {
             ]
         )
 
+        if (hasConcernTypeAssignments) {
+            await assertConcernTypesExist(connection, concernTypeIds)
+            await replaceOrganizationConcernTypes(
+                connection,
+                organizationId,
+                concernTypeIds
+            )
+        }
+
+        await connection.commit()
+
         return {
 
             success: true,
@@ -103,6 +134,8 @@ export default defineEventHandler(async (event) => {
         }
 
     } catch (error) {
+
+        await connection.rollback()
 
         if (error?.statusCode) {
             throw error
@@ -118,6 +151,8 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Failed to update organization.'
         })
 
+    } finally {
+        connection.release()
     }
 
 })

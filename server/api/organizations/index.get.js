@@ -6,6 +6,15 @@ export default defineEventHandler(async (event) => {
 
     const currentUser = await requireAuth(event)
 
+    function withConcernTypeIds(rows) {
+        return rows.map(organization => ({
+            ...organization,
+            concern_type_ids: organization.concern_type_ids
+                ? organization.concern_type_ids.split(',').map(Number)
+                : []
+        }))
+    }
+
     const queryParams = getQuery(event)
 
     /*
@@ -68,7 +77,12 @@ export default defineEventHandler(async (event) => {
                 organizations.created_by,
                 organizations.updated_by,
                 CONCAT(creator.first_name, ' ', creator.last_name) AS created_by_name,
-                CONCAT(updater.first_name, ' ', updater.last_name) AS updated_by_name
+                CONCAT(updater.first_name, ' ', updater.last_name) AS updated_by_name,
+                (
+                    SELECT GROUP_CONCAT(organization_concern_types.concern_type_id ORDER BY organization_concern_types.concern_type_id)
+                    FROM organization_concern_types
+                    WHERE organization_concern_types.organization_id = organizations.id
+                ) AS concern_type_ids
             FROM organizations
             LEFT JOIN users creator ON creator.id = organizations.created_by
             LEFT JOIN users updater ON updater.id = organizations.updated_by
@@ -78,7 +92,7 @@ export default defineEventHandler(async (event) => {
 
         return {
             success: true,
-            organizations: rows
+            organizations: withConcernTypeIds(rows)
         }
     }
 
@@ -140,7 +154,12 @@ export default defineEventHandler(async (event) => {
             organizations.created_by,
             organizations.updated_by,
             CONCAT(creator.first_name, ' ', creator.last_name) AS created_by_name,
-            CONCAT(updater.first_name, ' ', updater.last_name) AS updated_by_name
+            CONCAT(updater.first_name, ' ', updater.last_name) AS updated_by_name,
+            (
+                SELECT GROUP_CONCAT(organization_concern_types.concern_type_id ORDER BY organization_concern_types.concern_type_id)
+                FROM organization_concern_types
+                WHERE organization_concern_types.organization_id = organizations.id
+            ) AS concern_type_ids
         FROM organizations
         LEFT JOIN users creator ON creator.id = organizations.created_by
         LEFT JOIN users updater ON updater.id = organizations.updated_by
@@ -154,7 +173,7 @@ export default defineEventHandler(async (event) => {
 
     return {
         success: true,
-        organizations: rows,
+        organizations: withConcernTypeIds(rows),
         pagination: {
             page,
             limit,

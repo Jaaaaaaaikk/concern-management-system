@@ -18,6 +18,16 @@ const props = defineProps({
     saving: {
         type: Boolean,
         default: false
+    },
+
+    concernTypes: {
+        type: Array,
+        default: () => []
+    },
+
+    canAssignConcernTypes: {
+        type: Boolean,
+        default: false
     }
 
 })
@@ -40,6 +50,15 @@ function organizationTypeLabel(type) {
         tenant: 'Tenant',
         admin_facilities: 'Admin Facilities'
     }[type] || 'organization'
+}
+
+function toggleConcernType(concernTypeId) {
+    const assignedIds = props.form.concern_type_ids || []
+    const id = Number(concernTypeId)
+
+    props.form.concern_type_ids = assignedIds.some(value => Number(value) === id)
+        ? assignedIds.filter(value => Number(value) !== id)
+        : [...assignedIds, id]
 }
 
 function confirmSubmit() {
@@ -156,6 +175,28 @@ watch(() => props.show, (isShown) => {
                     />
                     <p class="mt-1 text-xs leading-5 text-slate-500">This determines which organizations its users can route concerns to.</p>
                 </div>
+
+                <fieldset v-if="props.canAssignConcernTypes" class="rounded-xl border border-slate-200 p-4">
+                    <legend class="px-1 text-sm font-medium text-slate-700">Concern types this organization handles</legend>
+                    <p class="mb-3 text-xs leading-5 text-slate-500">Users will only be able to route matching concern types to this organization.</p>
+                    <div v-if="props.concernTypes.length" class="grid gap-2 sm:grid-cols-2">
+                        <label
+                            v-for="concernType in props.concernTypes"
+                            :key="concernType.id"
+                            class="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                            <input
+                                type="checkbox"
+                                :checked="(props.form.concern_type_ids || []).some(value => Number(value) === Number(concernType.id))"
+                                class="mt-0.5 rounded border-slate-300 text-blue-700 focus:ring-blue-600"
+                                @change="toggleConcernType(concernType.id)"
+                            >
+                            <span>{{ concernType.name }}<span v-if="concernType.status !== 'active'" class="ml-1 text-xs text-slate-400">(inactive)</span></span>
+                        </label>
+                    </div>
+                    <p v-else class="text-sm text-slate-500">No concern types are available.</p>
+                    <p class="mt-3 text-xs text-amber-700">No assigned types means this organization will not appear as a routing option.</p>
+                </fieldset>
 
                 <!-- Address -->
                 <div>

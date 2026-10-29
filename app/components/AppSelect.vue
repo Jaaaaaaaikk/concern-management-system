@@ -1,6 +1,15 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
+    ComboboxAnchor,
+    ComboboxContent,
+    ComboboxEmpty,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxItemIndicator,
+    ComboboxPortal,
+    ComboboxRoot,
+    ComboboxViewport,
     SelectContent,
     SelectItem,
     SelectItemIndicator,
@@ -48,10 +57,16 @@ const props = defineProps({
     compact: {
         type: Boolean,
         default: false
+    },
+    searchable: {
+        type: Boolean,
+        default: false
     }
 })
 
 const emit = defineEmits(['update:modelValue', 'change'])
+const searchTerm = ref('')
+const isOpen = ref(false)
 
 const normalizedOptions = computed(() => props.options.map((option) => ({
     label: String(option.label ?? ''),
@@ -76,10 +91,104 @@ const selectedValue = computed({
         emit('change', { target: { value: nextValue } })
     }
 })
+
+const selectedLabel = computed(() =>
+    normalizedOptions.value.find(option => option.value === selectedValue.value)?.label || ''
+)
+
+const activeSearchTerm = computed(() =>
+    isOpen.value && searchTerm.value !== selectedLabel.value
+        ? searchTerm.value
+        : ''
+)
+
+function displaySelectedValue(value) {
+    return normalizedOptions.value.find(option => option.value === String(value ?? ''))?.label || ''
+}
 </script>
 
 <template>
+    <div v-if="props.searchable" class="w-full">
+        <ComboboxRoot
+            v-model="selectedValue"
+            v-model:open="isOpen"
+            :disabled="props.disabled"
+            :reset-search-term-on-select="true"
+        >
+            <ComboboxAnchor as-child>
+                <button
+                    v-bind="$attrs"
+                    type="button"
+                    :id="props.id"
+                    :disabled="props.disabled"
+                    :aria-label="$attrs['aria-label'] || props.placeholder"
+                    :aria-expanded="isOpen"
+                    aria-haspopup="listbox"
+                    class="group inline-flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-left text-sm font-medium text-slate-700 outline-none transition hover:border-teal-400 focus:border-teal-600 focus:ring-4 focus:ring-teal-500/15 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                    @click="isOpen = !isOpen"
+                >
+                    <span class="min-w-0 flex-1 truncate" :class="activeSearchTerm ? 'text-teal-800' : selectedLabel ? 'text-slate-700' : 'text-slate-400'">
+                        {{ activeSearchTerm || selectedLabel || props.placeholder }}
+                    </span>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="1.8"
+                        stroke="currentColor"
+                        class="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 group-aria-expanded:rotate-180 group-aria-expanded:text-teal-700"
+                        aria-hidden="true"
+                    >
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+                    </svg>
+                </button>
+            </ComboboxAnchor>
+
+            <ComboboxPortal>
+                <ComboboxContent
+                    position="popper"
+                    side="bottom"
+                    :side-offset="6"
+                    align="start"
+                    :collision-padding="8"
+                    class="z-200 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl shadow-slate-950/15 outline-none"
+                    :style="{ minWidth: 'var(--reka-combobox-trigger-width)' }"
+                >
+                    <ComboboxInput
+                        v-model="searchTerm"
+                        :display-value="displaySelectedValue"
+                        :aria-label="`Search ${props.placeholder.toLowerCase()}`"
+                        class="sr-only"
+                        @focus="$event.target.select()"
+                    />
+                    <ComboboxViewport class="max-h-64 overflow-y-auto p-1">
+                        <ComboboxEmpty class="px-3 py-2 text-sm text-slate-500">
+                            No matching options found.
+                        </ComboboxEmpty>
+                        <ComboboxItem
+                            v-for="option in normalizedOptions.filter(option => option.value !== EMPTY_OPTION_VALUE)"
+                            :key="option.value"
+                            :value="option.value"
+                            :disabled="option.disabled"
+                            :text-value="option.label"
+                            class="relative flex min-h-9 cursor-pointer select-none items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none transition-colors data-highlighted:bg-teal-50 data-highlighted:text-teal-950 data-[state=checked]:bg-teal-700 data-[state=checked]:font-semibold data-[state=checked]:text-white data-disabled:pointer-events-none data-disabled:text-slate-400"
+                        >
+                            <span class="min-w-0 flex-1 truncate">{{ option.label }}</span>
+                            <ComboboxItemIndicator class="shrink-0 text-current" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.4" stroke="currentColor" class="h-4 w-4">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m5 12 4 4L19 6" />
+                                </svg>
+                            </ComboboxItemIndicator>
+                        </ComboboxItem>
+                    </ComboboxViewport>
+                </ComboboxContent>
+            </ComboboxPortal>
+        </ComboboxRoot>
+        <input v-if="props.name" type="hidden" :name="props.name" :value="selectedValue || ''">
+    </div>
+
     <SelectRoot
+        v-else
         v-model="selectedValue"
         :name="props.name"
         :required="props.required"

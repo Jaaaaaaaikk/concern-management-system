@@ -5,7 +5,8 @@ import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
 const props = defineProps({
     show: { type: Boolean, default: false },
     form: { type: Object, required: true },
-    saving: { type: Boolean, default: false }
+    saving: { type: Boolean, default: false },
+    organizations: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['close', 'submit'])
@@ -28,6 +29,15 @@ function confirmSubmit() {
     if (props.saving) return
     showConfirmation.value = false
     emit('submit')
+}
+
+function toggleOrganization(organizationId) {
+    const assignedIds = props.form.organization_ids || []
+    const id = Number(organizationId)
+
+    props.form.organization_ids = assignedIds.some(value => Number(value) === id)
+        ? assignedIds.filter(value => Number(value) !== id)
+        : [...assignedIds, id]
 }
 
 watch(() => props.show, (isShown) => {
@@ -91,6 +101,29 @@ watch(() => props.show, (isShown) => {
                 class="w-full resize-y rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15"
                 placeholder="Briefly describe what belongs in this category."
             />
+
+            <fieldset class="mt-5 rounded-xl border border-slate-200 p-4">
+                <legend class="px-1 text-sm font-medium text-slate-700">Organizations that handle this category</legend>
+                <p class="mb-3 text-xs leading-5 text-slate-500">Select every organization that is eligible to receive concerns in this category.</p>
+                <div v-if="props.organizations.length" class="max-h-48 space-y-1 overflow-y-auto">
+                    <label
+                        v-for="organization in props.organizations"
+                        :key="organization.id"
+                        class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                        <input
+                            type="checkbox"
+                            :checked="(props.form.organization_ids || []).some(value => Number(value) === Number(organization.id))"
+                            class="rounded border-slate-300 text-blue-700 focus:ring-blue-600"
+                            @change="toggleOrganization(organization.id)"
+                        >
+                        <span>{{ organization.name }}</span>
+                        <span class="ml-auto text-xs text-slate-400">{{ organization.organization_type?.replaceAll('_', ' ') }}</span>
+                    </label>
+                </div>
+                <p v-else class="text-sm text-slate-500">No active organizations are available.</p>
+                <p v-if="!(props.form.organization_ids || []).length" class="mt-2 text-xs text-amber-700">No organization is assigned yet; this category will have no routing destination.</p>
+            </fieldset>
 
             <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button

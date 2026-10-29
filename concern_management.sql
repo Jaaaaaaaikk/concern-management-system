@@ -162,6 +162,18 @@ CREATE TABLE `organizations` (
   `updated_by` int(10) UNSIGNED DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `organization_concern_types`
+--
+
+CREATE TABLE `organization_concern_types` (
+  `organization_id` int(10) UNSIGNED NOT NULL,
+  `concern_type_id` int(10) UNSIGNED NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 --
 -- Dumping data for table `organizations`
 --
@@ -176,6 +188,15 @@ INSERT INTO `organizations` (`id`, `name`, `organization_type`, `description`, `
 (7, 'Regus', 'tenant', 'Tenant', NULL, NULL, 'Felcris Centrale Building A 6th Floor', 'active', '2026-10-09 15:21:43', '2026-10-16 17:22:48', NULL, NULL, 1),
 (8, 'Intellicare', 'bpo', 'BPO Company', NULL, NULL, 'Felcris Centrale Building C 4th Floor', 'active', '2026-10-09 15:22:16', '2026-10-16 17:23:46', NULL, NULL, 1),
 (9, 'Safety and Security (SSI)', 'admin_facilities', 'Felcris Centrale EHSS Department', NULL, NULL, 'EHSS Department', 'active', '2026-10-14 08:25:40', '2026-10-16 17:21:54', NULL, 1, 1);
+
+--
+-- Dumping data for table `organization_concern_types`
+--
+
+INSERT INTO `organization_concern_types` (`organization_id`, `concern_type_id`) VALUES
+(1, 2), (1, 3), (1, 4),
+(3, 2), (3, 3), (3, 4),
+(9, 2), (9, 3), (9, 4);
 
 -- --------------------------------------------------------
 
@@ -339,6 +360,13 @@ ALTER TABLE `organizations`
   ADD KEY `idx_organizations_updated_by` (`updated_by`);
 
 --
+-- Indexes for table `organization_concern_types`
+--
+ALTER TABLE `organization_concern_types`
+  ADD PRIMARY KEY (`organization_id`, `concern_type_id`),
+  ADD KEY `idx_organization_concern_types_type` (`concern_type_id`);
+
+--
 -- Indexes for table `roles`
 --
 ALTER TABLE `roles`
@@ -481,6 +509,13 @@ ALTER TABLE `concern_status_history`
 ALTER TABLE `organizations`
   ADD CONSTRAINT `fk_organizations_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_organizations_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `organization_concern_types`
+--
+ALTER TABLE `organization_concern_types`
+  ADD CONSTRAINT `fk_organization_concern_types_organization` FOREIGN KEY (`organization_id`) REFERENCES `organizations` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_organization_concern_types_type` FOREIGN KEY (`concern_type_id`) REFERENCES `concern_types` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `users`

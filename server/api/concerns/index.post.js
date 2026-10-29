@@ -177,6 +177,7 @@ export default defineEventHandler(async (event) => {
             FROM organizations
             WHERE id = ?
               AND deleted_at IS NULL
+              AND status = 'active'
             LIMIT 1
             `,
     [Number(assignedOrganizationId)],
@@ -230,6 +231,24 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 403,
       statusMessage: "You cannot assign a concern to your own organization.",
+    });
+  }
+
+  const [assignmentRows] = await db.query(
+    `
+      SELECT 1
+      FROM organization_concern_types
+      WHERE organization_id = ?
+        AND concern_type_id = ?
+      LIMIT 1
+    `,
+    [Number(assignedOrganizationId), Number(concernTypeId)],
+  );
+
+  if (assignmentRows.length === 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "The selected organization is not assigned to handle this concern type.",
     });
   }
 

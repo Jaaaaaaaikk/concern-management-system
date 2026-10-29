@@ -59,34 +59,48 @@ const form = ref({
 
 const availableOrganizations = computed(() => {
 
-    if (!props.currentUser) {
+    if (!props.currentUser || !form.value.concern_type_id) {
         return []
     }
+
+    const concernTypeId = Number(form.value.concern_type_id)
+    let eligibleOrganizations = []
 
     if (
         props.currentUser.role_name === 'superadmin'
     ) {
-        return props.organizations
-    }
-
-    const ownOrganizationId = Number(props.currentUser.organization_id)
-    const ownOrganization = props.organizations.find(
-        organization => Number(organization.id) === ownOrganizationId
-    )
-    const isAdminFacilitiesOrganization =
-        ownOrganization?.organization_type === 'admin_facilities'
-
-    if (!isAdminFacilitiesOrganization) {
-        return props.organizations.filter(
-            organization => organization.organization_type === 'admin_facilities'
+        eligibleOrganizations = props.organizations
+    } else {
+        const ownOrganizationId = Number(props.currentUser.organization_id)
+        const ownOrganization = props.organizations.find(
+            organization => Number(organization.id) === ownOrganizationId
         )
+        const isAdminFacilitiesOrganization =
+            ownOrganization?.organization_type === 'admin_facilities'
+
+        eligibleOrganizations = !isAdminFacilitiesOrganization
+            ? props.organizations.filter(
+                organization => organization.organization_type === 'admin_facilities'
+            )
+            : props.organizations.filter(
+                organization => Number(organization.id) !== ownOrganizationId
+            )
     }
 
-    return props.organizations.filter(
-        organization =>
-            Number(organization.id) !== ownOrganizationId
+    return eligibleOrganizations.filter(organization =>
+        organization.status === 'active' &&
+        (organization.concern_type_ids || []).some(
+            assignedTypeId => Number(assignedTypeId) === concernTypeId
+        )
     )
 
+})
+
+const organizationPlaceholder = computed(() => {
+    if (!form.value.concern_type_id) return 'Select concern type first'
+    return availableOrganizations.value.length
+        ? 'Select organization'
+        : 'No organization handles this concern type'
 })
 
 function resetForm() {
@@ -390,6 +404,17 @@ async function createConcern(confirmed = false) {
 }
 
 watch(
+    () => form.value.concern_type_id,
+    () => {
+        if (!availableOrganizations.value.some(
+            organization => Number(organization.id) === Number(form.value.assigned_organization_id)
+        )) {
+            form.value.assigned_organization_id = ''
+        }
+    }
+)
+
+watch(
 
     () => props.show,
 
@@ -587,6 +612,7 @@ onUnmounted(() => {
                                 name="concern_type_id"
                                 placeholder="Select concern type"
                                 :required="true"
+                                :searchable="true"
                                 :options="[
                                     { label: 'Select concern type', value: '', disabled: true },
                                     ...concernTypes.map(type => ({ label: type.name, value: type.id }))
@@ -607,19 +633,18 @@ onUnmounted(() => {
                                 v-model="form.assigned_organization_id"
                                 aria-label="Assigned organization"
                                 name="assigned_organization_id"
-                                :placeholder="availableOrganizations.length ? 'Select organization' : 'No Admin Facilities organization is available'"
+                                :placeholder="organizationPlaceholder"
                                 :required="true"
-                                :disabled="availableOrganizations.length === 0"
+                                :disabled="!form.concern_type_id || availableOrganizations.length === 0"
+                                :searchable="true"
                                 :options="[
-                                    { label: availableOrganizations.length ? 'Select organization' : 'No Admin Facilities organization is available', value: '', disabled: true },
+                                    { label: organizationPlaceholder, value: '', disabled: true },
                                     ...availableOrganizations.map(organization => ({ label: organization.name, value: organization.id }))
                                 ]"
                             />
 
-                            <p v-if="currentUser?.role_name !== 'superadmin' && currentUser?.organization_id" class="mt-1 text-xs text-slate-500">
-                                {{ availableOrganizations.length && availableOrganizations.every(organization => organization.organization_type === 'admin_facilities') && props.organizations.find(organization => Number(organization.id) === Number(currentUser.organization_id))?.organization_type !== 'admin_facilities'
-                                    ? 'BPO and tenant concerns can only be assigned to Admin Facilities.'
-                                    : 'Admin Facilities can route to any other organization, but not to itself.' }}
+                            <p v-if="form.concern_type_id && !availableOrganizations.length" class="mt-1 text-xs text-amber-700">
+                                Ask a Superadmin to assign this concern type to an eligible organization.
                             </p>
 
                         </div>
