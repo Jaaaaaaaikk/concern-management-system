@@ -1,0 +1,3928 @@
+<script setup>
+
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
+import ConfirmActionModal from '~/components/ConfirmActionModal.vue'
+import AppSelect from '~/components/AppSelect.vue'
+import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
+import { roleDisplayName } from '~/composables/useRoleLabel'
+
+const props = defineProps({
+    show: {
+        type: Boolean,
+        default: false
+    },
+
+    concernId: {
+        type: [Number, String],
+        default: null
+    },
+
+    currentUser: {
+        type: Object,
+        default: null
+    }
+})
+
+useBodyScrollLock(() => props.show)
+
+const { showToast } = useToast()
+
+const emit = defineEmits([
+    'close',
+    'refresh'
+])
+
+const selectedConcern = ref(null)
+const concernComments = ref([])
+const concernAttachments = ref([])
+const concernStatusHistory = ref([])
+const activeConcernTab = ref('overview')
+const visibleCommentCount = ref(10)
+const showAllStatusHistory = ref(false)
+
+const visibleComments = computed(() =>
+    concernComments.value.slice(-visibleCommentCount.value)
+)
+
+const visibleStatusHistory = computed(() => {
+    const latestFirst = concernStatusHistory.value
+        .slice()
+        .sort((left, right) => {
+            const leftTime = parseDate(left.created_at)?.getTime() || 0
+            const rightTime = parseDate(right.created_at)?.getTime() || 0
+
+            return rightTime - leftTime
+        })
+
+    return showAllStatusHistory.value
+        ? latestFirst
+        : latestFirst.slice(0, 3)
+})
+
+const loadingConcernDetails = ref(false)
+const savingComment = ref(false)
+const updatingStatus = ref(false)
+const updatingTrash = ref(false)
+const trashConfirmation = ref('')
+const pendingConfirmation = ref(null)
+
+const newComment = ref('')
+const selectedStatus = ref('')
+const statusRemarks = ref('')
+const targetCommitmentAt = ref(null)
+
+const selectedStatusImages = ref([])
+const statusImagePreviews = ref([])
+const statusImageInput = ref(null)
+
+const selectedCommentImages = ref([])
+const commentImagePreviews = ref([])
+const commentImageInput = ref(null)
+
+/*
+ * ---------------------------------------------------------
+ * ATTACHMENT REPLACEMENT
+ * ---------------------------------------------------------
+ */
+
+const editingAttachmentId = ref(null)
+const replacingAttachmentId = ref(null)
+const deletingAttachmentId = ref(null)
+
+const replacementInput = ref(null)
+const selectedReplacementImage = ref(null)
+const replacementImagePreview = ref(null)
+
+/*
+ * ---------------------------------------------------------
+ * ADDITIONAL ATTACHMENTS
+ * ---------------------------------------------------------
+ */
+
+const addingAttachments = ref(false)
+const additionalAttachmentInput = ref(null)
+const selectedAdditionalImages = ref([])
+const additionalImagePreviews = ref([])
+
+const showImageViewer = ref(false)
+const selectedViewerImage = ref(null)
+
+const currentTime = ref(new Date())
+let durationTimer = null
+
+const confirmationDetails = computed(() => {
+    const action = pendingConfirmation.value
+
+    if (!action) {
+        return {
+            title: '',
+            message: '',
+            confirmLabel: 'Confirm',
+            tone: 'primary'
+        }
+    }
+
+    const details = {
+        comment: {
+            title: 'Send this comment?',
+            message: 'Your comment and any selected images will be shared with people who can access this concern.',
+            confirmLabel: 'Send comment',
+            tone: 'primary'
+        },
+        status: {
+            title: 'Confirm status update?',
+            message: `This will change the concern status to ${formatStatus(selectedStatus.value)} and share your update notes${selectedStatusImages.value.length ? ' and evidence images' : ''}.`,
+            confirmLabel: 'Update status',
+            tone: 'primary'
+        },
+        replaceAttachment: {
+            title: 'Replace this attachment?',
+            message: `The selected image will replace the current attachment${selectedReplacementImage.value?.name ? ` with “${selectedReplacementImage.value.name}”` : ''}.`,
+            confirmLabel: 'Replace image',
+            tone: 'primary'
+        },
+        addAttachments: {
+            title: 'Attach these images?',
+            message: `${selectedAdditionalImages.value.length} image${selectedAdditionalImages.value.length === 1 ? '' : 's'} will be added to this concern.`,
+            confirmLabel: 'Attach images',
+            tone: 'primary'
+        },
+        removeAttachment: {
+            title: 'Remove this attachment?',
+            message: `“${action.attachment?.file_name || 'This image'}” will be removed from the concern.`,
+            confirmLabel: 'Remove image',
+            tone: 'danger'
+        }
+    }
+
+    return details[action.type] || details.comment
+})
+
+const confirmationLoading = computed(() => {
+    const type = pendingConfirmation.value?.type
+
+    return type === 'comment'
+        ? savingComment.value
+        : type === 'status'
+            ? updatingStatus.value
+            : type === 'replaceAttachment'
+                ? Boolean(replacingAttachmentId.value)
+                : type === 'addAttachments'
+                    ? addingAttachments.value
+                    : type === 'removeAttachment'
+                        ? Boolean(deletingAttachmentId.value)
+                        : false
+})
+
+function requestConfirmation(type, details = {}) {
+    if (!confirmationLoading.value) {
+        pendingConfirmation.value = { type, ...details }
+    }
+}
+
+function cancelPendingConfirmation() {
+    if (!confirmationLoading.value) {
+        pendingConfirmation.value = null
+    }
+}
+
+async function confirmPendingAction() {
+    if (!pendingConfirmation.value || confirmationLoading.value) {
+        return
+    }
+
+    const action = pendingConfirmation.value
+    pendingConfirmation.value = null
+
+    if (action.type === 'comment') {
+        await addComment(true)
+    } else if (action.type === 'status') {
+        await updateConcernStatus(true)
+    } else if (action.type === 'replaceAttachment') {
+        await saveAttachmentReplacement(true)
+    } else if (action.type === 'addAttachments') {
+        await attachAdditionalImages(true)
+    } else if (action.type === 'removeAttachment') {
+        await removeOriginalAttachment(action.attachment, true)
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * DATE / TIME HELPERS
+ * ---------------------------------------------------------
+ */
+
+function mysqlDateTimeToLocalDate(value) {
+    if (!value) {
+        return null
+    }
+
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime())
+            ? null
+            : new Date(value.getTime())
+    }
+
+    const stringValue = String(value).trim()
+
+    if (!stringValue) {
+        return null
+    }
+
+    if (
+        stringValue.includes('Z') ||
+        /[+-]\d{2}:\d{2}$/.test(stringValue)
+    ) {
+        const date = new Date(stringValue)
+
+        return Number.isNaN(date.getTime())
+            ? null
+            : date
+    }
+
+    const normalized = stringValue
+        .replace(' ', 'T')
+        .slice(0, 19)
+
+    const [datePart, timePart = '00:00:00'] =
+        normalized.split('T')
+
+    const dateParts = datePart
+        .split('-')
+        .map(Number)
+
+    const timeParts = timePart
+        .split(':')
+        .map(Number)
+
+    if (
+        dateParts.length !== 3 ||
+        dateParts.some(Number.isNaN)
+    ) {
+        return null
+    }
+
+    const [
+        year,
+        month,
+        day
+    ] = dateParts
+
+    const [
+        hour = 0,
+        minute = 0,
+        second = 0
+    ] = timeParts.map((value) =>
+        Number.isNaN(value) ? 0 : value
+    )
+
+    const date = new Date(
+        year,
+        month - 1,
+        day,
+        hour,
+        minute,
+        second
+    )
+
+    return Number.isNaN(date.getTime())
+        ? null
+        : date
+}
+
+/*
+ * Convert a Date or date value into a local YYYY-MM-DD value.
+ */
+function localDateInputValue(value = new Date()) {
+    if (typeof value === 'string') {
+        const dateOnlyMatch = value.trim().match(/^(\d{4}-\d{2}-\d{2})/)
+
+        if (dateOnlyMatch) {
+            return dateOnlyMatch[1]
+        }
+    }
+
+    const date = value instanceof Date
+        ? value
+        : new Date(value)
+
+    if (Number.isNaN(date.getTime())) {
+        return ''
+    }
+
+    const year = date.getFullYear()
+
+    const month = String(
+        date.getMonth() + 1
+    ).padStart(2, '0')
+
+    const day = String(
+        date.getDate()
+    ).padStart(2, '0')
+
+    return `${year}-${month}-${day}`
+}
+
+/*
+ * The assigned organization can schedule the start for today
+ * or a later date. Earlier calendar days are unavailable.
+ */
+function minimumCommitmentDate() {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return today
+}
+
+function formatDateTime(value) {
+    if (!value) {
+        return '-'
+    }
+
+    const date = mysqlDateTimeToLocalDate(value)
+
+    if (!date) {
+        return String(value)
+    }
+
+    return date.toLocaleString('en-PH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    })
+}
+
+function formatDateOnly(value) {
+    if (!value) return '—'
+
+    const date = mysqlDateTimeToLocalDate(value)
+
+    if (!date) return '—'
+
+    return date.toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    })
+}
+
+function formatStatus(status) {
+    const labels = {
+        pending: 'Pending',
+        in_progress: 'In Progress',
+        on_hold: 'On Hold',
+        resolved: 'Resolved',
+        closed: 'Closed'
+    }
+
+    return labels[status] || status || '-'
+}
+
+function formatPriority(priority) {
+    const labels = {
+        low: 'Low',
+        medium: 'Medium',
+        high: 'High',
+        urgent: 'Urgent'
+    }
+
+    return labels[priority] || priority || '-'
+}
+
+function statusClass(status) {
+    const classes = {
+        pending: 'bg-amber-100 text-amber-700',
+        in_progress: 'bg-blue-100 text-blue-700',
+        on_hold: 'bg-orange-100 text-orange-700',
+        resolved: 'bg-green-100 text-green-700',
+        closed: 'bg-slate-200 text-slate-700',
+        cancelled: 'bg-red-100 text-red-700'
+    }
+
+    return classes[status] ||
+        'bg-slate-100 text-slate-600'
+}
+
+function priorityClass(priority) {
+    const classes = {
+        low: 'bg-slate-100 text-slate-600',
+        medium: 'bg-blue-100 text-blue-700',
+        high: 'bg-orange-100 text-orange-700',
+        urgent: 'bg-red-100 text-red-700'
+    }
+
+    return classes[priority] ||
+        'bg-slate-100 text-slate-600'
+}
+
+function formatDate(value) {
+    if (!value) {
+        return '-'
+    }
+
+    const stringValue = String(value)
+
+    if (
+        !stringValue.includes('Z') &&
+        !/[+-]\d{2}:\d{2}$/.test(stringValue)
+    ) {
+        const localDate =
+            mysqlDateTimeToLocalDate(stringValue)
+
+        if (localDate) {
+            return localDate.toLocaleString(
+                'en-PH',
+                {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit'
+                }
+            )
+        }
+    }
+
+    const date = new Date(value)
+
+    if (Number.isNaN(date.getTime())) {
+        return value
+    }
+
+    return date.toLocaleString(
+        'en-PH',
+        {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        }
+    )
+}
+
+function parseDate(value) {
+    if (!value) {
+        return null
+    }
+
+    return mysqlDateTimeToLocalDate(value)
+}
+
+function commitmentStartFromRemarks(remarks) {
+    const match = String(remarks || '').match(
+        /(?:commitment start(?: date)?|scheduled start(?: date(?:\/time)?)?|target resolution date):\s*(\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)/i
+    )
+
+    return match ? parseDate(match[1]) : null
+}
+
+function historyRemarksWithoutCommitmentStart(history) {
+    return String(history?.remarks || '')
+        .replace(
+            /\n?\s*(?:commitment start(?: date)?|scheduled start(?: date(?:\/time)?)?|target resolution date):\s*\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?\s*/i,
+            ''
+        )
+        .trim()
+}
+
+function getConcernDuration(concern) {
+    if (!concern) {
+        return 'Not started'
+    }
+
+    const histories =
+        concernStatusHistory.value
+            .slice()
+            .sort((left, right) =>
+                new Date(left.created_at) -
+                new Date(right.created_at)
+            )
+
+    let elapsedMilliseconds = 0
+    let activeSince = null
+    const latestInProgressHistory = [...histories]
+        .reverse()
+        .find((history) => history.new_status === 'in_progress')
+    const latestInProgressAt = parseDate(latestInProgressHistory?.created_at)
+    const reopenedAfterResolution = Boolean(
+        latestInProgressAt && histories.some((history) =>
+            history.new_status === 'resolved' &&
+            parseDate(history.created_at)?.getTime() < latestInProgressAt.getTime()
+        )
+    )
+
+    for (const history of histories) {
+        const changedAt =
+            parseDate(history.created_at)
+
+        if (!changedAt) {
+            continue
+        }
+
+        if (
+            history.new_status ===
+            'in_progress'
+        ) {
+            activeSince =
+                commitmentStartFromRemarks(history.remarks) ||
+                (
+                    history === latestInProgressHistory && !reopenedAfterResolution
+                        ? parseDate(concern.target_commitment_at)
+                        : null
+                ) ||
+                changedAt
+
+        } else if (
+            [
+                'on_hold',
+                'resolved',
+                'closed',
+                'cancelled'
+            ].includes(history.new_status) &&
+            activeSince
+        ) {
+            elapsedMilliseconds += Math.max(
+                0,
+                changedAt.getTime() -
+                activeSince.getTime()
+            )
+
+            activeSince = null
+        }
+    }
+
+    if (
+        activeSince &&
+        concern.status === 'in_progress'
+    ) {
+        elapsedMilliseconds += Math.max(
+            0,
+            currentTime.value.getTime() -
+            activeSince.getTime()
+        )
+    }
+
+    if (histories.length === 0) {
+        const legacyStart = parseDate(concern.target_commitment_at)
+
+        if (!legacyStart) {
+            return 'Not started'
+        }
+
+        const end = concern.resolved_at
+            ? parseDate(concern.resolved_at)
+            : concern.status === 'in_progress'
+                ? currentTime.value
+                : null
+
+        if (!end) {
+            return 'Not started'
+        }
+
+        elapsedMilliseconds = Math.max(
+            0,
+            end.getTime() -
+            legacyStart.getTime()
+        )
+    }
+
+    if (
+        elapsedMilliseconds <= 0 &&
+        (!activeSince || currentTime.value.getTime() < activeSince.getTime())
+    ) {
+        return 'Not started'
+    }
+
+    if (elapsedMilliseconds <= 0) {
+        return 'Not started'
+    }
+
+    const days = Math.floor(elapsedMilliseconds / 86400000)
+    return `${days} day${days === 1 ? '' : 's'}`
+}
+
+function attachmentUrl(path) {
+    if (!path) {
+        return ''
+    }
+
+    if (
+        path.startsWith('http://') ||
+        path.startsWith('https://')
+    ) {
+        return path
+    }
+
+    return path.startsWith('/')
+        ? path
+        : `/${path}`
+}
+
+/*
+ * ---------------------------------------------------------
+ * PERMISSIONS
+ * ---------------------------------------------------------
+ */
+
+function isConcernCompleted() {
+    if (!selectedConcern.value) {
+        return false
+    }
+
+    return (
+        selectedConcern.value.status === 'closed' ||
+        selectedConcern.value.status === 'cancelled'
+    )
+}
+
+/*
+ * Admin belongs to the organization that created
+ * the concern.
+ *
+ * This admin is responsible for closing a concern
+ * after the assigned organization resolves it.
+ */
+function isCreatorOrganizationAdmin() {
+    if (!props.currentUser || !selectedConcern.value) return false
+
+    return props.currentUser.role_name === 'concern_handler' &&
+        props.currentUser.organization_id != null &&
+        selectedConcern.value.creator_organization_id != null &&
+        Number(props.currentUser.organization_id) === Number(selectedConcern.value.creator_organization_id)
+}
+
+/*
+ * User belongs to the organization assigned
+ * to handle the concern.
+ */
+function isAssignedOrganizationMember() {
+    return Boolean(
+        props.currentUser &&
+        selectedConcern.value &&
+        ['concern_handler', 'requestor'].includes(
+            props.currentUser.role_name
+        ) &&
+        props.currentUser.organization_id != null &&
+        selectedConcern.value.assigned_organization_id != null &&
+        Number(
+            selectedConcern.value.assigned_organization_id
+        ) ===
+        Number(props.currentUser.organization_id)
+    )
+}
+
+/*
+ * User belongs to the creator organization.
+ *
+ * Used for conversation access.
+ */
+function isCreatorOrganizationMember() {
+    return Boolean(
+        props.currentUser &&
+        selectedConcern.value &&
+        ['concern_handler', 'requestor'].includes(
+            props.currentUser.role_name
+        ) &&
+        props.currentUser.organization_id != null &&
+        selectedConcern.value.creator_organization_id != null &&
+        Number(
+            selectedConcern.value.creator_organization_id
+        ) ===
+        Number(props.currentUser.organization_id)
+    )
+}
+
+function isAssignedAdmin() {
+    return Boolean(
+        props.currentUser &&
+        selectedConcern.value &&
+        props.currentUser.role_name === 'concern_handler' &&
+        props.currentUser.organization_id != null &&
+        selectedConcern.value.assigned_organization_id != null &&
+        Number(props.currentUser.organization_id) ===
+        Number(selectedConcern.value.assigned_organization_id)
+    )
+}
+
+function canEditOriginalAttachments() {
+    if (
+        !props.currentUser ||
+        !selectedConcern.value
+    ) {
+        return false
+    }
+
+    if (isConcernCompleted()) {
+        return false
+    }
+
+    if (selectedConcern.value.deleted_at) {
+        return false
+    }
+
+    return props.currentUser.role_name === 'superadmin' ||
+        Number(selectedConcern.value.created_by) === Number(props.currentUser.id)
+}
+
+function canComment() {
+    if (
+        !props.currentUser ||
+        !selectedConcern.value
+    ) {
+        return false
+    }
+
+    if (isConcernCompleted()) {
+        return false
+    }
+
+    if (selectedConcern.value.deleted_at) {
+        return false
+    }
+
+    if (['superadmin', 'system_admin', 'system_monitor'].includes(props.currentUser.role_name)) {
+        return true
+    }
+
+    return (
+        isCreatorOrganizationMember() ||
+        isAssignedOrganizationMember()
+    )
+}
+
+function canTrashConcern() {
+    if (
+        !props.currentUser ||
+        !selectedConcern.value ||
+        selectedConcern.value.status !== 'pending' ||
+        selectedConcern.value.deleted_at
+    ) {
+        return false
+    }
+
+    if (props.currentUser.role_name === 'requestor') {
+        return Number(selectedConcern.value.created_by) === Number(props.currentUser.id)
+    }
+
+    return isCreatorOrganizationAdmin()
+}
+
+function isTrashedConcern() {
+    return Boolean(selectedConcern.value?.deleted_at)
+}
+
+function canRestoreTrashedConcern() {
+    if (
+        !selectedConcern.value ||
+        !isTrashedConcern()
+    ) {
+        return false
+    }
+
+    if (['superadmin', 'system_admin'].includes(props.currentUser?.role_name)) {
+        return true
+    }
+
+    if (selectedConcern.value.status !== 'pending') {
+        return false
+    }
+
+    if (props.currentUser?.role_name === 'concern_handler') {
+        return Number(props.currentUser.organization_id) ===
+            Number(selectedConcern.value.creator_organization_id)
+    }
+
+    return props.currentUser?.role_name === 'requestor' &&
+        Number(props.currentUser.id) === Number(selectedConcern.value.created_by)
+}
+
+function requestTrashConfirmation(action) {
+    trashConfirmation.value = action
+}
+
+function cancelTrashConfirmation() {
+    if (!updatingTrash.value) {
+        trashConfirmation.value = ''
+    }
+}
+
+async function confirmTrashAction() {
+    const action = trashConfirmation.value
+
+    if (!action || updatingTrash.value) {
+        return
+    }
+
+    if (action === 'trash') {
+        await trashConcern()
+    } else if (action === 'restore') {
+        await restoreConcern()
+    } else if (action === 'purge') {
+        await permanentlyDeleteConcern()
+    }
+
+    trashConfirmation.value = ''
+}
+
+async function trashConcern() {
+    if (!canTrashConcern() || updatingTrash.value) {
+        return
+    }
+
+    updatingTrash.value = true
+
+    try {
+        await $fetch(`/api/concerns/${selectedConcern.value.id}/trash`, {
+            method: 'PATCH'
+        })
+
+        showToast('Concern moved to trash.', 'success')
+        emit('refresh')
+        emit('close')
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            'Failed to move concern to trash.',
+            'error'
+        )
+    } finally {
+        updatingTrash.value = false
+    }
+}
+
+async function restoreConcern() {
+    if (
+        !canRestoreTrashedConcern() ||
+        updatingTrash.value
+    ) {
+        return
+    }
+
+    updatingTrash.value = true
+
+    try {
+        await $fetch(`/api/concerns/${selectedConcern.value.id}/restore`, {
+            method: 'PATCH'
+        })
+
+        showToast('Concern restored successfully.', 'success')
+        emit('refresh')
+        emit('close')
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            'Failed to restore concern.',
+            'error'
+        )
+    } finally {
+        updatingTrash.value = false
+    }
+}
+
+async function permanentlyDeleteConcern() {
+    if (
+        !['superadmin', 'system_admin'].includes(props.currentUser?.role_name) ||
+        !isTrashedConcern() ||
+        updatingTrash.value
+    ) {
+        return
+    }
+
+    updatingTrash.value = true
+
+    try {
+        await $fetch(`/api/concerns/${selectedConcern.value.id}/purge`, {
+            method: 'DELETE'
+        })
+
+        showToast('Concern permanently deleted.', 'success')
+        emit('refresh')
+        emit('close')
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            'Failed to permanently delete concern.',
+            'error'
+        )
+    } finally {
+        updatingTrash.value = false
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * STATUS PERMISSIONS
+ * ---------------------------------------------------------
+ *
+ * Assigned organization admin:
+ *   Pending -> In Progress / On Hold
+ *   In Progress -> Resolved
+ *   On Hold -> In Progress
+ *
+ * Creator organization admin:
+ *   Resolved -> In Progress (reopen) / Closed
+ *
+ * Regular users:
+ *   No status changes.
+ *
+ * Cancellation is preserved in the backend, but it is
+ * intentionally not exposed in this modal because the
+ * existing UI did not provide a Cancel option.
+ */
+
+function canChangeToStatus(newStatus) {
+    if (
+        !props.currentUser ||
+        !selectedConcern.value
+    ) {
+        return false
+    }
+
+    const currentStatus =
+        selectedConcern.value.status
+
+    if (newStatus === currentStatus) {
+        return false
+    }
+
+    /*
+     * Closing is only allowed for an admin
+     * from the creator organization.
+     */
+    if (newStatus === 'closed') {
+        return canCloseConcern()
+    }
+
+    if (
+        newStatus === 'in_progress' &&
+        isCreatorOrganizationAdmin() &&
+        currentStatus === 'resolved'
+    ) {
+        return true
+    }
+
+    if (isAssignedAdmin()) {
+        const transitions = {
+            pending: ['in_progress', 'on_hold'],
+            in_progress: ['resolved'],
+            on_hold: ['in_progress'],
+            resolved: [],
+            closed: [],
+            cancelled: []
+        }
+
+        return (
+            transitions[currentStatus] || []
+        ).includes(newStatus)
+    }
+
+    return false
+}
+
+function canUpdateStatus() {
+    return (
+        availableStatusOptions.value.length > 0
+    )
+}
+
+const availableStatusOptions = computed(() => {
+    if (
+        !props.currentUser ||
+        !selectedConcern.value
+    ) {
+        return []
+    }
+
+    const currentStatus =
+        selectedConcern.value.status
+
+    /*
+     * Assigned organization admin.
+     */
+    if (isAssignedAdmin()) {
+        const transitions = {
+            pending: [
+                { value: 'in_progress', label: 'In Progress' },
+                { value: 'on_hold', label: 'On Hold' }
+            ],
+
+            in_progress: [
+                { value: 'resolved', label: 'Resolved' }
+            ],
+
+            on_hold: [
+                { value: 'in_progress', label: 'In Progress' }
+            ]
+        }
+
+        return transitions[currentStatus] || []
+    }
+
+    /*
+     * Creator organization admin can close
+     * a resolved concern.
+     */
+    if (
+        isCreatorOrganizationAdmin() &&
+        currentStatus === 'resolved'
+    ) {
+        return [
+            {
+                value: 'in_progress',
+                label: 'Reopen · In Progress'
+            },
+            {
+                value: 'closed',
+                label: 'Closed'
+            }
+        ]
+    }
+
+    return []
+})
+
+watch(selectedStatus, (status) => {
+    if (
+        status === 'in_progress' &&
+        selectedConcern.value?.status !== 'in_progress'
+    ) {
+        targetCommitmentAt.value = null
+    }
+})
+
+function canCloseConcern() {
+    return Boolean(
+        props.currentUser &&
+        selectedConcern.value &&
+        props.currentUser.role_name === 'concern_handler' &&
+        selectedConcern.value.status === 'resolved' &&
+        isCreatorOrganizationAdmin()
+    )
+}
+
+/*
+ * ---------------------------------------------------------
+ * CREATOR ORGANIZATION ADMIN CLOSE
+ * ---------------------------------------------------------
+ */
+
+function closeConcernByAdmin() {
+    if (!canCloseConcern()) {
+        return
+    }
+
+    selectedStatus.value = 'closed'
+
+    statusRemarks.value = ''
+
+    clearStatusImages()
+
+    updateConcernStatus()
+}
+
+/*
+ * ---------------------------------------------------------
+ * STATUS FIELD RULES
+ * ---------------------------------------------------------
+ */
+
+function canSetCommitmentForStatusChange() {
+    return isAssignedAdmin()
+}
+
+function isCommitmentDateRequired() {
+    return (
+        canSetCommitmentForStatusChange() &&
+        selectedStatus.value === 'in_progress' &&
+        selectedConcern.value?.status !== 'in_progress'
+    )
+}
+
+function isRemarksRequired() {
+    if (!selectedConcern.value) {
+        return false
+    }
+
+    if (
+        isCreatorOrganizationAdmin() &&
+        selectedConcern.value.status === 'resolved' &&
+        selectedStatus.value === 'in_progress'
+    ) {
+        return true
+    }
+
+    const canManageInProgress =
+        canSetCommitmentForStatusChange()
+
+    if (!canManageInProgress) {
+        return false
+    }
+
+    return (
+        selectedStatus.value === 'in_progress' ||
+
+        (
+            isAssignedAdmin() &&
+            selectedStatus.value === 'on_hold'
+        ) ||
+
+        (
+            isAssignedAdmin() &&
+            selectedConcern.value.status === 'in_progress' &&
+            selectedStatus.value === 'resolved'
+        )
+    )
+}
+
+/*
+ * ---------------------------------------------------------
+ * LOAD CONCERN
+ * ---------------------------------------------------------
+ */
+
+async function loadConcernDetails() {
+    if (!props.concernId) {
+        return
+    }
+
+    loadingConcernDetails.value = true
+
+    try {
+        const response = await $fetch(
+            `/api/concerns/${props.concernId}`,
+            {
+                cache: 'no-store'
+            }
+        )
+
+        selectedConcern.value = response.concern
+        activeConcernTab.value = 'overview'
+        visibleCommentCount.value = 10
+        showAllStatusHistory.value = false
+
+        concernComments.value =
+            response.comments || []
+
+        concernAttachments.value =
+            response.attachments || []
+
+        concernStatusHistory.value =
+            response.statusHistory || []
+
+        selectedStatus.value =
+            response.concern?.status || ''
+
+        targetCommitmentAt.value = mysqlDateTimeToLocalDate(
+            response.concern?.target_commitment_at
+        )
+
+        statusRemarks.value = ''
+
+        clearCommentImages()
+        clearStatusImages()
+        clearAdditionalImages()
+        clearReplacementImage()
+
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            error?.statusMessage ||
+            'Failed to load concern details.',
+            'error'
+        )
+
+        emit('close')
+
+    } finally {
+        loadingConcernDetails.value = false
+    }
+}
+
+async function refreshConcernDetails() {
+    if (!selectedConcern.value?.id) {
+        return
+    }
+
+    try {
+        const response = await $fetch(
+            `/api/concerns/${selectedConcern.value.id}`,
+            {
+                cache: 'no-store'
+            }
+        )
+
+        selectedConcern.value = response.concern
+
+        concernComments.value =
+            response.comments || []
+
+        concernAttachments.value =
+            response.attachments || []
+
+        concernStatusHistory.value =
+            response.statusHistory || []
+
+        selectedStatus.value =
+            response.concern?.status || ''
+
+        targetCommitmentAt.value = mysqlDateTimeToLocalDate(
+            response.concern?.target_commitment_at
+        )
+
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            error?.statusMessage ||
+            'Failed to refresh concern details.',
+            'error'
+        )
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * CLOSE MODAL
+ * ---------------------------------------------------------
+ */
+
+function closeViewModal() {
+    if (
+        savingComment.value ||
+        updatingStatus.value ||
+        updatingTrash.value ||
+        addingAttachments.value ||
+        replacingAttachmentId.value
+    ) {
+        return
+    }
+
+    clearCommentImages()
+    clearStatusImages()
+    clearAdditionalImages()
+    clearReplacementImage()
+
+    closeImageViewer()
+
+    selectedConcern.value = null
+    concernComments.value = []
+    concernAttachments.value = []
+    concernStatusHistory.value = []
+    activeConcernTab.value = 'overview'
+    visibleCommentCount.value = 10
+    showAllStatusHistory.value = false
+
+    selectedStatus.value = ''
+    statusRemarks.value = ''
+    targetCommitmentAt.value = null
+    newComment.value = ''
+    trashConfirmation.value = ''
+
+    editingAttachmentId.value = null
+
+    emit('close')
+}
+
+function handleConcernTabKeydown(event) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+        return
+    }
+
+    event.preventDefault()
+    activeConcernTab.value = event.key === 'ArrowLeft' || event.key === 'Home'
+        ? 'overview'
+        : 'conversation'
+
+    nextTick(() => {
+        document.getElementById(`concern-tab-${activeConcernTab.value}`)?.focus()
+    })
+}
+
+/*
+ * ---------------------------------------------------------
+ * IMAGE VIEWER
+ * ---------------------------------------------------------
+ */
+
+
+function openImageViewer(attachment) {
+    if (!attachment?.file_path) {
+        return
+    }
+
+    selectedViewerImage.value = {
+        url: attachmentUrl(attachment.file_path),
+        name: attachment.file_name || 'Image'
+    }
+
+    showImageViewer.value = true
+}
+
+function openProfilePhotoViewer(comment) {
+    if (!comment?.profile_photo) {
+        return
+    }
+
+    selectedViewerImage.value = {
+        url: comment.profile_photo,
+        name: `${comment.user_name || 'User'} profile photo`
+    }
+
+    showImageViewer.value = true
+}
+
+function closeImageViewer() {
+    showImageViewer.value = false
+    selectedViewerImage.value = null
+}
+
+/*
+ * ---------------------------------------------------------
+ * COMMENT IMAGES
+ * ---------------------------------------------------------
+ */
+
+function handleCommentImagesChange(event) {
+    const files = Array.from(
+        event.target.files || []
+    )
+
+    if (files.length === 0) {
+        return
+    }
+
+    const validImageTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp'
+    ]
+
+    const maxSize = 5 * 1024 * 1024
+
+    for (const file of files) {
+        if (!validImageTypes.includes(file.type)) {
+            showToast(
+                `Invalid image format: ${file.name}. Please upload JPG, PNG, GIF, or WEBP.`,
+                'error'
+            )
+
+            event.target.value = ''
+
+            return
+        }
+
+        if (file.size > maxSize) {
+            showToast(
+                `Image is too large: ${file.name}. Maximum size is 5 MB.`,
+                'error'
+            )
+
+            event.target.value = ''
+
+            return
+        }
+    }
+
+    selectedCommentImages.value = [
+        ...selectedCommentImages.value,
+        ...files
+    ]
+
+    for (const file of files) {
+        const previewUrl = URL.createObjectURL(file)
+
+        commentImagePreviews.value.push({
+            file,
+            url: previewUrl
+        })
+    }
+
+    event.target.value = ''
+}
+
+function removeCommentImage(index) {
+    const preview =
+        commentImagePreviews.value[index]
+
+    if (preview?.url) {
+        URL.revokeObjectURL(preview.url)
+    }
+
+    selectedCommentImages.value.splice(index, 1)
+    commentImagePreviews.value.splice(index, 1)
+}
+
+function clearCommentImages() {
+    for (const preview of commentImagePreviews.value) {
+        if (preview?.url) {
+            URL.revokeObjectURL(preview.url)
+        }
+    }
+
+    selectedCommentImages.value = []
+    commentImagePreviews.value = []
+
+    if (commentImageInput.value) {
+        commentImageInput.value.value = ''
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * STATUS EVIDENCE IMAGES
+ * ---------------------------------------------------------
+ */
+
+function handleStatusImagesChange(event) {
+    const files = Array.from(
+        event.target.files || []
+    )
+
+    if (files.length === 0) {
+        return
+    }
+
+    const allowedTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp'
+    ]
+
+    const maxSize = 5 * 1024 * 1024
+
+    for (const file of files) {
+        if (!allowedTypes.includes(file.type)) {
+            showToast(
+                `${file.name} is not a supported image type. Please use JPEG, PNG, GIF, or WEBP.`,
+                'error'
+            )
+
+            event.target.value = ''
+
+            return
+        }
+
+        if (file.size > maxSize) {
+            showToast(
+                `${file.name} exceeds the 5 MB limit.`,
+                'error'
+            )
+
+            event.target.value = ''
+
+            return
+        }
+    }
+
+    selectedStatusImages.value = [
+        ...selectedStatusImages.value,
+        ...files
+    ]
+
+    for (const file of files) {
+        const previewUrl = URL.createObjectURL(file)
+
+        statusImagePreviews.value.push({
+            file,
+            url: previewUrl
+        })
+    }
+
+    event.target.value = ''
+}
+
+function removeStatusImage(index) {
+    const preview =
+        statusImagePreviews.value[index]
+
+    if (preview?.url) {
+        URL.revokeObjectURL(preview.url)
+    }
+
+    selectedStatusImages.value.splice(index, 1)
+    statusImagePreviews.value.splice(index, 1)
+}
+
+function clearStatusImages() {
+    for (const preview of statusImagePreviews.value) {
+        if (preview?.url) {
+            URL.revokeObjectURL(preview.url)
+        }
+    }
+
+    selectedStatusImages.value = []
+    statusImagePreviews.value = []
+
+    if (statusImageInput.value) {
+        statusImageInput.value.value = ''
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * COMMENTS
+ * ---------------------------------------------------------
+ */
+
+async function addComment(confirmed = false) {
+    if (!selectedConcern.value?.id) {
+        return
+    }
+
+    if (!canComment()) {
+        showToast(
+            'You do not have permission to comment on this concern.',
+            'error'
+        )
+
+        return
+    }
+
+    if (
+        !newComment.value.trim() &&
+        selectedCommentImages.value.length === 0
+    ) {
+        showToast(
+            'Please enter a comment or attach at least one image.',
+            'error'
+        )
+
+        return
+    }
+
+    if (!confirmed) {
+        requestConfirmation('comment')
+        return
+    }
+
+    savingComment.value = true
+
+    try {
+        const formData = new FormData()
+
+        formData.append(
+            'comment',
+            newComment.value.trim()
+        )
+
+        for (const file of selectedCommentImages.value) {
+            formData.append('attachments', file)
+        }
+
+        await $fetch(
+            `/api/concerns/${selectedConcern.value.id}/comments`,
+            {
+                method: 'POST',
+                body: formData
+            }
+        )
+
+        newComment.value = ''
+
+        clearCommentImages()
+
+        await refreshConcernDetails()
+
+        emit('refresh')
+
+        showToast(
+            'Comment added successfully.',
+            'success'
+        )
+
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            error?.statusMessage ||
+            'Failed to add comment.',
+            'error'
+        )
+
+    } finally {
+        savingComment.value = false
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * ORIGINAL ATTACHMENTS
+ * ---------------------------------------------------------
+ */
+
+function triggerAttachmentReplace(attachment) {
+    if (!canEditOriginalAttachments()) {
+        return
+    }
+
+    if (
+        replacingAttachmentId.value ||
+        addingAttachments.value
+    ) {
+        return
+    }
+
+    clearReplacementImage()
+
+    editingAttachmentId.value = attachment.id
+
+    nextTick(() => {
+        replacementInput.value?.click()
+    })
+}
+
+function handleAttachmentReplacement(event) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+        event.target.value = ''
+        return
+    }
+
+    if (!editingAttachmentId.value) {
+        event.target.value = ''
+        return
+    }
+
+    if (!canEditOriginalAttachments()) {
+        event.target.value = ''
+        editingAttachmentId.value = null
+
+        return
+    }
+
+    const validImageTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp'
+    ]
+
+    const maxSize = 5 * 1024 * 1024
+
+    if (!validImageTypes.includes(file.type)) {
+        showToast(
+            'Invalid image format. Please upload JPG, PNG, GIF, or WEBP.',
+            'error'
+        )
+
+        event.target.value = ''
+
+        return
+    }
+
+    if (file.size > maxSize) {
+        showToast(
+            'Image is too large. Maximum size is 5 MB.',
+            'error'
+        )
+
+        event.target.value = ''
+
+        return
+    }
+
+    clearReplacementPreviewOnly()
+
+    selectedReplacementImage.value = file
+
+    replacementImagePreview.value = {
+        file,
+        url: URL.createObjectURL(file)
+    }
+
+    /*
+     * No API request is made here.
+     * The image is only staged until the user
+     * clicks Save Replacement.
+     */
+
+    event.target.value = ''
+}
+
+function clearReplacementPreviewOnly() {
+    if (replacementImagePreview.value?.url) {
+        URL.revokeObjectURL(
+            replacementImagePreview.value.url
+        )
+    }
+
+    selectedReplacementImage.value = null
+    replacementImagePreview.value = null
+}
+
+function clearReplacementImage() {
+    clearReplacementPreviewOnly()
+
+    editingAttachmentId.value = null
+
+    if (replacementInput.value) {
+        replacementInput.value.value = ''
+    }
+}
+
+async function saveAttachmentReplacement(confirmed = false) {
+    if (
+        !selectedConcern.value?.id ||
+        !editingAttachmentId.value ||
+        !selectedReplacementImage.value
+    ) {
+        return
+    }
+
+    if (!canEditOriginalAttachments()) {
+        clearReplacementImage()
+
+        showToast(
+            'You do not have permission to replace attachments on this concern.',
+            'error'
+        )
+
+        return
+    }
+
+    if (!confirmed) {
+        requestConfirmation('replaceAttachment')
+        return
+    }
+
+    replacingAttachmentId.value =
+        editingAttachmentId.value
+
+    try {
+        const formData = new FormData()
+
+        formData.append(
+            'attachment_id',
+            String(editingAttachmentId.value)
+        )
+
+        formData.append(
+            'image',
+            selectedReplacementImage.value
+        )
+
+        await $fetch(
+            `/api/concerns/${selectedConcern.value.id}/attachments`,
+            {
+                method: 'PUT',
+                body: formData
+            }
+        )
+
+        clearReplacementImage()
+
+        await refreshConcernDetails()
+
+        emit('refresh')
+
+        showToast(
+            'Attachment replaced successfully.',
+            'success'
+        )
+
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            error?.statusMessage ||
+            'Failed to replace attachment.',
+            'error'
+        )
+
+    } finally {
+        replacingAttachmentId.value = null
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * ADDITIONAL ATTACHMENTS
+ * ---------------------------------------------------------
+ */
+
+function handleAdditionalAttachments(event) {
+    if (!canEditOriginalAttachments()) {
+        event.target.value = ''
+        return
+    }
+
+    const files = Array.from(
+        event.target.files || []
+    )
+
+    if (files.length === 0) {
+        event.target.value = ''
+        return
+    }
+
+    const allowedTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp'
+    ]
+
+    const maxSize = 5 * 1024 * 1024
+
+    for (const file of files) {
+        if (!allowedTypes.includes(file.type)) {
+            showToast(
+                `${file.name} is not a supported image type. Please use JPEG, PNG, GIF, or WEBP.`,
+                'error'
+            )
+
+            event.target.value = ''
+
+            return
+        }
+
+        if (file.size > maxSize) {
+            showToast(
+                `${file.name} exceeds the 5 MB limit.`,
+                'error'
+            )
+
+            event.target.value = ''
+
+            return
+        }
+    }
+
+    selectedAdditionalImages.value = [
+        ...selectedAdditionalImages.value,
+        ...files
+    ]
+
+    for (const file of files) {
+        const previewUrl = URL.createObjectURL(file)
+
+        additionalImagePreviews.value.push({
+            file,
+            url: previewUrl
+        })
+    }
+
+    event.target.value = ''
+}
+
+function removeAdditionalImage(index) {
+    const preview =
+        additionalImagePreviews.value[index]
+
+    if (preview?.url) {
+        URL.revokeObjectURL(preview.url)
+    }
+
+    selectedAdditionalImages.value.splice(index, 1)
+    additionalImagePreviews.value.splice(index, 1)
+}
+
+function clearAdditionalImages() {
+    for (const preview of additionalImagePreviews.value) {
+        if (preview?.url) {
+            URL.revokeObjectURL(preview.url)
+        }
+    }
+
+    selectedAdditionalImages.value = []
+    additionalImagePreviews.value = []
+
+    if (additionalAttachmentInput.value) {
+        additionalAttachmentInput.value.value = ''
+    }
+}
+
+async function attachAdditionalImages(confirmed = false) {
+    if (
+        !selectedConcern.value?.id ||
+        selectedAdditionalImages.value.length === 0
+    ) {
+        return
+    }
+
+    if (!canEditOriginalAttachments()) {
+        clearAdditionalImages()
+
+        showToast(
+            'You do not have permission to add attachments to this concern.',
+            'error'
+        )
+
+        return
+    }
+
+    if (!confirmed) {
+        requestConfirmation('addAttachments')
+        return
+    }
+
+    addingAttachments.value = true
+
+    const imageCount =
+        selectedAdditionalImages.value.length
+
+    try {
+        const formData = new FormData()
+
+        for (const file of selectedAdditionalImages.value) {
+            formData.append('images', file)
+        }
+
+        const response = await $fetch(
+            `/api/concerns/${selectedConcern.value.id}/attachments`,
+            {
+                method: 'POST',
+                body: formData
+            }
+        )
+
+        if (!response?.success) {
+            throw new Error(
+                response?.message ||
+                'Failed to add attachments.'
+            )
+        }
+
+        clearAdditionalImages()
+
+        await refreshConcernDetails()
+
+        emit('refresh')
+
+        showToast(
+            `${imageCount} image${imageCount === 1 ? '' : 's'} attached successfully.`,
+            'success'
+        )
+
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            error?.data?.message ||
+            error?.statusMessage ||
+            error?.message ||
+            'Failed to add attachments.',
+            'error'
+        )
+
+    } finally {
+        addingAttachments.value = false
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * REMOVE ORIGINAL ATTACHMENT
+ * ---------------------------------------------------------
+ */
+
+async function removeOriginalAttachment(attachment, confirmed = false) {
+    if (!canEditOriginalAttachments()) {
+        return
+    }
+
+    if (!confirmed) {
+        requestConfirmation('removeAttachment', { attachment })
+        return
+    }
+
+    if (
+        Number(editingAttachmentId.value) ===
+        Number(attachment.id)
+    ) {
+        clearReplacementImage()
+    }
+
+    deletingAttachmentId.value = attachment.id
+
+    try {
+        await $fetch(
+            `/api/concerns/${selectedConcern.value.id}/attachments`,
+            {
+                method: 'DELETE',
+                body: {
+                    attachment_id: attachment.id
+                }
+            }
+        )
+
+        await refreshConcernDetails()
+
+        emit('refresh')
+
+        showToast(
+            'Attachment removed successfully.',
+            'success'
+        )
+
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            error?.statusMessage ||
+            'Failed to remove attachment.',
+            'error'
+        )
+
+    } finally {
+        deletingAttachmentId.value = null
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * UPDATE CONCERN STATUS
+ * ---------------------------------------------------------
+ */
+
+async function updateConcernStatus(confirmed = false) {
+    if (!selectedConcern.value?.id) {
+        return
+    }
+
+    if (
+        !selectedStatus.value ||
+        selectedStatus.value === selectedConcern.value.status
+    ) {
+        return
+    }
+
+    const targetStatus = selectedStatus.value
+
+    /*
+     * Frontend permission check.
+     */
+    if (!canChangeToStatus(targetStatus)) {
+        showToast(
+            'You do not have permission to make this status change.',
+            'error'
+        )
+
+        return
+    }
+
+    /*
+     * Closed concerns can only be closed by
+     * an admin from the creator organization
+     * after the concern is resolved.
+     */
+    if (
+        targetStatus === 'closed' &&
+        !canCloseConcern()
+    ) {
+        showToast(
+            'Only an admin in the concern creator’s organization can close a resolved concern.',
+            'error'
+        )
+
+        return
+    }
+
+    /*
+     * Moving into In Progress requires a
+    * recipient's committed start date.
+     */
+    const movingToInProgress = isAssignedAdmin() &&
+        targetStatus === 'in_progress' &&
+        selectedConcern.value.status !== 'in_progress'
+
+    if (
+        movingToInProgress &&
+        !targetCommitmentAt.value
+    ) {
+        showToast(
+            'Please set the committed start date before moving the concern to In Progress.',
+            'error'
+        )
+
+        return
+    }
+
+    /*
+    * Do not allow a commitment date before today.
+     */
+    if (
+        movingToInProgress &&
+        targetCommitmentAt.value
+    ) {
+        const selectedDate = localDateInputValue(targetCommitmentAt.value)
+
+        const today = localDateInputValue(
+            minimumCommitmentDate()
+        )
+
+        if (selectedDate < today) {
+            showToast(
+                'The commitment date cannot be before today.',
+                'error'
+            )
+
+            return
+        }
+    }
+
+    /*
+     * Required remarks.
+     */
+    if (
+        isRemarksRequired() &&
+        !statusRemarks.value.trim()
+    ) {
+        showToast(
+            targetStatus === 'on_hold'
+                ? 'Please explain why the concern is being placed on hold.'
+                : 'Please enter remarks for this status change.',
+            'error'
+        )
+
+        return
+    }
+
+    /*
+     * Resolution requires remarks.
+     */
+    const resolvingConcern =
+        isAssignedAdmin() &&
+        selectedConcern.value.status === 'in_progress' &&
+        targetStatus === 'resolved'
+
+    if (
+        resolvingConcern &&
+        !statusRemarks.value.trim()
+    ) {
+        showToast(
+            'Please enter remarks explaining what was done before marking the concern as resolved.',
+            'error'
+        )
+
+        return
+    }
+
+    /*
+     * Resolution requires at least one evidence image.
+     */
+    if (
+        resolvingConcern &&
+        selectedStatusImages.value.length === 0
+    ) {
+        showToast(
+            'Please attach at least one evidence image before marking the concern as resolved.',
+            'error'
+        )
+
+        return
+    }
+
+    if (!confirmed) {
+        requestConfirmation('status')
+        return
+    }
+
+    updatingStatus.value = true
+
+    try {
+        const formData = new FormData()
+
+        formData.append(
+            'status',
+            targetStatus
+        )
+
+        formData.append(
+            'remarks',
+            statusRemarks.value.trim()
+        )
+
+        if (movingToInProgress) {
+            formData.append(
+                'target_commitment_at',
+                localDateInputValue(targetCommitmentAt.value)
+            )
+        }
+
+        /*
+         * Send all selected evidence images.
+         */
+        for (const file of selectedStatusImages.value) {
+            formData.append(
+                'images',
+                file
+            )
+        }
+
+        await $fetch(
+            `/api/concerns/${selectedConcern.value.id}/status`,
+            {
+                method: 'PUT',
+                body: formData
+            }
+        )
+
+        statusRemarks.value = ''
+
+        clearStatusImages()
+
+        /*
+         * Reload the concern from the database
+         * after the status update.
+         *
+         * This ensures the modal displays the
+         * actual saved status and datetime.
+         */
+        await refreshConcernDetails()
+
+        emit('refresh')
+
+        showToast(
+            targetStatus === 'resolved'
+                ? 'Concern resolved successfully with evidence.'
+                : targetStatus === 'closed'
+                    ? 'Concern closed successfully.'
+                    : 'Concern status updated successfully.',
+            'success'
+        )
+
+    } catch (error) {
+        showToast(
+            error?.data?.statusMessage ||
+            error?.statusMessage ||
+            'Failed to update concern status.',
+            'error'
+        )
+
+    } finally {
+        updatingStatus.value = false
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * LIFECYCLE
+ * ---------------------------------------------------------
+ */
+
+watch(
+    () => props.show,
+    (visible) => {
+        if (visible) {
+            loadConcernDetails()
+        }
+    }
+)
+
+watch(
+    () => props.concernId,
+    (newId, oldId) => {
+        if (
+            props.show &&
+            newId &&
+            newId !== oldId
+        ) {
+            loadConcernDetails()
+        }
+    }
+)
+
+onMounted(() => {
+    durationTimer = setInterval(() => {
+        currentTime.value = new Date()
+    }, 60000)
+})
+
+onUnmounted(() => {
+    if (durationTimer) {
+        clearInterval(durationTimer)
+    }
+
+    clearCommentImages()
+    clearStatusImages()
+    clearAdditionalImages()
+    clearReplacementImage()
+})
+
+</script>
+
+
+<template>
+
+    <ConfirmActionModal
+        :show="Boolean(pendingConfirmation)"
+        :title="confirmationDetails.title"
+        :message="confirmationDetails.message"
+        :confirm-label="confirmationDetails.confirmLabel"
+        :tone="confirmationDetails.tone"
+        :loading="confirmationLoading"
+        @confirm="confirmPendingAction"
+        @cancel="cancelPendingConfirmation"
+    />
+
+    <div v-if="show"
+        class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/60 px-2 py-3 backdrop-blur-[2px] sm:items-center sm:px-4 sm:py-6">
+
+        <div
+            class="modal-height-adaptive my-auto flex max-h-[calc(100dvh-1.5rem)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+
+            <!-- Header -->
+            <div
+                class="modal-header-adaptive flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
+
+                <div>
+
+                    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
+                        Concern Workspace
+                    </p>
+
+                    <h3 class="mt-1 text-xl font-semibold text-slate-900">
+                        {{ selectedConcern?.title || 'Concern Details' }}
+                    </h3>
+
+                    <p class="mt-1 text-sm text-slate-500">
+                        {{ selectedConcern?.concern_number || 'Ticket' }}
+                    </p>
+
+                    <div v-if="selectedConcern" class="mt-2 flex flex-wrap gap-2">
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                            {{ formatStatus(selectedConcern.status) }}
+                        </span>
+                        <span class="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                            {{ formatPriority(selectedConcern.priority) }} priority
+                        </span>
+                    </div>
+
+                </div>
+
+                <button type="button" @click="closeViewModal" :disabled="savingComment || updatingStatus || updatingTrash || addingAttachments || replacingAttachmentId"
+                    aria-label="Close modal"
+                    class="group relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center text-3xl leading-none text-red-700 transition-colors duration-200 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50">
+                    <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                        stroke="currentColor" aria-hidden="true"
+                        class="absolute h-6 w-6 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                    </svg>
+                </button>
+
+            </div>
+
+            <div v-if="selectedConcern" class="shrink-0 border-b border-slate-200 bg-white px-4 py-2 sm:px-6">
+                <div
+                    class="flex overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm"
+                    role="tablist"
+                    aria-label="Concern sections"
+                    @keydown="handleConcernTabKeydown"
+                >
+                    <button
+                        id="concern-tab-overview"
+                        type="button"
+                        role="tab"
+                        aria-controls="concern-panel-overview"
+                        :aria-selected="activeConcernTab === 'overview'"
+                        :tabindex="activeConcernTab === 'overview' ? 0 : -1"
+                        class="flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-l-xl px-3 py-2 text-sm font-semibold transition focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-inset"
+                        :class="activeConcernTab === 'overview'
+                            ? 'bg-blue-900 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-blue-900'"
+                        @click="activeConcernTab = 'overview'"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25A1.5 1.5 0 0 1 5.25 3.75h5.25v7.5H3.75v-6Zm9.75-1.5h5.25a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5H13.5v-6Zm-9.75 10.5h5.25v6H5.25a1.5 1.5 0 0 1-1.5-1.5v-4.5Zm9.75 0h6.75v4.5a1.5 1.5 0 0 1-1.5 1.5H13.5v-6Z" />
+                        </svg>
+                        Overview
+                    </button>
+                    <button
+                        id="concern-tab-conversation"
+                        type="button"
+                        role="tab"
+                        aria-controls="concern-panel-conversation"
+                        :aria-selected="activeConcernTab === 'conversation'"
+                        :tabindex="activeConcernTab === 'conversation' ? 0 : -1"
+                        class="flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-r-xl px-3 py-2 text-sm font-semibold transition focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-inset"
+                        :class="activeConcernTab === 'conversation'
+                            ? 'bg-blue-900 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-blue-900'"
+                        @click="activeConcernTab = 'conversation'"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3.75h6m-9.75 7.5 2.6-3.12a2.25 2.25 0 0 1 1.73-.81h9.17A2.25 2.25 0 0 0 19.5 13.3V5.25A2.25 2.25 0 0 0 17.25 3h-10.5A2.25 2.25 0 0 0 4.5 5.25v14.25Z" />
+                        </svg>
+                        Conversation
+                        <span
+                            class="rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+                            :class="activeConcernTab === 'conversation' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'"
+                        >
+                            {{ concernComments.length }}
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="flex-1 overflow-y-auto bg-slate-50 px-3 py-4 sm:px-6 sm:py-5">
+
+                <!-- Loading -->
+                <div v-if="loadingConcernDetails" class="flex min-h-[300px] items-center justify-center">
+
+                    <div class="text-center">
+
+                        <div
+                            class="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-800">
+                        </div>
+
+                        <p class="mt-3 text-sm text-slate-500">
+                            Loading concern details...
+                        </p>
+
+                    </div>
+
+                </div>
+
+                <div v-else-if="selectedConcern" class="space-y-5">
+
+                    <div v-if="activeConcernTab === 'overview'" id="concern-panel-overview" role="tabpanel" aria-labelledby="concern-tab-overview" class="space-y-5">
+
+                    <!-- Pending Recipient Notice -->
+                    <div v-if="
+                        isAssignedAdmin() &&
+                        selectedConcern.status === 'pending'
+                    " class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+
+                        <p class="text-sm font-semibold text-blue-800">
+                            New concern assigned to your organization
+                        </p>
+
+                        <p class="mt-1 text-xs leading-5 text-blue-700">
+                            Select
+                            <span class="font-semibold">
+                                In Progress
+                            </span>
+                            to set when your team will begin handling the concern and add an update, or select
+                            <span class="font-semibold">
+                                On Hold
+                            </span>
+                            with a reason if work cannot start yet.
+                        </p>
+
+                    </div>
+
+                    <!-- In Progress Recipient Notice -->
+                    <div v-if="
+                        isAssignedAdmin() &&
+                        selectedConcern.status === 'in_progress'
+                    " class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+
+                        <p class="text-sm font-semibold text-blue-800">
+                            You are currently handling this concern
+                        </p>
+
+                        <p class="mt-1 text-xs leading-5 text-blue-700">
+                            Handling duration counts while the concern is In Progress and pauses while it is On Hold.
+                            When the work is completed, select
+                            <span class="font-semibold">
+                                Resolved
+                            </span>
+                            and provide remarks and at least one evidence image.
+                        </p>
+
+                    </div>
+
+                    <!-- On Hold Recipient Notice -->
+                    <div v-if="
+                        isAssignedAdmin() &&
+                        selectedConcern.status === 'on_hold'
+                    " class="rounded-xl border border-orange-200 bg-orange-50 p-4">
+
+                        <p class="text-sm font-semibold text-orange-800">
+                            This concern is currently on hold
+                        </p>
+
+                        <p class="mt-1 text-xs leading-5 text-orange-700">
+                            When work can continue, select
+                            <span class="font-semibold">
+                                In Progress
+                            </span>
+                            and set when your team will resume handling the concern.
+                        </p>
+
+                    </div>
+
+                    <!-- Resolved Notice -->
+                    <div v-if="selectedConcern.status === 'resolved'"
+                        class="rounded-xl border border-green-200 bg-green-50 p-4">
+
+                        <p class="text-sm font-semibold text-green-800">
+                            Concern resolved
+                        </p>
+
+                        <p v-if="canCloseConcern()" class="mt-1 text-xs leading-5 text-green-700">
+                            Please review the resolution remarks and evidence below.
+                            If the concern has been properly resolved, you can close it.
+                        </p>
+
+                        <p v-else class="mt-1 text-xs leading-5 text-green-700">
+                            The assigned organization has marked this concern as resolved.
+                        </p>
+
+                        <!-- Admin Close Concern -->
+                        <div v-if="canCloseConcern()" class="mt-4">
+
+                            <button type="button" @click="closeConcernByAdmin" :disabled="updatingStatus"
+                                class="cursor-pointer rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50">
+                                {{
+                                    updatingStatus
+                                        ? 'Closing...'
+                                        : 'Close Concern'
+                                }}
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    <!-- Trashed Concern Controls -->
+                    <div v-if="isTrashedConcern() && (currentUser?.role_name === 'superadmin' || canRestoreTrashedConcern())"
+                        class="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-red-900">This concern is in trash</p>
+                            <p class="mt-1 text-xs text-red-700">
+                                Trashed {{ formatDate(selectedConcern.deleted_at) }}
+                                <span v-if="selectedConcern.deleted_by_name">by {{ selectedConcern.deleted_by_name }}</span>.
+                                Restore this pending concern before its 30-day retention period ends. Expired trash is permanently deleted automatically; superadmins can delete it sooner.
+                            </p>
+                        </div>
+                        <div class="flex shrink-0 gap-2">
+                            <button v-if="canRestoreTrashedConcern()" type="button" @click="requestTrashConfirmation('restore')" :disabled="updatingTrash"
+                                class="secondary-hover-button cursor-pointer rounded-lg border border-green-300 bg-white px-3 py-2 text-xs font-semibold text-green-800 transition hover:bg-green-50 disabled:opacity-50">
+                                Restore
+                            </button>
+                            <button v-if="currentUser?.role_name === 'superadmin'" type="button" @click="requestTrashConfirmation('purge')" :disabled="updatingTrash"
+                                class="cursor-pointer rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-red-800 disabled:opacity-50">
+                                Permanently Delete
+                            </button>
+                        </div>
+
+                        <div v-if="trashConfirmation" class="w-full rounded-lg border border-red-200 bg-white p-4 sm:col-span-2">
+                            <p class="text-sm font-semibold text-slate-800">
+                                {{ trashConfirmation === 'restore'
+                                    ? 'Restore this pending concern?'
+                                    : 'Permanently delete this concern and its attachments, comments, and history? This cannot be undone.' }}
+                            </p>
+                            <div class="mt-3 flex justify-end gap-2">
+                                <button type="button" @click="cancelTrashConfirmation" :disabled="updatingTrash"
+                                    class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                                    Cancel
+                                </button>
+                                <button type="button" @click="confirmTrashAction" :disabled="updatingTrash"
+                                    class="cursor-pointer rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                                    {{ updatingTrash ? 'Working...' : 'Confirm' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="trashConfirmation === 'trash'" class="rounded-xl border border-red-200 bg-red-50 p-4">
+                        <p class="text-sm font-semibold text-red-900">
+                            Move this pending concern to trash?
+                        </p>
+                        <p class="mt-1 text-xs leading-5 text-red-700">
+                            Authorized organization members can restore it while it remains pending.
+                        </p>
+                        <div class="mt-3 flex justify-end gap-2">
+                            <button type="button" @click="cancelTrashConfirmation" :disabled="updatingTrash"
+                                    class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                                Cancel
+                            </button>
+                            <button type="button" @click="confirmTrashAction" :disabled="updatingTrash"
+                                class="cursor-pointer rounded-lg bg-red-700 px-3 py-2 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50">
+                                {{ updatingTrash ? 'Moving...' : 'Move to Trash' }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="view-concern-sections grid gap-5 lg:grid-cols-2">
+
+                    <!-- Main Information -->
+                    <div class="view-concern-main overflow-hidden rounded-xl border border-blue-100 bg-white p-5 shadow-lg shadow-blue-950/5">
+
+                        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+
+                            <div>
+                                <h4 class="text-base font-semibold text-slate-800">
+                                    Main Information
+                                </h4>
+
+                                <p class="mt-1 text-sm text-slate-500">
+                                    Details of this concern.
+                                </p>
+                            </div>
+
+                            <button v-if="canTrashConcern()" type="button" @click="requestTrashConfirmation('trash')"
+                                :disabled="updatingTrash"
+                                class="inline-flex cursor-pointer items-center justify-center gap-2 self-start rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">
+                                <span aria-hidden="true">♲</span>
+                                {{ updatingTrash ? 'Moving...' : 'Move to Trash' }}
+                            </button>
+
+                        </div>
+
+                        <div class="grid gap-5 md:grid-cols-2">
+
+                            <!-- Title -->
+                            <div class="md:col-span-2">
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Title
+                                </p>
+
+                                <p class="text-sm font-semibold text-slate-800">
+                                    {{ selectedConcern.title || '-' }}
+                                </p>
+
+                            </div>
+
+                            <!-- Priority -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Priority
+                                </p>
+
+                                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                                    :class="priorityClass(selectedConcern.priority)">
+                                    {{
+                                        formatPriority(
+                                            selectedConcern.priority
+                                        )
+                                    }}
+                                </span>
+
+                            </div>
+
+                            <!-- Status -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Status
+                                </p>
+
+                                <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                                    :class="statusClass(selectedConcern.status)">
+                                    {{
+                                        formatStatus(
+                                            selectedConcern.status
+                                        )
+                                    }}
+                                </span>
+
+                                <span v-if="
+                                    selectedConcern.status === 'closed'
+                                "
+                                    class="ml-2 inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                                    ✓ Completed
+                                </span>
+
+                            </div>
+
+                            <!-- Concern Number -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Concern Number
+                                </p>
+
+                                <p class="text-sm text-slate-700">
+                                    {{ selectedConcern.concern_number || '-' }}
+                                </p>
+
+                            </div>
+
+                            <!-- Concern Type -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Concern Type
+                                </p>
+
+                                <p class="text-sm text-slate-700">
+                                    {{ selectedConcern.concern_type_name || '-' }}
+                                </p>
+
+                            </div>
+
+                            <!-- Assigned To -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Assigned To
+                                </p>
+
+                                <p class="text-sm text-slate-700">
+                                    {{
+                                        selectedConcern.organization_name ||
+                                        selectedConcern.assigned_organization_name ||
+                                        '-'
+                                    }}
+                                </p>
+
+                            </div>
+
+                            <!-- Created By -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Created By
+                                </p>
+
+                                <p class="text-sm text-slate-700">
+                                    {{ selectedConcern.created_by_name || '-' }}
+                                </p>
+
+                            </div>
+
+                            <!-- Creator Organization -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Creator Organization
+                                </p>
+
+                                <p class="text-sm text-slate-700">
+                                    {{ selectedConcern.creator_organization_name || '-' }}
+                                </p>
+
+                            </div>
+
+                            <!-- Created At -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Created At
+                                </p>
+
+                                <p class="text-sm text-slate-700">
+                                    {{ formatDate(selectedConcern.created_at) }}
+                                </p>
+
+                            </div>
+
+                            <!-- Scheduled Handling Start -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Committed Start Date
+                                </p>
+
+                                <p v-if="selectedConcern.target_commitment_at"
+                                    class="text-sm font-medium text-slate-700">
+                                    {{ formatDateOnly(selectedConcern.target_commitment_at) }}
+                                </p>
+
+                                <p v-else class="text-sm text-slate-400">
+                                    Not set
+                                </p>
+
+                            </div>
+
+                            <!-- Handling Duration -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Handling Duration
+                                </p>
+
+                                <p class="text-sm font-medium" :class="getConcernDuration(selectedConcern) === 'Not started'
+                                    ? 'text-slate-400'
+                                    : 'text-slate-700'
+                                    ">
+                                    {{
+                                        getConcernDuration(
+                                            selectedConcern
+                                        )
+                                    }}
+                                </p>
+
+                            </div>
+
+                            <!-- Updated At -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Updated At
+                                </p>
+
+                                <p class="text-sm text-slate-700">
+                                    {{ formatDate(selectedConcern.updated_at) }}
+                                </p>
+
+                            </div>
+
+                            <!-- Resolved At -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Resolved At
+                                </p>
+
+                                <p class="text-sm text-slate-700">
+                                    {{ formatDate(selectedConcern.resolved_at) }}
+                                </p>
+
+                            </div>
+
+                            <!-- Closed At -->
+                            <div>
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Closed At
+                                </p>
+
+                                <p class="text-sm text-slate-700">
+                                    {{ formatDate(selectedConcern.closed_at) }}
+                                </p>
+
+                            </div>
+
+                            <!-- Description -->
+                            <div class="md:col-span-2">
+
+                                <p class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                                    Description
+                                </p>
+
+                                <p class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
+                                    {{ selectedConcern.description || '-' }}
+                                </p>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- Status Update -->
+                    <div v-if="canUpdateStatus()" data-tour="view-status" class="view-concern-status overflow-hidden rounded-xl border border-blue-200 bg-white shadow-md">
+
+                        <div class="border-b border-blue-100 bg-blue-50/70 px-5 py-4">
+
+                            <div class="flex items-start gap-3">
+
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-800">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.8" stroke="currentColor" class="h-5 w-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" />
+                                    </svg>
+                                </span>
+
+                                <div>
+                                    <h4 class="text-base font-semibold text-slate-900">
+                                        Update Status
+                                    </h4>
+
+                                    <p class="mt-1 text-sm leading-5 text-slate-600">
+                                        <span v-if="isAssignedAdmin()">
+                                            Manage this concern on behalf of the assigned organization.
+                                        </span>
+                                        <span v-else>
+                                            Review the resolution and close the concern for the creator organization.
+                                        </span>
+                                    </p>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="space-y-5 p-5">
+
+                            <div class="grid gap-4 md:grid-cols-2">
+
+                                <!-- Status -->
+                                <div>
+
+                                    <label for="concern-status" class="mb-2 block text-sm font-semibold text-slate-700">
+                                        New status
+                                    </label>
+
+                                    <AppSelect
+                                        id="concern-status"
+                                        v-model="selectedStatus"
+                                        :placeholder="formatStatus(selectedConcern.status)"
+                                        :disabled="updatingStatus || availableStatusOptions.length === 0"
+                                        :options="[
+                                            { label: formatStatus(selectedConcern.status), value: selectedConcern.status },
+                                            ...availableStatusOptions
+                                        ]"
+                                    />
+
+                                    <p class="mt-2 text-xs text-slate-500">
+                                        Choose the next status allowed for your organization.
+                                    </p>
+                                    <p v-if="isCreatorOrganizationAdmin() && selectedConcern.status === 'resolved'" class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                                        Review the reported resolution. If work is incomplete, reopen it as In Progress and explain what remains. The original commitment date is retained; no new commitment date is required.
+                                    </p>
+
+                                </div>
+
+                                <!-- Scheduled Handling Start -->
+                                <div v-if="isCommitmentDateRequired()" class="rounded-lg border border-blue-200 bg-blue-50/70 p-4">
+
+                                    <label for="target-commitment-at" class="mb-2 block text-sm font-semibold text-blue-900">
+                                        Committed start date <span class="text-red-500">*</span>
+                                    </label>
+
+                                    <VueDatePicker
+                                        id="target-commitment-at"
+                                        v-model="targetCommitmentAt"
+                                        :min-date="minimumCommitmentDate()"
+                                        :time-config="{ enableTimePicker: false }"
+                                        :disabled="updatingStatus"
+                                        :auto-apply="true"
+                                        format="MMM d, yyyy"
+                                        placeholder="Choose your committed start date"
+                                        input-class-name="!rounded-lg !border-blue-300 !py-3 !text-sm focus:!border-blue-500"
+                                        menu-class-name="rounded-xl border border-slate-200 shadow-xl"
+                                        class="w-full"
+                                    />
+
+                                    <p class="mt-2 text-xs leading-5 text-blue-800">
+                                        This is the date your organization commits to begin handling the concern, not a due date. Choose today or a future date.
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+                            <!-- Remarks -->
+                            <div>
+
+                                <label for="status-remarks" class="mb-2 block text-sm font-semibold text-slate-700">
+                                    Update notes
+                                    <span v-if="isRemarksRequired()" class="text-red-500">*</span>
+                                    <span v-else class="font-normal text-slate-400">(Optional)</span>
+                                </label>
+
+                                <textarea id="status-remarks" v-model="statusRemarks" :disabled="updatingStatus" rows="3"
+                                    :placeholder="isAssignedAdmin() && selectedStatus === 'on_hold'
+                                        ? 'Explain why this concern is being placed on hold...'
+                                        : isCreatorOrganizationAdmin() && selectedConcern.status === 'resolved' && selectedStatus === 'in_progress'
+                                            ? 'Explain why the reported resolution is rejected and what work remains...'
+                                        : isAssignedAdmin() && selectedStatus === 'in_progress'
+                                            ? 'Explain what work is starting or continuing...'
+                                            : isAssignedAdmin() && selectedConcern.status === 'in_progress' && selectedStatus === 'resolved'
+                                                ? 'Explain what was done to resolve the concern...'
+                                                : 'Add notes about this status change...'
+                                        "
+                                    class="w-full resize-y rounded-lg border border-slate-300 px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"></textarea>
+
+                            </div>
+
+                        <!-- Resolution Evidence -->
+                        <div v-if="
+                            isAssignedAdmin() &&
+                            selectedConcern.status === 'in_progress' &&
+                            selectedStatus === 'resolved'
+                        " class="mt-5 rounded-lg border border-green-200 bg-green-50 p-4">
+
+                            <div class="mb-3">
+
+                                <p class="text-sm font-semibold text-green-800">
+                                    Resolution Evidence
+                                    <span class="text-red-500">*</span>
+                                </p>
+
+                                <p class="mt-1 text-xs leading-5 text-green-700">
+                                    Attach one or more images showing the completed work,
+                                    repaired issue, or other evidence that the concern has
+                                    been resolved.
+                                </p>
+
+                            </div>
+
+                            <input ref="statusImageInput" type="file" multiple
+                                accept="image/jpeg,image/png,image/gif,image/webp" :disabled="updatingStatus"
+                                @change="handleStatusImagesChange"
+                                class="w-full cursor-pointer rounded-lg border border-green-300 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-green-100 file:px-4 file:py-2 file:text-sm file:font-medium file:text-green-700 hover:border-green-400 hover:file:bg-green-200 disabled:cursor-not-allowed disabled:bg-slate-100" />
+
+                            <p class="mt-1 text-xs text-slate-500">
+                                Multiple images are allowed. Maximum size: 5 MB per image.
+                            </p>
+
+                            <!-- Selected Evidence Images -->
+                            <div v-if="statusImagePreviews.length > 0" class="mt-4">
+
+                                <div class="mb-2 flex items-center justify-between">
+
+                                    <p class="text-sm font-medium text-slate-700">
+                                        Selected Evidence
+                                        ({{ statusImagePreviews.length }})
+                                    </p>
+
+                                    <button type="button" @click="clearStatusImages" :disabled="updatingStatus"
+                                        class="cursor-pointer text-xs font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                        Remove All
+                                    </button>
+
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+
+                                    <div v-for="(preview, index) in statusImagePreviews" :key="preview.url"
+                                        class="group relative overflow-hidden rounded-lg border border-green-200 bg-white">
+
+                                        <img :src="preview.url" :alt="preview.file.name"
+                                            class="h-28 w-full object-cover transition duration-200 group-hover:scale-105" />
+
+                                        <button type="button" @click="removeStatusImage(index)"
+                                            :disabled="updatingStatus"
+                                            class="absolute right-2 top-2 cursor-pointer rounded-md bg-black/70 px-2 py-1 text-xs font-medium text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50">
+                                            Remove
+                                        </button>
+
+                                        <div class="border-t border-slate-200 px-2 py-2">
+
+                                            <p class="truncate text-xs text-slate-500" :title="preview.file.name">
+                                                {{ preview.file.name }}
+                                            </p>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <!-- Update Button -->
+                        <div class="flex justify-end border-t border-slate-100 pt-4">
+
+                            <button type="button" @click="updateConcernStatus" :disabled="updatingStatus ||
+                                selectedStatus === selectedConcern.status
+                                "
+                                class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50">
+                                {{
+                                    updatingStatus
+                                        ? 'Updating...'
+                                        : 'Update Status'
+                                }}
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    </div>
+
+                    <!-- Attachments -->
+                    <div data-tour="view-attachments" class="view-concern-attachments rounded-xl border border-violet-100 bg-white p-5 shadow-lg shadow-violet-950/5">
+
+                        <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+
+                            <div>
+
+                                <h4 class="text-base font-semibold text-slate-800">
+                                    Attachments
+                                </h4>
+
+                                <p class="mt-1 text-sm text-slate-500">
+                                    Images attached to this concern.
+                                </p>
+
+                            </div>
+
+                            <div class="flex items-center gap-3">
+
+                                <span v-if="concernAttachments.length > 0" class="text-xs text-slate-400">
+                                    {{ concernAttachments.length }}
+                                    attachment{{
+                                        concernAttachments.length === 1
+                                            ? ''
+                                            : 's'
+                                    }}
+                                </span>
+
+                                <!-- Add Images -->
+                                <button v-if="canEditOriginalAttachments()" type="button"
+                                    @click="additionalAttachmentInput?.click()" :disabled="addingAttachments ||
+                                        replacingAttachmentId
+                                        "
+                                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50">
+
+                                    <span class="text-base leading-none">
+                                        +
+                                    </span>
+
+                                    Add Images
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <!-- Selected Additional Images -->
+                        <div v-if="additionalImagePreviews.length > 0"
+                            class="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4">
+
+                            <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+                                <div>
+
+                                    <p class="text-sm font-semibold text-blue-900">
+                                        Selected Images
+                                        ({{ additionalImagePreviews.length }})
+                                    </p>
+
+                                    <p class="mt-1 text-xs text-blue-700">
+                                        These images have not been saved yet.
+                                        Click Save Images to attach them to this concern.
+                                    </p>
+
+                                </div>
+
+                                <button type="button" @click="clearAdditionalImages" :disabled="addingAttachments"
+                                    class="cursor-pointer text-xs font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                    Remove All
+                                </button>
+
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+
+                                <div v-for="(preview, index) in additionalImagePreviews" :key="preview.url"
+                                    class="overflow-hidden rounded-lg border border-blue-200 bg-white">
+
+                                    <div class="relative overflow-hidden">
+
+                                        <img :src="preview.url" :alt="preview.file.name"
+                                            class="h-32 w-full object-cover" />
+
+                                        <button type="button" @click="removeAdditionalImage(index)"
+                                            :disabled="addingAttachments"
+                                            class="absolute right-2 top-2 cursor-pointer rounded-md bg-black/70 px-2 py-1 text-xs font-medium text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50">
+                                            Remove
+                                        </button>
+
+                                    </div>
+
+                                    <div class="border-t border-slate-200 px-2 py-2">
+
+                                        <p class="truncate text-xs text-slate-500" :title="preview.file.name">
+                                            {{ preview.file.name }}
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <!-- Save Images -->
+                            <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+
+                                <button type="button" @click="clearAdditionalImages" :disabled="addingAttachments"
+                                    class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+                                    Cancel
+                                </button>
+
+                                <button type="button" @click="attachAdditionalImages" :disabled="addingAttachments ||
+                                    selectedAdditionalImages.length === 0
+                                    "
+                                    class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">
+                                    {{
+                                        addingAttachments
+                                            ? 'Saving...'
+                                            : `Save Images (${selectedAdditionalImages.length})`
+                                    }}
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <!-- Selected Replacement -->
+                        <div v-if="
+                            replacementImagePreview &&
+                            selectedReplacementImage &&
+                            editingAttachmentId
+                        " class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
+
+                            <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+                                <div>
+
+                                    <p class="text-sm font-semibold text-amber-900">
+                                        Selected Replacement
+                                    </p>
+
+                                    <p class="mt-1 text-xs leading-5 text-amber-700">
+                                        This replacement has not been saved yet.
+                                        Click Save Replacement to replace the existing attachment.
+                                    </p>
+
+                                </div>
+
+                                <button type="button" @click="clearReplacementImage" :disabled="replacingAttachmentId"
+                                    class="secondary-hover-button cursor-pointer text-xs font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                    Cancel
+                                </button>
+
+                            </div>
+
+                            <div class="max-w-sm overflow-hidden rounded-lg border border-amber-200 bg-white">
+
+                                <div class="relative overflow-hidden">
+
+                                    <img :src="replacementImagePreview.url" :alt="replacementImagePreview.file.name"
+                                        class="h-48 w-full object-cover" />
+
+                                </div>
+
+                                <div class="border-t border-slate-200 p-3">
+
+                                    <p class="truncate text-xs font-medium text-slate-700"
+                                        :title="replacementImagePreview.file.name">
+                                        {{ replacementImagePreview.file.name }}
+                                    </p>
+
+                                    <p class="mt-1 text-[11px] text-slate-400">
+                                        Replacement is not saved yet.
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+                            <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+
+                                <button type="button" @click="clearReplacementImage" :disabled="replacingAttachmentId"
+                                    class="secondary-hover-button cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+                                    Cancel
+                                </button>
+
+                                <button type="button" @click="saveAttachmentReplacement" :disabled="replacingAttachmentId ||
+                                    !selectedReplacementImage ||
+                                    !editingAttachmentId
+                                    "
+                                    class="cursor-pointer rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                    {{
+                                        replacingAttachmentId
+                                            ? 'Saving...'
+                                            : 'Save Replacement'
+                                    }}
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <!-- No Attachments -->
+                        <div v-if="concernAttachments.length === 0"
+                            class="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+                            No attachments.
+                        </div>
+
+                        <!-- Existing Attachments -->
+                        <div v-else class="max-h-[520px] overflow-y-auto pr-1">
+
+                            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+
+                                <div v-for="attachment in concernAttachments" :key="attachment.id"
+                                    class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+
+                                    <button type="button" @click="openImageViewer(attachment)"
+                                        class="group block w-full cursor-pointer text-left"
+                                        :title="`View ${attachment.file_name}`">
+
+                                        <div class="relative overflow-hidden bg-white">
+
+                                            <img v-if="attachment.file_type?.startsWith('image/')"
+                                                :src="attachmentUrl(attachment.file_path)" :alt="attachment.file_name"
+                                                class="h-32 w-full object-cover transition duration-200 group-hover:scale-105" />
+
+                                            <div v-else
+                                                class="flex h-32 items-center justify-center text-xs text-slate-500">
+                                                File attachment
+                                            </div>
+
+                                            <div
+                                                class="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
+
+                                                <span
+                                                    class="rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 opacity-0 shadow transition group-hover:opacity-100">
+                                                    View
+                                                </span>
+
+                                            </div>
+
+                                        </div>
+
+                                    </button>
+
+                                    <div class="border-t border-slate-200 bg-white p-3">
+
+                                        <div class="mb-2 flex items-center justify-between gap-2">
+
+                                            <span class="rounded-full px-2 py-1 text-[10px] font-semibold" :class="attachment.edited_at
+                                                ? 'bg-amber-100 text-amber-700'
+                                                : 'bg-slate-100 text-slate-600'
+                                                ">
+                                                {{
+                                                    attachment.edited_at
+                                                        ? 'Edited'
+                                                        : 'Uploaded'
+                                                }}
+                                            </span>
+
+                                            <span v-if="canEditOriginalAttachments()"
+                                                class="text-[10px] text-slate-400">
+                                                Original
+                                            </span>
+
+                                        </div>
+
+                                        <p class="truncate text-xs font-medium text-slate-700"
+                                            :title="attachment.file_name">
+                                            {{ attachment.file_name }}
+                                        </p>
+
+                                        <p class="mt-1 truncate text-[11px] text-slate-400">
+                                            {{
+                                                attachment.uploaded_by_name ||
+                                                '-'
+                                            }}
+                                        </p>
+
+                                        <p class="mt-1 text-[11px] text-slate-400">
+                                            {{
+                                                attachment.edited_at
+                                                    ? `Edited ${formatDate(attachment.edited_at)}`
+                                                    : `Uploaded ${formatDate(attachment.created_at)}`
+                                            }}
+                                        </p>
+
+                                        <div v-if="canEditOriginalAttachments()" class="mt-3 flex gap-2">
+
+                                            <button type="button" @click="triggerAttachmentReplace(attachment)"
+                                                :disabled="replacingAttachmentId ||
+                                                    deletingAttachmentId === attachment.id ||
+                                                    addingAttachments
+                                                    "
+                                                class="secondary-hover-button flex-1 cursor-pointer rounded-md border border-slate-300 px-2 py-1.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50">
+                                                Replace
+                                            </button>
+
+                                            <button type="button" @click="removeOriginalAttachment(attachment)"
+                                                :disabled="replacingAttachmentId === attachment.id ||
+                                                    deletingAttachmentId === attachment.id ||
+                                                    addingAttachments
+                                                    "
+                                                class="secondary-hover-button cursor-pointer rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                                {{
+                                                    deletingAttachmentId === attachment.id
+                                                        ? '...'
+                                                        : 'Remove'
+                                                }}
+                                            </button>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <!-- Replacement Input -->
+                        <input ref="replacementInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp"
+                            class="hidden" @change="handleAttachmentReplacement" />
+
+                        <!-- Additional Attachment Input -->
+                        <input ref="additionalAttachmentInput" type="file" multiple
+                            accept="image/jpeg,image/png,image/gif,image/webp" class="hidden"
+                            @change="handleAdditionalAttachments" />
+
+                    </div>
+
+                    <!-- Status History -->
+                    <div class="view-concern-history rounded-xl border border-emerald-100 bg-white p-5 shadow-lg shadow-emerald-950/5">
+
+                        <div class="mb-4 flex items-start justify-between gap-3">
+                            <div>
+
+                                <h4 class="text-base font-semibold text-slate-800">
+                                    Status History
+                                </h4>
+
+                                <p class="mt-1 text-sm text-slate-500">
+                                    Record of status changes.
+                                </p>
+                            </div>
+
+                            <span v-if="concernStatusHistory.length" class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">
+                                {{ concernStatusHistory.length }} {{ concernStatusHistory.length === 1 ? 'entry' : 'entries' }}
+                            </span>
+
+                        </div>
+
+                        <div v-if="concernStatusHistory.length === 0"
+                            class="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+                            No status history available.
+                        </div>
+
+                        <div v-else class="space-y-4">
+
+                            <div v-for="history in visibleStatusHistory" :key="history.id"
+                                class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+
+                                    <div class="flex flex-wrap items-center gap-2">
+
+                                        <span v-if="history.old_status"
+                                            class="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700">
+                                            {{
+                                                formatStatus(
+                                                    history.old_status
+                                                )
+                                            }}
+                                        </span>
+
+                                        <span v-if="history.old_status" class="text-slate-400">
+                                            →
+                                        </span>
+
+                                        <span class="rounded-full px-3 py-1 text-xs font-medium"
+                                            :class="statusClass(history.new_status)">
+                                            {{
+                                                formatStatus(
+                                                    history.new_status
+                                                )
+                                            }}
+                                        </span>
+
+                                        <span v-if="
+                                            history.new_status === 'closed'
+                                        "
+                                            class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">
+                                            ✓ Completed
+                                        </span>
+
+                                    </div>
+
+                                    <span class="text-xs text-slate-400">
+                                        {{
+                                            formatDate(
+                                                history.created_at
+                                            )
+                                        }}
+                                    </span>
+
+                                </div>
+
+                                <p class="mt-3 text-xs text-slate-500">
+
+                                    Changed by
+
+                                    <span class="font-medium text-slate-700">
+                                        {{
+                                            history.changed_by_name ||
+                                            '-'
+                                        }}
+                                    </span>
+
+                                </p>
+
+                                    <p v-if="commitmentStartFromRemarks(history.remarks)"
+                                        class="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-800">
+                                        Committed start:
+                                        {{ formatDateOnly(commitmentStartFromRemarks(history.remarks)) }}
+                                    </p>
+
+                                <p v-if="historyRemarksWithoutCommitmentStart(history)"
+                                    class="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700">
+                                    {{ historyRemarksWithoutCommitmentStart(history) }}
+                                </p>
+
+                                <div v-if="
+                                    history.attachments &&
+                                    history.attachments.length > 0
+                                " class="mt-4">
+
+                                    <div class="mb-2 flex items-center justify-between">
+
+                                        <p class="text-xs font-semibold text-slate-700">
+                                            Resolution Evidence
+                                        </p>
+
+                                        <span class="text-[11px] text-slate-400">
+                                            {{
+                                                history.attachments.length
+                                            }}
+                                            image{{
+                                                history.attachments.length === 1
+                                                    ? ''
+                                                    : 's'
+                                            }}
+                                        </span>
+
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+
+                                        <button v-for="attachment in history.attachments" :key="attachment.id"
+                                            type="button" @click="openImageViewer(attachment)"
+                                            class="group relative block w-full cursor-pointer overflow-hidden rounded-lg border border-green-200 bg-white text-left transition hover:border-green-400 hover:shadow-md"
+                                            :title="`View ${attachment.file_name}`">
+
+                                            <img v-if="attachment.file_type?.startsWith('image/')"
+                                                :src="attachmentUrl(attachment.file_path)" :alt="attachment.file_name"
+                                                class="h-28 w-full object-cover transition duration-200 group-hover:scale-105" />
+
+                                            <div
+                                                class="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
+
+                                                <span
+                                                    class="rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 opacity-0 shadow transition group-hover:opacity-100">
+                                                    View
+                                                </span>
+
+                                            </div>
+
+                                            <div class="border-t border-green-100 bg-white px-2 py-2">
+
+                                                <p class="truncate text-[11px] font-medium text-slate-600"
+                                                    :title="attachment.file_name">
+                                                    {{
+                                                        attachment.file_name
+                                                    }}
+                                                </p>
+
+                                                <p class="mt-1 text-[10px] text-slate-400">
+                                                    Uploaded by
+                                                    {{
+                                                        attachment.uploaded_by_name ||
+                                                        '-'
+                                                    }}
+                                                </p>
+
+                                                <p class="mt-1 text-[10px] text-slate-400">
+                                                    {{
+                                                        formatDate(
+                                                            attachment.created_at
+                                                        )
+                                                    }}
+                                                </p>
+
+                                            </div>
+
+                                        </button>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <button
+                                v-if="concernStatusHistory.length > 3"
+                                type="button"
+                                class="w-full cursor-pointer rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-xs font-semibold text-blue-800 transition hover:border-blue-200 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+                                @click="showAllStatusHistory = !showAllStatusHistory"
+                            >
+                                {{ showAllStatusHistory ? 'Show latest 3 entries' : `Show all ${concernStatusHistory.length} history entries` }}
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    </div>
+
+                    </div>
+
+                    <!-- Conversation -->
+                    <div v-else id="concern-panel-conversation" role="tabpanel" aria-labelledby="concern-tab-conversation" data-tour="view-comments" class="rounded-xl border border-slate-200 bg-white p-5 shadow-lg shadow-blue-950/5">
+
+                        <div class="mb-5">
+
+                            <h4 class="flex items-center gap-2 text-base font-semibold text-blue-950">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-800" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3.75h6m-9.75 7.5 2.6-3.12a2.25 2.25 0 0 1 1.73-.81h9.17A2.25 2.25 0 0 0 19.5 13.3V5.25A2.25 2.25 0 0 0 17.25 3h-10.5A2.25 2.25 0 0 0 4.5 5.25v14.25Z" />
+                                    </svg>
+                                </span>
+                                Conversation
+                            </h4>
+
+                            <p class="mt-1 text-sm text-slate-500">
+                                Communication between members of the creator organization and the assigned organization.
+                            </p>
+
+                        </div>
+
+                        <!-- No Comments -->
+                        <div v-if="concernComments.length === 0" class="rounded-lg bg-slate-50 p-6 text-center">
+
+                            <p class="text-sm text-slate-500">
+                                No conversation yet.
+                            </p>
+
+                            <p v-if="canComment()" class="mt-1 text-xs text-slate-400">
+                                Start the conversation by adding a comment below.
+                            </p>
+
+                        </div>
+
+                        <!-- Conversation -->
+                        <div v-else class="space-y-5">
+
+                            <button
+                                v-if="visibleCommentCount < concernComments.length"
+                                type="button"
+                                class="w-full cursor-pointer rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-xs font-semibold text-blue-800 transition hover:border-blue-200 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+                                @click="visibleCommentCount = Math.min(visibleCommentCount + 10, concernComments.length)"
+                            >
+                                Load {{ Math.min(10, concernComments.length - visibleCommentCount) }} earlier {{ concernComments.length - visibleCommentCount === 1 ? 'comment' : 'comments' }}
+                                <span class="ml-1 font-medium text-blue-600">({{ concernComments.length - visibleCommentCount }} remaining)</span>
+                            </button>
+
+                            <article
+                                v-for="comment in visibleComments"
+                                :key="comment.id"
+                                class="flex items-start gap-3"
+                                :class="Number(comment.user_id) === Number(currentUser?.id) ? 'flex-row-reverse' : 'flex-row'"
+                            >
+                                <button
+                                    v-if="comment.profile_photo"
+                                    type="button"
+                                    class="mt-1 shrink-0 cursor-zoom-in rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                                    :aria-label="`View ${comment.user_name || 'user'} profile photo`"
+                                    :title="`View ${comment.user_name || 'user'} profile photo`"
+                                    @click="openProfilePhotoViewer(comment)"
+                                >
+                                    <UserAvatar
+                                        :name="comment.user_name || '-'"
+                                        :photo-url="comment.profile_photo"
+                                        size="h-10 w-10 text-xs"
+                                        class="ring-2 ring-white shadow-sm"
+                                    />
+                                </button>
+                                <UserAvatar
+                                    v-else
+                                    :name="comment.user_name || '-'"
+                                    size="h-10 w-10 text-xs"
+                                    class="mt-1 ring-2 ring-white shadow-sm"
+                                />
+
+                                <div
+                                    class="min-w-0 max-w-[88%] overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md sm:max-w-[78%]"
+                                    :class="Number(comment.user_id) === Number(currentUser?.id)
+                                        ? 'border-blue-200 bg-blue-50/70'
+                                        : 'border-slate-200 bg-white'"
+                                >
+                                    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-2"
+                                        :class="Number(comment.user_id) === Number(currentUser?.id)
+                                            ? 'border-blue-100 bg-blue-100/60'
+                                            : 'border-slate-100 bg-slate-50'">
+                                        <span class="text-[10px] font-medium text-slate-500">{{ formatDate(comment.created_at) }}</span>
+                                        <span class="text-slate-300" aria-hidden="true">·</span>
+                                        <span class="text-[11px] font-bold text-blue-950">{{ comment.user_name || '-' }}</span>
+                                        <span class="rounded-full bg-white/90 px-2 py-0.5 text-[9px] font-semibold text-blue-800 ring-1 ring-blue-100">
+                                            {{ roleDisplayName(comment.role_name) }}
+                                        </span>
+                                        <span v-if="comment.organization_name" class="max-w-40 truncate rounded-full bg-white/90 px-2 py-0.5 text-[9px] font-medium text-slate-600 ring-1 ring-slate-200" :title="comment.organization_name">
+                                            {{ comment.organization_name }}
+                                        </span>
+                                        <template v-if="comment.updated_at && comment.updated_at !== comment.created_at">
+                                            <span class="text-slate-300" aria-hidden="true">·</span>
+                                            <span class="text-[10px] font-semibold text-slate-500">Edited {{ formatDate(comment.updated_at) }}</span>
+                                        </template>
+                                    </div>
+
+                                    <div class="px-3 py-3 sm:px-4">
+                                        <p v-if="comment.comment" class="whitespace-pre-wrap break-words text-sm leading-6 text-slate-800">{{ comment.comment }}</p>
+
+                                        <div v-if="comment.attachments?.length" :class="comment.comment ? 'mt-3' : ''" class="flex flex-wrap gap-2">
+                                            <button
+                                                v-for="attachment in comment.attachments"
+                                                :key="attachment.id"
+                                                type="button"
+                                                @click="openImageViewer(attachment)"
+                                                class="group relative block h-20 w-20 cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white transition hover:border-blue-400 hover:shadow-md sm:h-24 sm:w-24"
+                                                :title="`View ${attachment.file_name}`"
+                                            >
+                                                <img v-if="attachment.file_type?.startsWith('image/')" :src="attachmentUrl(attachment.file_path)" :alt="attachment.file_name" class="h-full w-full object-cover transition duration-200 group-hover:scale-105" />
+                                                <span class="absolute inset-0 flex items-center justify-center bg-black/0 text-xs font-semibold text-white opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100">View</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+
+                        </div>
+
+                        <!-- Add Comment -->
+                        <div v-if="canComment()" class="mt-6 border-t border-slate-200 pt-5">
+
+                            <div class="mb-2 flex items-center justify-between">
+
+                                <label class="block text-sm font-medium text-slate-700">
+                                    Add Comment
+                                </label>
+
+                                <span class="text-xs text-slate-400">
+                                    {{
+                                        roleDisplayName(currentUser?.role_name)
+                                    }}
+                                </span>
+
+                            </div>
+
+                            <!-- Message -->
+                            <textarea v-model="newComment" :disabled="savingComment" rows="4"
+                                placeholder="Write a message..."
+                                class="w-full resize-y rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none transition focus:border-slate-500 disabled:cursor-not-allowed disabled:bg-slate-100"></textarea>
+
+                            <!-- Attachment Input -->
+                            <div class="mt-3">
+
+                                <label class="mb-2 block text-sm font-medium text-slate-700">
+
+                                    Attach Images for Comment
+
+                                    <span class="font-normal text-slate-400">
+                                        (Optional)
+                                    </span>
+
+                                </label>
+
+                                <input ref="commentImageInput" type="file" multiple
+                                    accept="image/jpeg,image/png,image/gif,image/webp" :disabled="savingComment"
+                                    @change="handleCommentImagesChange"
+                                    class="w-full cursor-pointer rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition file:mr-4 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:border-slate-400 hover:file:bg-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100" />
+
+                                <p class="mt-1 text-xs text-slate-500">
+                                    You can select multiple images. Maximum size: 5 MB per image.
+                                </p>
+
+                            </div>
+
+                            <!-- Selected Comment Images -->
+                            <div v-if="commentImagePreviews.length > 0" class="mt-4">
+
+                                <div class="mb-2 flex items-center justify-between">
+
+                                    <p class="text-sm font-medium text-slate-700">
+                                        Selected Images
+                                    </p>
+
+                                    <button type="button" @click="clearCommentImages" :disabled="savingComment"
+                                        class="cursor-pointer text-xs font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                        Remove All
+                                    </button>
+
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+
+                                    <div v-for="(preview, index) in commentImagePreviews" :key="preview.url"
+                                        class="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+
+                                        <img :src="preview.url" :alt="preview.file.name"
+                                            class="h-28 w-full bg-white object-cover" />
+
+                                        <div
+                                            class="flex items-center justify-between gap-2 border-t border-slate-200 bg-white p-2">
+
+                                            <p class="min-w-0 flex-1 truncate text-xs text-slate-500"
+                                                :title="preview.file.name">
+                                                {{
+                                                    preview.file.name
+                                                }}
+                                            </p>
+
+                                            <button type="button" @click="removeCommentImage(index)"
+                                                :disabled="savingComment"
+                                                class="shrink-0 cursor-pointer text-xs font-medium text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                                                Remove
+                                            </button>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <!-- Send -->
+                            <div class="mt-3 flex justify-end">
+
+                                <button type="button" @click="addComment" :disabled="savingComment ||
+                                    (
+                                        !newComment.trim() &&
+                                        selectedCommentImages.length === 0
+                                    )
+                                    "
+                                    class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-blue-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50">
+                                    {{
+                                        savingComment
+                                            ? 'Sending...'
+                                            : 'Send Comment'
+                                    }}
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <!-- No Permission -->
+                        <div v-else class="mt-5 border-t border-slate-200 pt-5">
+
+                            <p v-if="isConcernCompleted()" class="text-sm text-slate-400">
+                                This concern is already completed. Conversation is closed.
+                            </p>
+
+                            <p v-else class="text-sm text-slate-400">
+                                You do not have permission to participate in this conversation.
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Full Image Viewer -->
+    <div v-if="
+        showImageViewer &&
+        selectedViewerImage
+    " class="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4" @click.self="closeImageViewer">
+
+        <div class="relative flex max-h-[95vh] max-w-[95vw] flex-col items-center">
+
+            <button type="button" @click="closeImageViewer"
+                aria-label="Close image viewer"
+                class="group absolute -right-2 -top-2 z-10 flex h-10 w-10 cursor-pointer items-center justify-center text-3xl leading-none text-red-300 transition-colors duration-200 hover:text-red-400"
+                title="Close image">
+                <span class="transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                    stroke="currentColor" aria-hidden="true"
+                    class="absolute h-6 w-6 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                </svg>
+            </button>
+
+            <img :src="selectedViewerImage.url" :alt="selectedViewerImage.name"
+                class="max-h-[85vh] max-w-[90vw] rounded-xl bg-white object-contain shadow-2xl" />
+
+            <p class="mt-3 max-w-[90vw] truncate text-center text-sm font-medium text-white"
+                :title="selectedViewerImage.name">
+                {{ selectedViewerImage.name }}
+            </p>
+
+        </div>
+
+    </div>
+
+</template>
+
+<style scoped>
+@media (min-width: 1024px) {
+    .view-concern-sections {
+        align-items: start;
+        grid-template-areas:
+            'main history'
+            'status status'
+            'attachments attachments';
+    }
+
+    .view-concern-main {
+        grid-area: main;
+    }
+
+    .view-concern-history {
+        grid-area: history;
+    }
+
+    .view-concern-status {
+        grid-area: status;
+    }
+
+    .view-concern-attachments {
+        grid-area: attachments;
+    }
+}
+</style>
