@@ -6,6 +6,7 @@ const teamMembers = [
         name: 'Jaikhene Joel F. Villar',
         role: 'Main Programmer',
         initials: 'JV',
+        image: '/images/team/147539623_2765157050404257_8638623082829100447_n.jpg',
         accent: 'from-blue-700 to-indigo-600',
         description: 'Leads the application development, turning the system requirements into reliable features and workflows.'
     },
@@ -13,6 +14,7 @@ const teamMembers = [
         name: 'Jerick John S Espina',
         role: 'UI/UX',
         initials: 'JE',
+        image: '/images/team/a708ec5a-326b-4243-9a7c-eb127a58a64f.jpg',
         accent: 'from-violet-600 to-fuchsia-500',
         description: 'Shapes the user experience and interface, helping make the system clear, approachable, and easy to use.'
     },
@@ -20,6 +22,7 @@ const teamMembers = [
         name: 'Laimar Agulay',
         role: 'Planner',
         initials: 'LA',
+        image: '/images/team/c819aafd-f8d9-4d81-85a0-214524d2e280.jpg',
         accent: 'from-teal-600 to-emerald-500',
         description: 'Organizes project goals, priorities, and coordination to keep the team focused on the work ahead.'
     },
@@ -29,13 +32,6 @@ const teamMembers = [
         initials: 'MF',
         accent: 'from-amber-500 to-orange-500',
         description: 'Coordinates deployment and release activities to help deliver the system smoothly into its environment.'
-    },
-    {
-        name: 'Ronnie Aton',
-        role: 'ICT Staff',
-        initials: 'RA',
-        accent: 'from-cyan-600 to-blue-600',
-        description: 'Provides ICT support and practical guidance that helps the team deliver a solution for the organization.'
     }
 ]
 </script>
@@ -88,8 +84,9 @@ const teamMembers = [
                 >
                     <div class="absolute inset-x-0 top-0 h-1 bg-linear-to-r" :class="member.accent"></div>
                     <div class="flex items-start gap-4">
-                        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br text-base font-bold text-white shadow-md ring-4 ring-slate-50 transition duration-200 group-hover:scale-105" :class="member.accent" aria-hidden="true">
-                            {{ member.initials }}
+                        <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-linear-to-br text-base font-bold text-white shadow-md ring-4 ring-slate-50 transition duration-200 group-hover:scale-105" :class="member.accent">
+                            <img v-if="member.image" :src="member.image" :alt="member.name" class="h-full w-full object-cover" />
+                            <span v-else aria-hidden="true">{{ member.initials }}</span>
                         </div>
                         <div class="min-w-0 pt-0.5">
                             <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">{{ member.role }}</p>

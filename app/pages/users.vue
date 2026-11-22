@@ -353,7 +353,7 @@ async function goToNextPage() {
 
 }
 
-const isSuperadminRole = computed(() => {
+const isOrganizationNotApplicable = computed(() => {
 
     const selectedRole = roles.value.find(
         role =>
@@ -361,18 +361,18 @@ const isSuperadminRole = computed(() => {
             Number(form.value.role_id)
     )
 
-    return ['superadmin', 'system_admin'].includes(selectedRole?.name)
+    return ['superadmin', 'system_admin', 'system_monitor'].includes(selectedRole?.name)
 
 })
 
-const isEditSuperadminRole = computed(() => {
+const isEditOrganizationNotApplicable = computed(() => {
 
     if (
         editingUser.value &&
         isCurrentUser(editingUser.value) &&
         Number(editForm.value.role_id) === Number(currentUser.value?.role_id)
     ) {
-        return ['superadmin', 'system_admin'].includes(currentUser.value?.role_name)
+        return ['superadmin', 'system_admin', 'system_monitor'].includes(currentUser.value?.role_name)
     }
 
     const selectedRole = roles.value.find(
@@ -381,7 +381,7 @@ const isEditSuperadminRole = computed(() => {
             Number(editForm.value.role_id)
     )
 
-    return ['superadmin', 'system_admin'].includes(selectedRole?.name)
+    return ['superadmin', 'system_admin', 'system_monitor'].includes(selectedRole?.name)
 
 })
 
@@ -392,7 +392,7 @@ const hasUserEditChanges = computed(() => {
         return false
     }
 
-    const organizationId = isEditSuperadminRole.value
+    const organizationId = isEditOrganizationNotApplicable.value
         ? null
         : editForm.value.organization_id
             ? Number(editForm.value.organization_id)
@@ -440,7 +440,7 @@ function openCreateModal() {
 
 function handleRoleChange() {
 
-    if (isSuperadminRole.value) {
+    if (isOrganizationNotApplicable.value) {
 
         form.value.organization_id = ''
 
@@ -469,7 +469,7 @@ async function createUser() {
     try {
 
         const organizationId =
-            isSuperadminRole.value
+            isOrganizationNotApplicable.value
                 ? null
                 : (
                     form.value.organization_id
@@ -577,7 +577,7 @@ function handleUserRowKeydown(event, user) {
 
 function handleEditRoleChange() {
 
-    if (isEditSuperadminRole.value) {
+    if (isEditOrganizationNotApplicable.value) {
 
         editForm.value.organization_id = ''
 
@@ -621,7 +621,7 @@ async function updateUser() {
     try {
 
         const organizationId =
-            isEditSuperadminRole.value
+            isEditOrganizationNotApplicable.value
                 ? null
                 : (
                     editForm.value.organization_id
@@ -1350,14 +1350,14 @@ onMounted(() => {
 
         <!-- Create User Modal -->
         <CreateUserModal :show="showModal" :form="form" :roles="creatableRoles" :organizations="organizations"
-            :is-superadmin-role="isSuperadminRole" :saving="saving" @close="closeModal" @submit="createUser"
+            :is-organization-not-applicable="isOrganizationNotApplicable" :saving="saving" @close="closeModal" @submit="createUser"
             @role-change="handleRoleChange" />
 
         <!-- Edit User Modal -->
         <EditUserModal :show="showEditModal" :form="editForm" :roles="roles" :organizations="organizations"
             :current-user-role="currentUser?.role_name"
             :is-current-user="editingUser ? isCurrentUser(editingUser) : false"
-            :is-superadmin-role="isEditSuperadminRole" :has-changes="hasUserEditChanges" :updating="updating" @close="closeEditModal" @submit="updateUser"
+            :is-organization-not-applicable="isEditOrganizationNotApplicable" :has-changes="hasUserEditChanges" :updating="updating" @close="closeEditModal" @submit="updateUser"
             @role-change="handleEditRoleChange" @status-toggle="requestEditUserStatusChange" />
 
         <div v-if="statusConfirmation"

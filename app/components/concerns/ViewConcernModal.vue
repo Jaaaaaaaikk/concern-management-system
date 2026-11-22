@@ -70,6 +70,7 @@ const pendingConfirmation = ref(null)
 const newComment = ref('')
 const selectedStatus = ref('')
 const statusRemarks = ref('')
+const statusSelectorSection = ref(null)
 const targetCommitmentAt = ref(null)
 
 const selectedStatusImages = ref([])
@@ -1071,17 +1072,24 @@ function canCloseConcern() {
  */
 
 function closeConcernByAdmin() {
-    if (!canCloseConcern()) {
+    if (!canCloseConcern() || updatingStatus.value) {
         return
     }
 
-    selectedStatus.value = 'closed'
+    // Guide the admin to the existing status selector.
+    // The concern is not closed until they select Closed
+    // and submit the normal Update Status confirmation.
+    nextTick(() => {
+        statusSelectorSection.value?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        })
 
-    statusRemarks.value = ''
-
-    clearStatusImages()
-
-    updateConcernStatus()
+        window.setTimeout(() => {
+            const statusSelector = document.getElementById('concern-status')
+            statusSelector?.focus()
+        }, 450)
+    })
 }
 
 /*
@@ -2524,17 +2532,21 @@ onUnmounted(() => {
                             The assigned organization has marked this concern as resolved.
                         </p>
 
-                        <!-- Admin Close Concern -->
+                        <!-- Guide creator admin to the status selector -->
                         <div v-if="canCloseConcern()" class="mt-4">
 
                             <button type="button" @click="closeConcernByAdmin" :disabled="updatingStatus"
-                                class="cursor-pointer rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50">
-                                {{
-                                    updatingStatus
-                                        ? 'Closing...'
-                                        : 'Close Concern'
-                                }}
+                                class="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                    stroke-width="2" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h10v10M17 7l-10 10" />
+                                </svg>
+                                Review &amp; Close Concern
                             </button>
+
+                            <p class="mt-2 text-xs text-green-700">
+                                You will be directed to the status selector to choose Closed and submit the update.
+                            </p>
 
                         </div>
 
@@ -2861,7 +2873,7 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Status Update -->
-                    <div v-if="canUpdateStatus()" data-tour="view-status" class="view-concern-status overflow-hidden rounded-xl border border-blue-200 bg-white shadow-md">
+                    <div v-if="canUpdateStatus()" ref="statusSelectorSection" data-tour="view-status" class="view-concern-status scroll-mt-8 overflow-hidden rounded-xl border border-blue-200 bg-white shadow-md">
 
                         <div class="border-b border-blue-100 bg-blue-50/70 px-5 py-4">
 
@@ -3464,6 +3476,18 @@ onUnmounted(() => {
                                                     history.new_status
                                                 )
                                             }}
+                                        </span>
+
+                                        <span v-if="
+                                            history.old_status === 'resolved' &&
+                                            history.new_status === 'in_progress'
+                                        "
+                                            class="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                                stroke-width="2" stroke="currentColor" class="h-3.5 w-3.5" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 1 12.8-5.3L19.5 9m0-4.5V9h-4.5M19.5 12a7.5 7.5 0 0 1-12.8 5.3L4.5 15m0 4.5V15H9" />
+                                            </svg>
+                                            Reopened
                                         </span>
 
                                         <span v-if="

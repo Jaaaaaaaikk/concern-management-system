@@ -21,7 +21,7 @@ const props = defineProps({
         type: Array,
         default: () => []
     },
-    isSuperadminRole: {
+    isOrganizationNotApplicable: {
         type: Boolean,
         default: false
     },
@@ -341,11 +341,11 @@ onBeforeUnmount(releasePhotoPreview)
                             v-model="props.form.organization_id"
                             aria-label="Organization"
                             name="organization_id"
-                            :placeholder="props.isSuperadminRole ? 'Not applicable' : 'Select organization'"
-                            :disabled="props.isSuperadminRole"
-                            :required="!props.isSuperadminRole"
+                            :placeholder="props.isOrganizationNotApplicable ? 'Not applicable' : 'Select organization'"
+                            :disabled="props.isOrganizationNotApplicable"
+                            :required="!props.isOrganizationNotApplicable"
                             :options="[
-                                { label: props.isSuperadminRole ? 'Not applicable' : 'Select organization', value: '', disabled: !props.isSuperadminRole },
+                                { label: props.isOrganizationNotApplicable ? 'Not applicable' : 'Select organization', value: '', disabled: !props.isOrganizationNotApplicable },
                                 ...props.organizations.map(organization => ({ label: organization.name, value: organization.id }))
                             ]"
                         />

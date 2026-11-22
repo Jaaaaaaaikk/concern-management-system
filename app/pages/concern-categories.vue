@@ -17,9 +17,12 @@ const loading = ref(true)
 const saving = ref(false)
 const updatingId = ref(null)
 const showCreateModal = ref(false)
+const categoryToEdit = ref(null)
 const categoryToToggle = ref(null)
 const errorMessage = ref('')
 const form = ref({ name: '', description: '', organization_ids: [] })
+
+const categoryModalMode = computed(() => categoryToEdit.value ? 'edit' : 'create')
 
 const activeCount = computed(() =>
     categories.value.filter(category => category.status === 'active').length
@@ -51,32 +54,69 @@ async function loadData() {
 }
 
 function openCreateModal() {
+    categoryToEdit.value = null
     form.value = { name: '', description: '', organization_ids: [] }
     showCreateModal.value = true
 }
 
-function closeCreateModal() {
-    if (!saving.value) showCreateModal.value = false
+function openEditModal(category) {
+    categoryToEdit.value = category
+    form.value = {
+        name: category.name || '',
+        description: category.description || '',
+        organization_ids: (category.assigned_organizations || []).map(organization => organization.id)
+    }
+    showCreateModal.value = true
 }
 
-async function createCategory() {
+function closeCreateModal() {
+    if (!saving.value) {
+        showCreateModal.value = false
+        categoryToEdit.value = null
+    }
+}
+
+async function saveCategory() {
     if (saving.value) return
 
     saving.value = true
+
     try {
-        await $fetch('/api/concern-types', {
-            method: 'POST',
-            body: {
-                name: form.value.name.trim(),
-                description: form.value.description.trim(),
-                organization_ids: form.value.organization_ids
-            }
-        })
+        if (categoryToEdit.value) {
+            await $fetch(`/api/concern-types/${categoryToEdit.value.id}`, {
+                method: 'PATCH',
+                body: {
+                    name: form.value.name.trim(),
+                    description: form.value.description.trim(),
+                    organization_ids: form.value.organization_ids
+                }
+            })
+
+            showToast('Concern category updated successfully.')
+        } else {
+            await $fetch('/api/concern-types', {
+                method: 'POST',
+                body: {
+                    name: form.value.name.trim(),
+                    description: form.value.description.trim(),
+                    organization_ids: form.value.organization_ids
+                }
+            })
+
+            showToast('Concern category created successfully.')
+        }
+
         showCreateModal.value = false
+        categoryToEdit.value = null
         await loadCategories()
-        showToast('Concern category created successfully.')
     } catch (error) {
-        showToast(error?.data?.statusMessage || 'Failed to create concern category.', 'error')
+        showToast(
+            error?.data?.statusMessage ||
+            (categoryToEdit.value
+                ? 'Failed to update concern category.'
+                : 'Failed to create concern category.'),
+            'error'
+        )
     } finally {
         saving.value = false
     }
@@ -234,7 +274,15 @@ onMounted(loadData)
                                     <p class="mt-2 text-xs text-slate-400">Added {{ formatDate(category.created_at) }}</p>
                                 </div>
                             </div>
-                            <button type="button" :disabled="updatingId === category.id" class="secondary-hover-button shrink-0 cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 sm:text-sm" :class="category.status === 'active' ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-blue-200 text-blue-800 hover:bg-blue-50'" @click="toggleCategory(category)">{{ updatingId === category.id ? 'Saving…' : category.status === 'active' ? 'Remove' : 'Restore' }}</button>
+                            <div class="flex shrink-0 items-center gap-2">
+                                <button
+                                    type="button"
+                                    :disabled="updatingId === category.id"
+                                    class="secondary-hover-button cursor-pointer rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-800 transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60 sm:text-sm"
+                                    @click="openEditModal(category)"
+                                >Edit</button>
+                                <button type="button" :disabled="updatingId === category.id" class="secondary-hover-button shrink-0 cursor-pointer rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 sm:text-sm" :class="category.status === 'active' ? 'border-red-200 text-red-700 hover:bg-red-50' : 'border-blue-200 text-blue-800 hover:bg-blue-50'" @click="toggleCategory(category)">{{ updatingId === category.id ? 'Saving…' : category.status === 'active' ? 'Remove' : 'Restore' }}</button>
+                            </div>
                         </article>
                     </div>
                     <div v-else class="px-6 py-12 text-center">
@@ -243,6 +291,8 @@ onMounted(loadData)
                     </div>
                 </div>
             </section>
+
+            <AppFooter />
         </main>
 
         <CreateConcernCategoryModal
@@ -250,8 +300,9 @@ onMounted(loadData)
             :form="form"
             :saving="saving"
             :organizations="organizations"
+            :mode="categoryModalMode"
             @close="closeCreateModal"
-            @submit="createCategory"
+            @submit="saveCategory"
         />
 
         <ConcernCategoryStatusModal

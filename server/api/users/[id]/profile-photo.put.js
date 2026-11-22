@@ -182,6 +182,8 @@ export default defineEventHandler(async (event) => {
     message: removePhoto
       ? 'Profile photo removed successfully.'
       : 'Profile photo updated successfully.',
-    profile_photo: newPhoto ? `/api/users/${userId}/profile-photo` : null
+    profile_photo: newPhoto
+      ? `/api/users/${userId}/profile-photo?v=${randomUUID()}`
+      : null
   }
 })

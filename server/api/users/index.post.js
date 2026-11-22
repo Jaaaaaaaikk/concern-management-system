@@ -88,20 +88,24 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // All organization-level roles require an organization.
+    const finalOrganizationId = ['system_admin', 'system_monitor'].includes(role.name)
+      ? null
+      : organizationId
+
+    // Concern Handler and Requestor roles are scoped to an organization.
     if (
-      ['concern_handler', 'system_monitor', 'requestor'].includes(role.name) &&
-      !organizationId
+      ['concern_handler', 'requestor'].includes(role.name) &&
+      !finalOrganizationId
     ) {
       throw createError({
         statusCode: 400,
         statusMessage:
-          'An organization is required for admin and user accounts.'
+            'An organization is required for Concern Handler and Requestor accounts.'
       })
     }
 
     // Check organization
-    if (organizationId) {
+    if (finalOrganizationId) {
       const [organizationRows] = await db.query(
         `
         SELECT id
@@ -110,7 +114,7 @@ export default defineEventHandler(async (event) => {
           AND deleted_at IS NULL
         LIMIT 1
         `,
-        [organizationId]
+        [finalOrganizationId]
       )
 
       if (organizationRows.length === 0) {
@@ -146,7 +150,7 @@ export default defineEventHandler(async (event) => {
         middleName,
         lastName,
         roleId,
-        organizationId,
+        finalOrganizationId,
         currentUser.id,
         currentUser.id
       ]
