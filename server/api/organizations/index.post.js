@@ -1,4 +1,3 @@
-
 import db from '../../utils/db.js'
 import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
 import {
@@ -6,7 +5,10 @@ import {
     normalizeConcernTypeIds,
     replaceOrganizationConcernTypes
 } from '../../utils/organization-concern-types.js'
-import { notifySuperadminsOfSystemAdminAction } from '../../utils/notifications.js'
+import {
+    formatActorDisplayName,
+    notifySuperadminsOfSystemAdminAction
+} from '../../utils/notifications.js'
 
 export default defineEventHandler(async (event) => {
     const currentUser = await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
@@ -87,7 +89,7 @@ export default defineEventHandler(async (event) => {
             actorRole: currentUser.role_name,
             eventType: 'organization_created',
             title: 'Organization created',
-            message: `System Administrator created the organization “${name}”.`
+            message: `${formatActorDisplayName(currentUser)} created the organization “${name}”.`
         })
 
         await connection.commit()

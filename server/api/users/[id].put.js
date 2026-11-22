@@ -1,7 +1,10 @@
 import db from '../../utils/db.js'
 import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
 import { hashPassword } from '../../utils/auth.js'
-import { notifySuperadminsOfSystemAdminAction } from '../../utils/notifications.js'
+import {
+  formatActorDisplayName,
+  notifySuperadminsOfSystemAdminAction
+} from '../../utils/notifications.js'
 
 export default defineEventHandler(async (event) => {
   const currentUser = await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
@@ -397,7 +400,7 @@ export default defineEventHandler(async (event) => {
       actorRole: currentUser.role_name,
       eventType: 'user_updated',
       title: 'User account updated',
-      message: `System Administrator updated the user account “${username}”.`
+      message: `${formatActorDisplayName(currentUser)} updated the user account “${username}”.`
     })
   } catch (notificationError) {
     console.error('Failed to create user administration notification:', notificationError)

@@ -6,7 +6,10 @@ import {
     normalizeConcernTypeIds,
     replaceOrganizationConcernTypes
 } from '../../utils/organization-concern-types.js'
-import { notifySuperadminsOfSystemAdminAction } from '../../utils/notifications.js'
+import {
+    formatActorDisplayName,
+    notifySuperadminsOfSystemAdminAction
+} from '../../utils/notifications.js'
 
 export default defineEventHandler(async (event) => {
 
@@ -129,7 +132,7 @@ export default defineEventHandler(async (event) => {
             actorRole: currentUser.role_name,
             eventType: 'organization_updated',
             title: 'Organization updated',
-            message: `System Administrator updated the organization “${name}”.`
+            message: `${formatActorDisplayName(currentUser)} updated the organization “${name}”.`
         })
 
         await connection.commit()

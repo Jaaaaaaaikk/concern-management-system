@@ -112,3 +112,12 @@ export async function notifySuperadminsOfSystemAdminAction(executor, {
 
 export const GLOBAL_NOTIFICATION_ROLES = GLOBAL_ROLES
 export const ORGANIZATION_NOTIFICATION_ROLES = ORGANIZATION_ROLES
+
+export function formatActorDisplayName(actor = {}) {
+  const fullName = [actor.first_name, actor.middle_name, actor.last_name]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ')
+
+  return fullName || String(actor.username || actor.name || 'A user').trim()
+}

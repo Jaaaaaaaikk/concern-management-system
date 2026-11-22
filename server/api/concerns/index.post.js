@@ -4,7 +4,10 @@ import { requireRole } from "../../utils/require-auth.js";
 
 import crypto from "crypto";
 import { removeConcernUpload, saveConcernUpload } from "../../utils/concern-uploads.js";
-import { notifyConcernParticipants } from "../../utils/notifications.js";
+import {
+  formatActorDisplayName,
+  notifyConcernParticipants
+} from "../../utils/notifications.js";
 
 export default defineEventHandler(async (event) => {
   const currentUser = await requireRole(event, ["concern_handler", "requestor"]);
@@ -407,7 +410,7 @@ export default defineEventHandler(async (event) => {
       actorUserId: currentUser.id,
       eventType: "concern_created",
       title: "New concern created",
-      message: `${concernNumber} was submitted and is available to the involved organizations.`
+      message: `${formatActorDisplayName(currentUser)} submitted ${concernNumber}; it is available to the involved organizations.`
     });
 
     /*

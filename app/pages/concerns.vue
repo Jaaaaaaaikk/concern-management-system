@@ -53,6 +53,7 @@ const exportDateFilter = ref('')
 const showViewModal = ref(false)
 
 const selectedConcernId = ref(null)
+const focusStatusOnOpen = ref(false)
 const trashView = ref(false)
 
 /*
@@ -400,6 +401,16 @@ function responseAttentionState(concern) {
         return ''
     }
 
+    const roleName = currentUser.value?.role_name
+    const isGlobalMonitor = ['superadmin', 'system_admin', 'system_monitor'].includes(roleName)
+    const isOrganizationRecipient = ['concern_handler', 'requestor'].includes(roleName) &&
+        currentUser.value?.organization_id != null &&
+        Number(currentUser.value.organization_id) === Number(concern.assigned_organization_id)
+
+    if (!isGlobalMonitor && !isOrganizationRecipient) {
+        return ''
+    }
+
     const createdAt = parseDate(concern.created_at)
 
     if (!createdAt) {
@@ -583,10 +594,12 @@ function closeModal() {
  */
 
 function viewConcern(
-    concern
+    concern,
+    options = {}
 ) {
 
     errorMessage.value = ''
+    focusStatusOnOpen.value = Boolean(options.focusStatus)
 
     selectedConcernId.value =
         concern.id
@@ -594,27 +607,10 @@ function viewConcern(
     showViewModal.value = true
 }
 
-function handleConcernRowKeydown(
-    event,
-    concern
-) {
-
-    if (
-        event.key === 'Enter' ||
-        event.key === ' '
-    ) {
-
-        event.preventDefault()
-
-        viewConcern(
-            concern
-        )
-    }
-}
-
 function closeViewModal() {
 
     showViewModal.value = false
+    focusStatusOnOpen.value = false
 
     selectedConcernId.value =
         null
@@ -1353,6 +1349,92 @@ onUnmounted(() => {
     }
 })
 
+function shouldHighlightPendingConcern(concern) {
+    if (
+        !concern ||
+        concern.deleted_at ||
+        trashView.value ||
+        concern.status !== 'pending'
+    ) {
+        return false
+    }
+
+    const roleName = currentUser.value?.role_name
+
+    if (['superadmin', 'system_admin', 'system_monitor'].includes(roleName)) {
+        return true
+    }
+
+    return ['concern_handler', 'requestor'].includes(roleName) &&
+        currentUser.value?.organization_id != null &&
+        Number(currentUser.value.organization_id) === Number(concern.assigned_organization_id)
+}
+
+function concernRowHighlightState(concern) {
+    if (!concern || concern.deleted_at || trashView.value) {
+        return ''
+    }
+
+    if (responseAttentionState(concern)) {
+        return 'late'
+    }
+
+    if (concern.status === 'pending') {
+        return shouldHighlightPendingConcern(concern) ? 'pending' : ''
+    }
+
+    if (concern.status === 'in_progress') {
+        return 'in_progress'
+    }
+
+    if (concern.status === 'resolved') {
+        return 'resolved'
+    }
+
+    if (concern.status === 'on_hold') {
+        return 'on_hold'
+    }
+
+    return ''
+}
+
+function concernRowHighlightClasses(concern, alternate = false) {
+    const state = concernRowHighlightState(concern)
+
+    if (state === 'late') {
+        return alternate
+            ? 'bg-rose-50/70 hover:bg-rose-100/80'
+            : 'bg-rose-50 hover:bg-rose-100/80'
+    }
+
+    if (state === 'pending') {
+        return alternate
+            ? 'bg-amber-50/70 hover:bg-amber-100/80'
+            : 'bg-amber-50 hover:bg-amber-100/80'
+    }
+
+    if (state === 'in_progress') {
+        return alternate
+            ? 'bg-blue-50/70 hover:bg-blue-100/80'
+            : 'bg-blue-50 hover:bg-blue-100/80'
+    }
+
+    if (state === 'resolved') {
+        return alternate
+            ? 'bg-emerald-50/70 hover:bg-emerald-100/80'
+            : 'bg-emerald-50 hover:bg-emerald-100/80'
+    }
+
+    if (state === 'on_hold') {
+        return alternate
+            ? 'bg-orange-50/70 hover:bg-orange-100/80'
+            : 'bg-orange-50 hover:bg-orange-100/80'
+    }
+
+    return alternate
+        ? 'bg-slate-50 hover:bg-blue-50/70'
+        : 'bg-white hover:bg-blue-50/50'
+}
 </script>
 
 <template>
@@ -1897,10 +1979,8 @@ onUnmounted(() => {
 
                                         <tr v-for="(concern, index) in concerns" :key="concern.id" data-tour="concern-row" role="button"
                                         tabindex="0" @click="viewConcern(concern)"
-                                        @keydown="handleConcernRowKeydown($event, concern)" :class="index % 2 === 0
-                                            ? (responseAttentionState(concern) ? 'bg-rose-50 hover:bg-rose-100/80' : 'bg-white hover:bg-blue-50/50')
-                                            : (responseAttentionState(concern) ? 'bg-rose-50/70 hover:bg-rose-100/80' : 'bg-slate-50 hover:bg-blue-50/70')
-                                            "
+                                        @keydown="handleConcernRowKeydown($event, concern)"
+                                        :class="concernRowHighlightClasses(concern, index % 2 !== 0)"
                                         class="cursor-pointer transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700">
 
                                         <!-- Concern -->
@@ -2073,11 +2153,19 @@ onUnmounted(() => {
 
                             <article v-for="(concern, index) in concerns" :key="concern.id" data-tour="concern-row" role="button" tabindex="0"
                                 @click="viewConcern(concern)" @keydown="handleConcernRowKeydown($event, concern)"
-                                :class="responseAttentionState(concern)
+                                :class="concernRowHighlightState(concern) === 'late'
                                     ? 'border-rose-300 bg-rose-50 hover:border-rose-400 hover:bg-rose-100'
-                                    : index % 2 === 0
-                                        ? 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
-                                        : 'border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/70'"
+                                    : concernRowHighlightState(concern) === 'pending'
+                                        ? 'border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100'
+                                        : concernRowHighlightState(concern) === 'in_progress'
+                                            ? 'border-blue-300 bg-blue-50 hover:border-blue-400 hover:bg-blue-100'
+                                            : concernRowHighlightState(concern) === 'resolved'
+                                                ? 'border-emerald-300 bg-emerald-50 hover:border-emerald-400 hover:bg-emerald-100'
+                                                : concernRowHighlightState(concern) === 'on_hold'
+                                                    ? 'border-orange-300 bg-orange-50 hover:border-orange-400 hover:bg-orange-100'
+                                                    : index % 2 === 0
+                                                        ? 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
+                                                        : 'border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/70'"
                                 class="cursor-pointer rounded-xl border p-4 transition focus:outline-none focus:ring-2 focus:ring-blue-700">
 
                                 <div class="flex items-start justify-between gap-3">
@@ -2327,6 +2415,7 @@ onUnmounted(() => {
         <!-- View Concern Modal -->
 
         <ViewConcernModal :show="showViewModal" :concern-id="selectedConcernId" :current-user="currentUser"
+            :focus-status-on-open="focusStatusOnOpen"
             @close="closeViewModal" @refresh="loadConcerns" />
 
         <!-- Export Confirmation Modal -->

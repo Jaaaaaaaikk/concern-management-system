@@ -1,11 +1,13 @@
-
 import db from "../../../utils/db.js";
 import { requireAuth } from "../../../utils/require-auth.js";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { saveConcernUpload } from "../../../utils/concern-uploads.js";
-import { notifyConcernParticipants } from "../../../utils/notifications.js";
+import {
+  formatActorDisplayName,
+  notifyConcernParticipants
+} from "../../../utils/notifications.js";
 
 export default defineEventHandler(async (event) => {
   /*
@@ -748,7 +750,7 @@ export default defineEventHandler(async (event) => {
       actorUserId: currentUser.id,
       eventType: "concern_status_changed",
       title: "Concern status updated",
-      message: `${concern.concern_number} changed from ${concern.status.replaceAll("_", " ")} to ${newStatus.replaceAll("_", " ")}.`
+      message: `${formatActorDisplayName(currentUser)} changed ${concern.concern_number} from ${concern.status.replaceAll("_", " ")} to ${newStatus.replaceAll("_", " ")}.`
     });
 
     /*

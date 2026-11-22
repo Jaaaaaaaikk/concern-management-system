@@ -23,6 +23,11 @@ const props = defineProps({
     currentUser: {
         type: Object,
         default: null
+    },
+
+    focusStatusOnOpen: {
+        type: Boolean,
+        default: false
     }
 })
 
@@ -1216,6 +1221,10 @@ async function loadConcernDetails() {
         clearAdditionalImages()
         clearReplacementImage()
 
+        if (props.focusStatusOnOpen && response.concern?.status === 'pending') {
+            focusStatusSelector()
+        }
+
     } catch (error) {
         showToast(
             error?.data?.statusMessage ||
@@ -1327,6 +1336,19 @@ function handleConcernTabKeydown(event) {
 
     nextTick(() => {
         document.getElementById(`concern-tab-${activeConcernTab.value}`)?.focus()
+    })
+}
+
+function focusStatusSelector() {
+    nextTick(() => {
+        statusSelectorSection.value?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        })
+
+        window.setTimeout(() => {
+            document.getElementById('concern-status')?.focus()
+        }, 450)
     })
 }
 
@@ -2507,6 +2529,17 @@ onUnmounted(() => {
                             </span>
                             with a reason if work cannot start yet.
                         </p>
+
+                        <button
+                            type="button"
+                            class="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-semibold text-blue-800 shadow-sm transition hover:border-blue-400 hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                            @click="focusStatusSelector"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12h15m-6-6 6 6-6 6" />
+                            </svg>
+                            Respond to concern
+                        </button>
 
                     </div>
 

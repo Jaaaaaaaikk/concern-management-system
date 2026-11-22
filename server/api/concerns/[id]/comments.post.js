@@ -3,7 +3,10 @@ import { requireAuth } from "../../../utils/require-auth.js";
 import { readMultipartFormData } from "h3";
 
 import { saveConcernUpload } from "../../../utils/concern-uploads.js";
-import { notifyConcernParticipants } from "../../../utils/notifications.js";
+import {
+  formatActorDisplayName,
+  notifyConcernParticipants,
+} from "../../../utils/notifications.js";
 
 export default defineEventHandler(async (event) => {
   const currentUser = await requireAuth(event);
@@ -273,7 +276,7 @@ export default defineEventHandler(async (event) => {
       actorUserId: currentUser.id,
       eventType: "concern_comment_added",
       title: "New concern comment",
-      message: `A new comment was added to ${concern.concern_number}.`
+      message: `${formatActorDisplayName(currentUser)} added a comment to ${concern.concern_number}.`
     });
   } catch (notificationError) {
     console.error('Failed to create concern comment notifications:', notificationError);
