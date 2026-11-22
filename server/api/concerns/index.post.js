@@ -1,0 +1,454 @@
+import db from "../../utils/db.js";
+
+import { requireRole } from "../../utils/require-auth.js";
+
+import crypto from "crypto";
+import { removeConcernUpload, saveConcernUpload } from "../../utils/concern-uploads.js";
+import { notifyConcernParticipants } from "../../utils/notifications.js";
+
+export default defineEventHandler(async (event) => {
+  const currentUser = await requireRole(event, ["concern_handler", "requestor"]);
+
+  /*
+   * Read multipart form data.
+   */
+
+  const parts = await readMultipartFormData(event);
+
+  if (!parts) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid form data.",
+    });
+  }
+
+  /*
+   * Convert multipart fields into an object.
+   *
+   * Multiple uploaded images use the same field name:
+   * "image"
+   */
+
+  const fields = {};
+  const imageFiles = [];
+
+  for (const part of parts) {
+    if (part.name === "image" && part.filename) {
+      imageFiles.push(part);
+    } else if (part.name) {
+      fields[part.name] = part.data?.toString() || "";
+    }
+  }
+
+  const title = fields.title?.trim();
+
+  const description = fields.description?.trim();
+
+  const concernTypeId = fields.concern_type_id;
+
+  const assignedOrganizationId = fields.assigned_organization_id;
+
+  const priority = fields.priority || "medium";
+
+  /*
+   * Validate title.
+   */
+
+  if (!title) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Concern title is required.",
+    });
+  }
+
+  /*
+   * Validate description.
+   */
+
+  if (!description) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Concern description is required.",
+    });
+  }
+
+  /*
+   * Validate concern type.
+   */
+
+  if (!concernTypeId || Number.isNaN(Number(concernTypeId))) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Concern type is required.",
+    });
+  }
+
+  /*
+   * Validate priority.
+   */
+
+  const validPriorities = ["low", "medium", "high", "urgent"];
+
+  if (!validPriorities.includes(priority)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid priority.",
+    });
+  }
+
+  /*
+   * Validate assigned organization.
+   */
+
+  if (!assignedOrganizationId || Number.isNaN(Number(assignedOrganizationId))) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Assigned organization is required.",
+    });
+  }
+
+  /*
+   * Validate uploaded images.
+   *
+   * Images are optional.
+   *
+   * Maximum:
+   * 5 MB per image.
+   */
+
+  const validImageTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+  ];
+
+  const maxImageSize = 5 * 1024 * 1024;
+
+  for (const imageFile of imageFiles) {
+    if (!validImageTypes.includes(imageFile.type)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage:
+          "Invalid image format. Please upload JPG, PNG, GIF, or WEBP.",
+      });
+    }
+
+    if (imageFile.data.length > maxImageSize) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: "Each image must not exceed 5 MB.",
+      });
+    }
+  }
+
+  /*
+   * Verify concern type exists and is active.
+   */
+
+  const [concernTypeRows] = await db.query(
+    `
+            SELECT
+                id
+            FROM concern_types
+            WHERE id = ?
+              AND status = 'active'
+            LIMIT 1
+            `,
+    [Number(concernTypeId)],
+  );
+
+  if (concernTypeRows.length === 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid or inactive concern type.",
+    });
+  }
+
+  /*
+   * Verify organization exists and is active.
+   */
+
+  const [organizationRows] = await db.query(
+    `
+            SELECT
+                id,
+              name,
+              organization_type
+            FROM organizations
+            WHERE id = ?
+              AND deleted_at IS NULL
+              AND status = 'active'
+            LIMIT 1
+            `,
+    [Number(assignedOrganizationId)],
+  );
+
+  if (organizationRows.length === 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid organization.",
+    });
+  }
+
+  const [creatorOrganizationRows] = await db.query(
+    `
+      SELECT id, name, organization_type
+      FROM organizations
+      WHERE id = ?
+        AND deleted_at IS NULL
+      LIMIT 1
+    `,
+    [Number(currentUser.organization_id)],
+  );
+
+  if (creatorOrganizationRows.length === 0) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "Your organization is unavailable. You cannot create concerns.",
+    });
+  }
+
+  const assignedOrganization = organizationRows[0];
+  const creatorOrganization = creatorOrganizationRows[0];
+  const isAdminFacilitiesCreator =
+    creatorOrganization.organization_type === "admin_facilities";
+  const isAssignedToAdminFacilities =
+    assignedOrganization.organization_type === "admin_facilities";
+
+  if (!isAdminFacilitiesCreator && !isAssignedToAdminFacilities) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "BPO and tenant organizations can only assign concerns to an Admin Facilities organization.",
+    });
+  }
+
+  /*
+ * All organization users and admins must route outside their own organization.
+ */
+  if (
+    Number(assignedOrganizationId) === Number(currentUser.organization_id)
+  ) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: "You cannot assign a concern to your own organization.",
+    });
+  }
+
+  const [assignmentRows] = await db.query(
+    `
+      SELECT 1
+      FROM organization_concern_types
+      WHERE organization_id = ?
+        AND concern_type_id = ?
+      LIMIT 1
+    `,
+    [Number(assignedOrganizationId), Number(concernTypeId)],
+  );
+
+  if (assignmentRows.length === 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "The selected organization is not assigned to handle this concern type.",
+    });
+  }
+
+  /*
+   * Generate concern number.
+   *
+   * Example:
+   * CON-2026-00001
+   */
+
+  const currentYear = new Date().getFullYear();
+
+  const [latestRows] = await db.query(
+    `
+            SELECT
+                concern_number
+            FROM concerns
+            WHERE concern_number LIKE ?
+            ORDER BY id DESC
+            LIMIT 1
+            `,
+    [`CON-${currentYear}-%`],
+  );
+
+  let nextNumber = 1;
+
+  if (latestRows.length > 0) {
+    const latestNumber = latestRows[0].concern_number.split("-").pop();
+
+    const parsedNumber = Number(latestNumber);
+
+    if (!Number.isNaN(parsedNumber)) {
+      nextNumber = parsedNumber + 1;
+    }
+  }
+
+  const concernNumber = `CON-${currentYear}-${String(nextNumber).padStart(5, "0")}`;
+
+  /*
+   * Keep track of all saved files.
+   *
+   * If something fails later, every
+   * already-created file will be removed.
+   */
+
+  const savedFilePaths = [];
+
+  /*
+   * Start database transaction.
+   */
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    /*
+     * Create concern.
+     */
+
+    const [result] = await connection.query(
+      `
+                INSERT INTO concerns (
+                    concern_number,
+                    title,
+                    description,
+                    concern_type_id,
+                    created_by,
+                    assigned_organization_id,
+                    status,
+                    priority
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+                `,
+      [
+        concernNumber,
+        title,
+        description,
+        Number(concernTypeId),
+        currentUser.id,
+        Number(assignedOrganizationId),
+        priority,
+      ],
+    );
+
+    const concernId = result.insertId;
+
+    if (imageFiles.length > 0) {
+      /*
+       * Determine extension based
+       * on MIME type.
+       */
+
+      const extensionMap = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+      };
+
+      /*
+       * Save every uploaded image.
+       */
+
+      for (const imageFile of imageFiles) {
+        const extension = extensionMap[imageFile.type] || ".jpg";
+
+        /*
+         * Generate unique filename.
+         */
+
+        const randomName = crypto.randomBytes(16).toString("hex");
+
+        const fileName = `concern-${concernId}-${randomName}${extension}`;
+
+        const databaseFilePath = `/uploads/concerns/${fileName}`;
+        await saveConcernUpload(fileName, imageFile.data);
+        savedFilePaths.push(databaseFilePath);
+
+        /*
+         * Keep the legacy-shaped path in the database; API responses expose
+         * only the authenticated download URL.
+         */
+
+        /*
+         * Save attachment information.
+         */
+
+        await connection.query(
+          `
+                    INSERT INTO concern_attachments (
+                        concern_id,
+                        uploaded_by,
+                        file_name,
+                        file_path,
+                        file_type,
+                        file_size
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    `,
+          [
+            concernId,
+            currentUser.id,
+            imageFile.filename || fileName,
+            databaseFilePath,
+            imageFile.type,
+            imageFile.data.length,
+          ],
+        );
+      }
+    }
+
+    await notifyConcernParticipants(connection, {
+      concernId,
+      actorUserId: currentUser.id,
+      eventType: "concern_created",
+      title: "New concern created",
+      message: `${concernNumber} was submitted and is available to the involved organizations.`
+    });
+
+    /*
+     * Everything succeeded.
+     */
+
+    await connection.commit();
+
+    return {
+      success: true,
+      message: "Concern created successfully.",
+      concernId,
+      concernNumber,
+    };
+  } catch (error) {
+    /*
+     * Roll back database changes.
+     */
+
+    await connection.rollback();
+
+    /*
+     * Remove every image that was
+     * already saved.
+     */
+
+    for (const savedFilePath of savedFilePaths) {
+      try {
+        await removeConcernUpload(savedFilePath);
+      } catch (fileError) {
+        console.error("Failed to remove uploaded image:", fileError);
+      }
+    }
+
+    console.error("Concern creation error:", error);
+
+    throw createError({
+      statusCode: 500,
+      statusMessage: "Failed to create concern.",
+    });
+  } finally {
+    connection.release();
+  }
+});

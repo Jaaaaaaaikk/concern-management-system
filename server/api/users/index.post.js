@@ -1,0 +1,199 @@
+import db from '../../utils/db.js'
+import { hashPassword } from '../../utils/auth.js'
+import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
+import { notifySuperadminsOfSystemAdminAction } from '../../utils/notifications.js'
+
+export default defineEventHandler(async (event) => {
+  const currentUser = await requireRole(event, SYSTEM_MANAGEMENT_ROLES)
+
+  const body = await readBody(event)
+
+  const username = body?.username?.trim()
+  const password = body?.password
+  const firstName = body?.first_name?.trim()
+  const middleName = body?.middle_name?.trim() || null
+  const lastName = body?.last_name?.trim()
+  const roleId = body?.role_id
+  const organizationId = body?.organization_id || null
+
+  if (
+    !username ||
+    !password ||
+    !firstName ||
+    !lastName ||
+    !roleId
+  ) {
+    throw createError({
+      statusCode: 400,
+      statusMessage:
+        'Username, password, first name, last name, and role are required.'
+    })
+  }
+
+  if (password.length < 8) {
+    throw createError({
+      statusCode: 400,
+      statusMessage:
+        'Password must be at least 8 characters long.'
+    })
+  }
+
+  try {
+    // Check username
+    const [existingUsername] = await db.query(
+      `
+      SELECT id
+      FROM users
+      WHERE username = ?
+        AND deleted_at IS NULL
+      LIMIT 1
+      `,
+      [username]
+    )
+
+    if (existingUsername.length > 0) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Username already exists.'
+      })
+    }
+
+    // Check role
+    const [roleRows] = await db.query(
+      `
+      SELECT id, name
+      FROM roles
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [roleId]
+    )
+
+    if (roleRows.length === 0) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid role.'
+      })
+    }
+
+    const role = roleRows[0]
+
+    const allowedRoleNames = currentUser.role_name === 'superadmin'
+      ? ['system_admin', 'concern_handler', 'system_monitor', 'requestor']
+      : ['concern_handler', 'requestor']
+
+    if (!allowedRoleNames.includes(role.name)) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'You cannot assign that account role.'
+      })
+    }
+
+    const finalOrganizationId = ['system_admin', 'system_monitor'].includes(role.name)
+      ? null
+      : organizationId
+
+    // Concern Handler and Requestor roles are scoped to an organization.
+    if (
+      ['concern_handler', 'requestor'].includes(role.name) &&
+      !finalOrganizationId
+    ) {
+      throw createError({
+        statusCode: 400,
+        statusMessage:
+            'An organization is required for Concern Handler and Requestor accounts.'
+      })
+    }
+
+    // Check organization
+    if (finalOrganizationId) {
+      const [organizationRows] = await db.query(
+        `
+        SELECT id
+        FROM organizations
+        WHERE id = ?
+          AND deleted_at IS NULL
+        LIMIT 1
+        `,
+        [finalOrganizationId]
+      )
+
+      if (organizationRows.length === 0) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Invalid organization.'
+        })
+      }
+    }
+
+    const passwordHash = await hashPassword(password)
+
+    const [result] = await db.query(
+      `
+      INSERT INTO users (
+        username,
+        password_hash,
+        first_name,
+        middle_name,
+        last_name,
+        role_id,
+        organization_id,
+        status,
+        created_by,
+        updated_by
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+      `,
+      [
+        username,
+        passwordHash,
+        firstName,
+        middleName,
+        lastName,
+        roleId,
+        finalOrganizationId,
+        currentUser.id,
+        currentUser.id
+      ]
+    )
+
+    try {
+      await notifySuperadminsOfSystemAdminAction(db, {
+        actorUserId: currentUser.id,
+        actorRole: currentUser.role_name,
+        eventType: 'user_created',
+        title: 'User account created',
+        message: `System Administrator created the user account “${username}”.`
+      })
+    } catch (notificationError) {
+      console.error('Failed to create user administration notification:', notificationError)
+    }
+
+    return {
+      success: true,
+      message: 'User created successfully.',
+      userId: result.insertId
+    }
+  } catch (error) {
+    if (
+      error?.statusCode &&
+      error?.statusCode !== 500
+    ) {
+      throw error
+    }
+
+    if (error.code === 'ER_DUP_ENTRY') {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'Username already exists.'
+      })
+    }
+
+    console.error('User creation error:', error)
+
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Failed to create user.'
+    })
+  }
+})
