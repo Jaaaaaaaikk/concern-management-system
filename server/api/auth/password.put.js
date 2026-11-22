@@ -5,13 +5,6 @@ import { requireAuth } from '../../utils/require-auth.js'
 export default defineEventHandler(async (event) => {
   const currentUser = await requireAuth(event)
 
-  if (!['concern_handler', 'system_monitor', 'requestor'].includes(currentUser.role_name)) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Password changes are not available for this role. Please use Manage Users.'
-    })
-  }
-
   const body = await readBody(event)
   const currentPassword = body?.current_password
   const newPassword = body?.new_password

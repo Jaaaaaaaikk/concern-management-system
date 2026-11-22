@@ -2317,25 +2317,16 @@ async function updateConcernStatus(confirmed = false) {
  */
 
 watch(
-    () => props.show,
-    (visible) => {
-        if (visible) {
+    [
+        () => props.show,
+        () => props.concernId
+    ],
+    ([visible, concernId]) => {
+        if (visible && concernId) {
             loadConcernDetails()
         }
-    }
-)
-
-watch(
-    () => props.concernId,
-    (newId, oldId) => {
-        if (
-            props.show &&
-            newId &&
-            newId !== oldId
-        ) {
-            loadConcernDetails()
-        }
-    }
+    },
+    { immediate: true }
 )
 
 onMounted(() => {

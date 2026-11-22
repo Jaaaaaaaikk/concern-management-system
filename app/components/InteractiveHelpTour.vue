@@ -10,6 +10,7 @@ const emit = defineEmits(['update:active'])
 const route = useRoute()
 const tourCard = ref(null)
 const targetRect = ref(null)
+const arrowTargetRect = ref(null)
 const cardPosition = ref({ left: 16, top: 16, width: 360 })
 const stepIndex = ref(0)
 const targetMissing = ref(false)
@@ -26,25 +27,34 @@ const progress = computed(() => tourSteps.value.length
 const arrowPath = computed(() => {
     if (!targetRect.value || !tourCard.value) return ''
 
-    const targetX = targetRect.value.left + targetRect.value.width / 2
-    const targetY = targetRect.value.top + targetRect.value.height / 2
+    const arrowTarget = arrowTargetRect.value || targetRect.value
+    const targetCenterX = arrowTarget.left + arrowTarget.width / 2
+    const targetCenterY = arrowTarget.top + arrowTarget.height / 2
     const card = cardPosition.value
     const cardCenterX = card.left + card.width / 2
     const cardCenterY = card.top + (tourCard.value.offsetHeight || 0) / 2
 
     if (window.innerWidth < 640) {
         const cardTop = card.top
-        const targetBelowCard = targetY > cardTop
-        const anchorX = Math.min(Math.max(targetX, card.left + 28), card.left + card.width - 28)
+        const targetBelowCard = targetCenterY > cardTop
+        const anchorX = Math.min(Math.max(targetCenterX, card.left + 28), card.left + card.width - 28)
         const anchorY = targetBelowCard ? cardTop + 4 : card.top + (tourCard.value.offsetHeight || 0) - 4
-        const bendY = (targetY + anchorY) / 2
-        return `M ${anchorX} ${anchorY} Q ${anchorX} ${bendY} ${targetX} ${targetY}`
+        const bendY = (targetCenterY + anchorY) / 2
+        return `M ${anchorX} ${anchorY} Q ${anchorX} ${bendY} ${targetCenterX} ${targetCenterY}`
     }
 
-    const anchorX = cardCenterX > targetX ? card.left : card.left + card.width
+    const cardIsLeftOfTarget = cardCenterX < targetCenterX
+    const anchorX = cardIsLeftOfTarget ? card.left + card.width : card.left
     const anchorY = cardCenterY
-    const bendX = (targetX + anchorX) / 2
-    return `M ${anchorX} ${anchorY} C ${bendX} ${anchorY}, ${bendX} ${targetY}, ${targetX} ${targetY}`
+    const targetEdgeX = cardIsLeftOfTarget
+        ? arrowTarget.left
+        : arrowTarget.left + arrowTarget.width
+    const targetEdgeY = Math.min(
+        arrowTarget.top + arrowTarget.height - 8,
+        Math.max(arrowTarget.top + 8, anchorY)
+    )
+    const bendX = (targetEdgeX + anchorX) / 2
+    return `M ${anchorX} ${anchorY} C ${bendX} ${anchorY}, ${bendX} ${targetEdgeY}, ${targetEdgeX} ${targetEdgeY}`
 })
 
 function visibleTarget(selector) {
@@ -81,6 +91,7 @@ function updateGeometry() {
     }
     if (!target) {
         targetRect.value = null
+        arrowTargetRect.value = null
         targetMissing.value = true
         const width = Math.min(380, window.innerWidth - 32)
         cardPosition.value = {
@@ -93,6 +104,12 @@ function updateGeometry() {
 
     targetMissing.value = false
     const rect = target.getBoundingClientRect()
+    arrowTargetRect.value = {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+    }
     const padding = 8
     const left = Math.max(8, rect.left - padding)
     const top = Math.max(8, rect.top - padding)
@@ -158,6 +175,7 @@ async function goToStep(index) {
     isBusy.value = true
     stepIndex.value = index
     targetRect.value = null
+    arrowTargetRect.value = null
     targetMissing.value = false
     waitForActionTarget.value = false
 
@@ -202,6 +220,7 @@ function closeTour() {
     window.clearTimeout(retryTimer)
     waitForActionTarget.value = false
     targetRect.value = null
+    arrowTargetRect.value = null
     emit('update:active', false)
 }
 

@@ -180,6 +180,17 @@ const guideSteps = computed(() => {
     }
 
     steps.push({
+        title: 'Stay updated with notifications',
+        descriptionStart: 'Use the ',
+        emphasis: 'notification bell',
+        descriptionEnd: ' to see unread concern updates. Select an alert to open its concern, mark notifications as read individually or all at once, and load older alerts when needed.',
+        art: 'concerns',
+        tip: 'Only alerts for concerns or system changes relevant to your account appear in your bell. Read notifications older than 90 days are cleaned up automatically.',
+        to: '/dashboard',
+        actionLabel: 'Go to Dashboard'
+    })
+
+    steps.push({
         title: 'Update your account and profile',
         descriptionStart: 'Open your account menu to ',
         emphasis: 'change your password or profile photo',
@@ -239,6 +250,9 @@ const guideSteps = computed(() => {
         } else if (title === 'Review and revoke sessions') {
             tourTarget = '[data-tour="login-history-sessions"]'
             tourRoute = '/login-history'
+        } else if (title === 'Stay updated with notifications') {
+            tourTarget = '[data-tour="notification-bell"]'
+            tourRoute = '/dashboard'
         } else if (title === 'Update your account and profile') {
             tourTarget = '[data-tour="profile-menu-item"], [data-tour="profile-menu-mobile"]'
             tourRoute = '/dashboard'
@@ -352,7 +366,7 @@ watch(isHelpAvailable, (available) => {
         <button
             v-if="isHelpAvailable"
             type="button"
-            class="help-guide-launcher fixed bottom-5 right-5 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-transparent bg-blue-950 p-0 text-sm font-semibold text-white shadow-xl shadow-blue-950/25 transition duration-200 hover:-translate-y-1 hover:bg-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-300/70 sm:bottom-7 sm:right-7 sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-3"
+            class="help-guide-launcher fixed bottom-5 right-5 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-transparent bg-blue-950 p-0 text-sm font-semibold text-white shadow-xl shadow-blue-950/25 transition duration-200 hover:-translate-y-1 hover:bg-blue-900 focus:outline-none focus:ring-4 focus:ring-blue-300/70 sm:bottom-7 sm:right-7 lg:h-auto lg:w-auto lg:gap-2 lg:px-4 lg:py-3"
             aria-label="Open help guide"
             @click="openGuide"
         >
@@ -361,7 +375,7 @@ watch(isHelpAvailable, (available) => {
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="relative z-10 h-5 w-5" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9a2.25 2.25 0 1 1 3.9 1.54c-.9.92-1.65 1.36-1.65 2.71m.01 3h-.02M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
             </svg>
-            <span class="relative z-10 hidden sm:inline">Help guide</span>
+            <span class="relative z-10 hidden lg:inline">Help guide</span>
         </button>
 
         <Teleport to="body">

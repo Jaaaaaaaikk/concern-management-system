@@ -25,6 +25,8 @@ const actionTips = {
     'send comment': 'Share this message with people who can access the concern.',
     'add images': 'Attach additional images to this concern.',
     'view profile': 'Review your account and organization details.',
+    'open account menu': 'Open your account menu.',
+    'close account menu': 'Close your account menu.',
     'close guide': 'Close the help guide.',
     'close modal': 'Close this window without saving.',
     'close image viewer': 'Close the image preview.',

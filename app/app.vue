@@ -117,7 +117,7 @@ onBeforeUnmount(() => {
 
 <template>
   <NuxtPage />
-  <ConcernNotificationCenter :current-user="currentUser" />
+  <ConcernNotificationCenter :current-user="currentUser" placement="desktop" />
   <HelpGuideModal :current-user="currentUser" />
   <Transition
     enter-active-class="transition duration-200 ease-out"

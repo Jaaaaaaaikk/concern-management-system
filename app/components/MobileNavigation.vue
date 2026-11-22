@@ -121,7 +121,7 @@ onMounted(async () => {
                         v-if="isProfileExpanded"
                         data-tour="profile-menu-mobile"
                         id="mobile-profile-details"
-                        class="absolute right-0 top-full z-50 mt-2 w-44 max-w-[calc(100vw-1.5rem)] origin-top-right rounded-xl border border-slate-200 bg-white p-2 shadow-xl sm:w-60"
+                        class="absolute right-0 top-full z-50 mt-2 w-52 max-w-[calc(100vw-1.5rem)] origin-top-right rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
                     >
                         <UserProfileControl
                             :current-user="currentUser"

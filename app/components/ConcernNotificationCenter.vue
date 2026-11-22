@@ -5,40 +5,96 @@ const props = defineProps({
     currentUser: {
         type: Object,
         default: null
+    },
+    placement: {
+        type: String,
+        default: 'mobile',
+        validator: (value) => ['mobile', 'desktop'].includes(value)
     }
 })
 
+const emit = defineEmits(['unread-count'])
+
 const isOpen = ref(false)
 const isLoading = ref(false)
+const isLoadingMore = ref(false)
 const isMarkingAllRead = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
+const hasMoreNotifications = ref(false)
 const loadFailed = ref(false)
+const hasNewNotification = ref(false)
+const isPlacementActive = ref(false)
 const pendingNotificationIds = ref(new Set())
+const notificationRoot = ref(null)
 let refreshTimer = null
+let animationTimer = null
 let requestInProgress = false
 
-async function loadNotifications() {
-    if (!props.currentUser?.id || requestInProgress) {
+async function loadNotifications({ older = false } = {}) {
+    if (!props.currentUser?.id || !isPlacementActive.value || requestInProgress) {
         return
     }
 
     requestInProgress = true
-    isLoading.value = true
+    if (older) {
+        isLoadingMore.value = true
+    } else {
+        isLoading.value = true
+    }
 
     try {
+        const lastNotification = notifications.value.at(-1)
         const response = await $fetch('/api/notifications', {
-            cache: 'no-store'
+            cache: 'no-store',
+            query: older && lastNotification
+                ? { beforeId: lastNotification.id }
+                : undefined
         })
 
-        notifications.value = response.notifications || []
-        unreadCount.value = Number(response.unreadCount || 0)
+        const nextUnreadCount = Number(response.unreadCount || 0)
+        if (nextUnreadCount > unreadCount.value) {
+            hasNewNotification.value = true
+            window.clearTimeout(animationTimer)
+            animationTimer = window.setTimeout(() => {
+                hasNewNotification.value = false
+                animationTimer = null
+            }, 1400)
+        }
+
+        const receivedNotifications = response.notifications || []
+        if (older) {
+            const existingIds = new Set(notifications.value.map((item) => String(item.id)))
+            notifications.value = [
+                ...notifications.value,
+                ...receivedNotifications.filter((item) => !existingIds.has(String(item.id)))
+            ]
+            hasMoreNotifications.value = Boolean(response.hasMore)
+        } else {
+            const latestIds = new Set(receivedNotifications.map((item) => String(item.id)))
+            const loadedOlderNotifications = notifications.value.filter(
+                (item) => !latestIds.has(String(item.id))
+            )
+            notifications.value = [...receivedNotifications, ...loadedOlderNotifications]
+            hasMoreNotifications.value = loadedOlderNotifications.length > 0
+                ? hasMoreNotifications.value
+                : Boolean(response.hasMore)
+        }
+        unreadCount.value = nextUnreadCount
+        emit('unread-count', nextUnreadCount)
         loadFailed.value = false
     } catch {
         loadFailed.value = true
     } finally {
         isLoading.value = false
+        isLoadingMore.value = false
         requestInProgress = false
+    }
+}
+
+function loadOlderNotifications() {
+    if (hasMoreNotifications.value && notifications.value.length > 0) {
+        loadNotifications({ older: true })
     }
 }
 
@@ -66,6 +122,7 @@ async function markNotificationRead(notification) {
         })
         notification.read_at = new Date().toISOString()
         unreadCount.value = Math.max(0, unreadCount.value - 1)
+        emit('unread-count', unreadCount.value)
     } catch {
         // Refresh will reconcile the unread state if the request failed.
     } finally {
@@ -102,6 +159,7 @@ async function markAllAsRead() {
             read_at: notification.read_at || readAt
         }))
         unreadCount.value = 0
+        emit('unread-count', 0)
     } catch {
         await loadNotifications()
     } finally {
@@ -138,11 +196,29 @@ function handleWindowFocus() {
     loadNotifications()
 }
 
+function handleOutsidePointerDown(event) {
+    if (!notificationRoot.value?.contains(event.target)) {
+        isOpen.value = false
+    }
+}
+
+function updatePlacementState() {
+    isPlacementActive.value = true
+}
+
+watch(isPlacementActive, (active) => {
+    if (active && props.currentUser?.id) {
+        loadNotifications()
+    }
+})
+
 watch(
     () => props.currentUser?.id,
     (userId) => {
         notifications.value = []
         unreadCount.value = 0
+        hasMoreNotifications.value = false
+        emit('unread-count', 0)
         isOpen.value = false
         loadFailed.value = false
 
@@ -154,40 +230,43 @@ watch(
 )
 
 onMounted(() => {
-    if (props.currentUser?.id) {
-        loadNotifications()
-    }
-
-    refreshTimer = window.setInterval(loadNotifications, 30000)
+    updatePlacementState()
+    refreshTimer = window.setInterval(loadNotifications, 10000)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleWindowFocus)
+    document.addEventListener('pointerdown', handleOutsidePointerDown)
 })
 
 onBeforeUnmount(() => {
     if (refreshTimer) {
         window.clearInterval(refreshTimer)
     }
-
+    if (animationTimer) {
+        window.clearTimeout(animationTimer)
+    }
     document.removeEventListener('visibilitychange', handleVisibilityChange)
     window.removeEventListener('focus', handleWindowFocus)
+    document.removeEventListener('pointerdown', handleOutsidePointerDown)
 })
 </script>
 
 <template>
-    <div v-if="currentUser" class="fixed bottom-5 right-5 z-180">
+    <div v-if="currentUser" ref="notificationRoot" class="fixed bottom-5 right-20 z-40 shrink-0 sm:bottom-7 sm:right-24 lg:right-44" @keydown.esc="isOpen = false">
         <button
             type="button"
-            class="relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border border-blue-200 bg-white text-blue-900 shadow-lg shadow-blue-950/15 transition hover:-translate-y-0.5 hover:bg-blue-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2"
+            data-tour="notification-bell"
+            class="relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border border-teal-700 bg-teal-600 text-white shadow-lg shadow-teal-950/20 transition hover:-translate-y-0.5 hover:border-teal-500 hover:bg-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
             :aria-expanded="isOpen"
             aria-controls="in-app-notifications-panel"
-            aria-label="Notifications"
+            :aria-label="`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`"
             @click="toggleNotifications"
         >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-6 w-6" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="notification-bell h-6 w-6 shrink-0" :class="{ 'notification-bell--ring': hasNewNotification }" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 18.75a2.25 2.25 0 0 1-4.5 0m9-2.25H5.25c1.125-1.125 1.5-2.625 1.5-4.5v-1.125a5.25 5.25 0 1 1 10.5 0V12c0 1.875.375 3.375 1.5 4.5Z" />
             </svg>
-            <span v-if="unreadCount > 0" class="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
-                {{ unreadCount > 99 ? '99+' : unreadCount }}
+            <span v-if="unreadCount > 0" class="absolute -right-1.5 -top-1.5 z-10 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-blue-950 px-1 text-[10px] font-extrabold leading-none text-white shadow-md shadow-blue-950/25">
+                <span class="relative z-10">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+                <span v-if="hasNewNotification" class="notification-badge-pulse pointer-events-none absolute inset-0 rounded-full bg-teal-400" aria-hidden="true"></span>
             </span>
         </button>
 
@@ -202,7 +281,8 @@ onBeforeUnmount(() => {
             <section
                 v-if="isOpen"
                 id="in-app-notifications-panel"
-                class="absolute bottom-14 right-0 flex max-h-[min(34rem,calc(100dvh-7rem))] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20"
+                class="absolute right-0 z-50 flex max-h-[min(34rem,calc(100dvh-7rem))] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20"
+                :class="placement === 'desktop' ? 'bottom-full mb-2' : 'top-full mt-2'"
                 aria-label="Notifications"
             >
                 <header class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
@@ -261,7 +341,51 @@ onBeforeUnmount(() => {
                         </li>
                     </ul>
                 </div>
+                <footer v-if="hasMoreNotifications" class="border-t border-slate-100 p-2">
+                    <button
+                        type="button"
+                        :disabled="isLoadingMore"
+                        class="w-full cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold text-blue-800 transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60"
+                        @click="loadOlderNotifications"
+                    >
+                        {{ isLoadingMore ? 'Loading older notifications…' : 'Load older notifications' }}
+                    </button>
+                </footer>
             </section>
         </Transition>
     </div>
 </template>
+
+<style scoped>
+.notification-bell--ring {
+    transform-origin: 50% 10%;
+    animation: notification-bell-ring 0.7s ease-in-out 2;
+}
+
+.notification-badge-pulse::after {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: inherit;
+    content: '';
+    animation: notification-badge-pulse 0.9s ease-out 2;
+}
+
+@keyframes notification-bell-ring {
+    0%, 100% { transform: rotate(0); }
+    15%, 45%, 75% { transform: rotate(13deg); }
+    30%, 60%, 90% { transform: rotate(-13deg); }
+}
+
+@keyframes notification-badge-pulse {
+    0% { opacity: 0.6; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.8); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .notification-bell--ring,
+    .notification-badge-pulse::after {
+        animation: none;
+    }
+}
+</style>

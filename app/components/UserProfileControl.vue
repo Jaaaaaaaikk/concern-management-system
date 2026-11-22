@@ -47,9 +47,7 @@ const displayName = computed(() => {
     return name || props.currentUser?.username || 'Signed-in user'
 })
 
-const canChangePassword = computed(() =>
-    ['concern_handler', 'system_monitor', 'requestor'].includes(props.currentUser?.role_name)
-)
+const canChangePassword = computed(() => Boolean(props.currentUser?.id))
 
 async function updatePhoto(file, remove = false) {
     if (uploading.value) {
@@ -188,7 +186,7 @@ async function changePassword() {
             <button v-if="currentUser?.profile_photo" type="button" :disabled="uploading" class="secondary-hover-button flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50" @click="showRemovePhotoConfirmation = true">
                 Remove photo
             </button>
-            <button type="button" class="mt-1 flex min-h-9 w-full items-center gap-2 border-t border-slate-100 px-2 pt-1 text-left text-xs font-semibold text-red-700 transition hover:bg-red-50 hover:text-red-900" @click="emit('logout')">
+            <button type="button" class="mt-1 flex min-h-9 w-full cursor-pointer items-center gap-2 border-t border-slate-100 px-2 pt-1 text-left text-xs font-semibold text-red-700 transition hover:bg-red-50 hover:text-red-900" @click="emit('logout')">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-3H9m0 0 3-3m-3 3 3 3" />
                 </svg>
@@ -209,8 +207,9 @@ async function changePassword() {
 
     <div
         v-else-if="currentUser"
-        class="profile-control-frame relative isolate min-w-0 overflow-hidden rounded-xl p-0.5"
+        class="flex min-w-0 items-center gap-2"
     >
+        <div class="profile-control-frame relative isolate min-w-0 flex-1 overflow-hidden rounded-xl p-0.5">
         <span class="profile-control-edge" aria-hidden="true"></span>
         <div class="relative z-10 min-w-0 overflow-hidden rounded-[10px] bg-blue-950 shadow-2xl shadow-black/45">
         <button
@@ -218,6 +217,7 @@ async function changePassword() {
             data-tour="profile-menu-toggle"
             class="group flex w-full cursor-pointer items-center gap-2.5 bg-linear-to-r from-blue-800 via-blue-900 to-blue-950 px-3 py-3 text-left transition hover:brightness-110 focus:outline-none sm:px-3.5 sm:py-3"
             :aria-expanded="isExpanded"
+            :aria-label="isExpanded ? 'Close account menu' : 'Open account menu'"
             @click="isExpanded = !isExpanded"
         >
             <span class="relative shrink-0 rounded-full group-focus-visible:ring-2 group-focus-visible:ring-blue-300 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-blue-900">
@@ -250,7 +250,7 @@ async function changePassword() {
             leave-from-class="translate-y-0 opacity-100"
             leave-to-class="-translate-y-1 opacity-0"
         >
-            <div v-if="isExpanded" class="space-y-0.5 bg-blue-950 px-2 py-2 sm:px-2.5 sm:py-2.5">
+            <div v-show="isExpanded" class="space-y-0.5 bg-blue-950 px-2 py-2 sm:px-2.5 sm:py-2.5">
                 <button
                     type="button"
                     data-tour="profile-menu-item"
@@ -351,21 +351,23 @@ async function changePassword() {
             @change="handlePhotoChange"
         />
 
-        <ProfileActionsModal
-            :current-user="currentUser"
-            :show-profile="showProfileDetails"
-            :show-password="showChangePassword"
-            :show-remove-photo="showRemovePhotoConfirmation"
-            :password-form="passwordForm"
-            :changing-password="changingPassword"
-            :uploading="uploading"
-            @close-profile="showProfileDetails = false"
-            @submit-password="changePassword"
-            @cancel-password="closePasswordForm"
-            @confirm-remove-photo="confirmPhotoRemoval"
-            @cancel-remove-photo="showRemovePhotoConfirmation = false"
-        />
+        </div>
     </div>
+
+    <ProfileActionsModal
+        :current-user="currentUser"
+        :show-profile="showProfileDetails"
+        :show-password="showChangePassword"
+        :show-remove-photo="showRemovePhotoConfirmation"
+        :password-form="passwordForm"
+        :changing-password="changingPassword"
+        :uploading="uploading"
+        @close-profile="showProfileDetails = false"
+        @submit-password="changePassword"
+        @cancel-password="closePasswordForm"
+        @confirm-remove-photo="confirmPhotoRemoval"
+        @cancel-remove-photo="showRemovePhotoConfirmation = false"
+    />
 </template>
 
 <style scoped>
