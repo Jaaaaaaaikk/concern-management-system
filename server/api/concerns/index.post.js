@@ -410,7 +410,7 @@ export default defineEventHandler(async (event) => {
       actorUserId: currentUser.id,
       eventType: "concern_created",
       title: "New concern created",
-      message: `${formatActorDisplayName(currentUser)} submitted ${concernNumber}; it is available to the involved organizations.`
+      message: `${formatActorDisplayName(currentUser)} submitted ${concernNumber} (${priority.toUpperCase()} priority), assigned to ${assignedOrganization.name}.`
     });
 
     /*

@@ -401,9 +401,7 @@ const statusColors = {
 
     resolved: '#22c55e',
 
-    closed: '#64748b',
-
-    cancelled: '#ef4444'
+    closed: '#64748b'
 
 }
 
@@ -484,9 +482,7 @@ function renderStatusChart() {
 
         'resolved',
 
-        'closed',
-
-        'cancelled'
+        'closed'
 
     ]
 
@@ -1659,7 +1655,7 @@ onMounted(() => {
 
                     <!-- Summary Cards -->
 
-                    <div data-scroll-reveal class="grid grid-cols-3 gap-2 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-6">
+                    <div data-scroll-reveal class="grid grid-cols-3 gap-2 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-7">
 
                         <!-- Total -->
 
@@ -1738,6 +1734,34 @@ onMounted(() => {
 
                             <p class="mt-2 hidden text-xs font-medium text-blue-700 transition group-hover:text-blue-900 sm:block">
                                 View in-progress concerns
+                            </p>
+                        </NuxtLink>
+
+
+                        <!-- On Hold -->
+
+                        <NuxtLink :to="{
+                            path: '/concerns',
+                            query: {
+                                status: 'on_hold'
+                            }
+                        }"
+                            class="group rounded-xl border border-orange-300 bg-orange-100/70 p-2 shadow-md transition duration-200 hover:-translate-y-0.5 hover:border-orange-400 hover:bg-orange-100 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-300 sm:p-5">
+                            <div class="flex items-start justify-between gap-1 sm:gap-3">
+                                <p class="text-[11px] font-semibold leading-tight text-orange-900 sm:text-sm">On Hold</p>
+                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-700 transition group-hover:bg-orange-200 sm:h-9 sm:w-9 sm:rounded-xl" aria-hidden="true">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-3.5 w-3.5 sm:h-5 sm:w-5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75v10.5m7.5-10.5v10.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                    </svg>
+                                </span>
+                            </div>
+
+                            <p class="mt-1 text-xl font-bold text-orange-700 sm:mt-2 sm:text-3xl">
+                                {{ getStatusTotal('on_hold') }}
+                            </p>
+
+                            <p class="mt-2 hidden text-xs font-medium text-orange-800 transition group-hover:text-orange-950 sm:block">
+                                View on-hold concerns
                             </p>
                         </NuxtLink>
 
@@ -1891,9 +1915,9 @@ onMounted(() => {
 
                             <!-- Status Legend -->
 
-                            <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            <div class="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
 
-                                <div class="flex items-center gap-2">
+                                <div class="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
 
                                     <span class="h-3 w-3 rounded-full bg-yellow-400"></span>
 
@@ -1901,14 +1925,14 @@ onMounted(() => {
                                         Pending
                                     </span>
 
-                                    <span class="ml-auto font-semibold text-slate-800">
+                                    <span class="ml-auto min-w-9 shrink-0 rounded-md bg-white px-2 py-1 text-right text-sm font-bold text-slate-800">
                                         {{ getStatusTotal('pending') }}
                                     </span>
 
                                 </div>
 
 
-                                <div class="flex items-center gap-2">
+                                <div class="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
 
                                     <span class="h-3 w-3 rounded-full bg-blue-500"></span>
 
@@ -1916,14 +1940,14 @@ onMounted(() => {
                                         In Progress
                                     </span>
 
-                                    <span class="ml-auto font-semibold text-slate-800">
+                                    <span class="ml-auto min-w-9 shrink-0 rounded-md bg-white px-2 py-1 text-right text-sm font-bold text-slate-800">
                                         {{ getStatusTotal('in_progress') }}
                                     </span>
 
                                 </div>
 
 
-                                <div class="flex items-center gap-2">
+                                <div class="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
 
                                     <span class="h-3 w-3 rounded-full bg-orange-400"></span>
 
@@ -1931,14 +1955,14 @@ onMounted(() => {
                                         On Hold
                                     </span>
 
-                                    <span class="ml-auto font-semibold text-slate-800">
+                                    <span class="ml-auto min-w-9 shrink-0 rounded-md bg-white px-2 py-1 text-right text-sm font-bold text-slate-800">
                                         {{ getStatusTotal('on_hold') }}
                                     </span>
 
                                 </div>
 
 
-                                <div class="flex items-center gap-2">
+                                <div class="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
 
                                     <span class="h-3 w-3 rounded-full bg-green-500"></span>
 
@@ -1946,14 +1970,14 @@ onMounted(() => {
                                         Resolved
                                     </span>
 
-                                    <span class="ml-auto font-semibold text-slate-800">
+                                    <span class="ml-auto min-w-9 shrink-0 rounded-md bg-white px-2 py-1 text-right text-sm font-bold text-slate-800">
                                         {{ getStatusTotal('resolved') }}
                                     </span>
 
                                 </div>
 
 
-                                <div class="flex items-center gap-2">
+                                <div class="flex min-w-0 items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
 
                                     <span class="h-3 w-3 rounded-full bg-slate-500"></span>
 
@@ -1961,26 +1985,12 @@ onMounted(() => {
                                         Closed
                                     </span>
 
-                                    <span class="ml-auto font-semibold text-slate-800">
+                                    <span class="ml-auto min-w-9 shrink-0 rounded-md bg-white px-2 py-1 text-right text-sm font-bold text-slate-800">
                                         {{ getStatusTotal('closed') }}
                                     </span>
 
                                 </div>
 
-
-                                <div class="flex items-center gap-2">
-
-                                    <span class="h-3 w-3 rounded-full bg-red-500"></span>
-
-                                    <span class="text-sm text-slate-600">
-                                        Cancelled
-                                    </span>
-
-                                    <span class="ml-auto font-semibold text-slate-800">
-                                        {{ getStatusTotal('cancelled') }}
-                                    </span>
-
-                                </div>
 
                             </div>
 

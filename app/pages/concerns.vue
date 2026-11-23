@@ -1349,27 +1349,6 @@ onUnmounted(() => {
     }
 })
 
-function shouldHighlightPendingConcern(concern) {
-    if (
-        !concern ||
-        concern.deleted_at ||
-        trashView.value ||
-        concern.status !== 'pending'
-    ) {
-        return false
-    }
-
-    const roleName = currentUser.value?.role_name
-
-    if (['superadmin', 'system_admin', 'system_monitor'].includes(roleName)) {
-        return true
-    }
-
-    return ['concern_handler', 'requestor'].includes(roleName) &&
-        currentUser.value?.organization_id != null &&
-        Number(currentUser.value.organization_id) === Number(concern.assigned_organization_id)
-}
-
 function concernRowHighlightState(concern) {
     if (!concern || concern.deleted_at || trashView.value) {
         return ''
@@ -1380,7 +1359,7 @@ function concernRowHighlightState(concern) {
     }
 
     if (concern.status === 'pending') {
-        return shouldHighlightPendingConcern(concern) ? 'pending' : ''
+        return 'pending'
     }
 
     if (concern.status === 'in_progress') {
@@ -1427,8 +1406,8 @@ function concernRowHighlightClasses(concern, alternate = false) {
 
     if (state === 'on_hold') {
         return alternate
-            ? 'bg-orange-50/70 hover:bg-orange-100/80'
-            : 'bg-orange-50 hover:bg-orange-100/80'
+            ? 'bg-orange-100/80 hover:bg-orange-200/80'
+            : 'bg-orange-100/60 hover:bg-orange-200/80'
     }
 
     return alternate
@@ -2162,7 +2141,7 @@ function concernRowHighlightClasses(concern, alternate = false) {
                                             : concernRowHighlightState(concern) === 'resolved'
                                                 ? 'border-emerald-300 bg-emerald-50 hover:border-emerald-400 hover:bg-emerald-100'
                                                 : concernRowHighlightState(concern) === 'on_hold'
-                                                    ? 'border-orange-300 bg-orange-50 hover:border-orange-400 hover:bg-orange-100'
+                                                    ? 'border-orange-300 bg-orange-100 hover:border-orange-400 hover:bg-orange-200'
                                                     : index % 2 === 0
                                                         ? 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
                                                         : 'border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/70'"

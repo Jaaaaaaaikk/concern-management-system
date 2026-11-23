@@ -3,8 +3,8 @@ const GLOBAL_ROLES = ['superadmin', 'system_admin', 'system_monitor']
 
 /**
  * Creates notifications for active members of the concern's creator and
- * assigned organizations. Global-role users are notified only if they have
- * already participated in the concern conversation.
+ * assigned organizations. Active system monitors also receive new-concern
+ * notifications; other global-role users are notified after participating.
  */
 export async function notifyConcernParticipants(executor, {
   concernId,
@@ -58,9 +58,13 @@ export async function notifyConcernParticipants(executor, {
                 AND participant_comment.user_id = recipient.id
             )
           )
+          OR (
+            recipient_role.name = 'system_monitor'
+            AND ? = 'concern_created'
+          )
         )
-    `,
-      [eventType, actorUserId, title, message, actorUserId, concernId]
+      `,
+      [eventType, actorUserId, title, message, actorUserId, concernId, eventType]
     )
   } catch (error) {
     console.error('Failed to create concern notifications:', error)
@@ -114,10 +118,34 @@ export const GLOBAL_NOTIFICATION_ROLES = GLOBAL_ROLES
 export const ORGANIZATION_NOTIFICATION_ROLES = ORGANIZATION_ROLES
 
 export function formatActorDisplayName(actor = {}) {
-  const fullName = [actor.first_name, actor.middle_name, actor.last_name]
+  const name = [actor.first_name, actor.last_name]
     .map(value => String(value || '').trim())
     .filter(Boolean)
-    .join(' ')
+    .join(' ') || String(actor.username || '').trim()
+  const roleLabels = {
+    system_admin: 'System Administrator',
+    system_monitor: 'System Monitor',
+    concern_handler: 'Concern Handler',
+    requestor: 'Requestor'
+  }
+  const roleName = String(actor.role_name || '').toLowerCase()
 
-  return fullName || String(actor.username || actor.name || 'A user').trim()
+  if (roleName === 'superadmin') {
+    return 'Superadmin'
+  }
+
+  if (['concern_handler', 'requestor'].includes(roleName)) {
+    const organizationName = String(actor.organization_name || '').trim()
+    const identity = name || roleLabels[roleName]
+    return organizationName
+      ? `${identity} — ${organizationName}`
+      : `${identity} (${roleLabels[roleName]})`
+  }
+
+  const roleLabel = roleLabels[roleName]
+  if (roleLabel) {
+    return name ? `${name} (${roleLabel})` : roleLabel
+  }
+
+  return name || String(actor.name || 'A user').trim()
 }

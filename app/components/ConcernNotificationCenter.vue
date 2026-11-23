@@ -302,8 +302,11 @@ onBeforeUnmount(() => {
                         >
                             {{ isMarkingAllRead ? 'Updating…' : 'Mark all read' }}
                         </button>
-                        <button type="button" class="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" aria-label="Close notifications" @click="isOpen = false">
-                            <span aria-hidden="true" class="text-xl leading-none">×</span>
+                        <button type="button" class="group relative flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100" aria-label="Close notifications" @click="isOpen = false">
+                            <span aria-hidden="true" class="text-xl leading-none transition-all duration-200 group-hover:-translate-x-1 group-hover:opacity-0">×</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true" class="absolute h-4 w-4 translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.5 5.5 8 12l6.5 6.5M8.5 12H20" />
+                            </svg>
                         </button>
                     </div>
                 </header>
