@@ -2,11 +2,6 @@ import db from '../../utils/db.js'
 
 import { requireRole, SYSTEM_MANAGEMENT_ROLES } from '../../utils/require-auth.js'
 import {
-    assertConcernTypesExist,
-    normalizeConcernTypeIds,
-    replaceOrganizationConcernTypes
-} from '../../utils/organization-concern-types.js'
-import {
     formatActorDisplayName,
     notifySuperadminsOfSystemAdminAction
 } from '../../utils/notifications.js'
@@ -40,18 +35,12 @@ export default defineEventHandler(async (event) => {
         body?.address?.trim() || null
 
     const allowedOrganizationTypes = ['bpo', 'tenant', 'admin_facilities']
-    const hasConcernTypeAssignments = Object.hasOwn(body || {}, 'concern_type_ids')
-
-    if (hasConcernTypeAssignments && currentUser.role_name !== 'superadmin') {
+    if (Object.hasOwn(body || {}, 'concern_type_ids')) {
         throw createError({
-            statusCode: 403,
-            statusMessage: 'Only superadmins can assign concern types to organizations.'
+            statusCode: 400,
+            statusMessage: 'Assign one receiving organization from the concern category settings.'
         })
     }
-
-    const concernTypeIds = hasConcernTypeAssignments
-        ? normalizeConcernTypeIds(body.concern_type_ids)
-        : []
 
     if (!name) {
 
@@ -117,15 +106,6 @@ export default defineEventHandler(async (event) => {
                 organizationId
             ]
         )
-
-        if (hasConcernTypeAssignments) {
-            await assertConcernTypesExist(connection, concernTypeIds)
-            await replaceOrganizationConcernTypes(
-                connection,
-                organizationId,
-                concernTypeIds
-            )
-        }
 
         await notifySuperadminsOfSystemAdminAction(connection, {
             actorUserId: currentUser.id,

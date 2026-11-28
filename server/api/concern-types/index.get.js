@@ -14,44 +14,63 @@ export default defineEventHandler(async (event) => {
 
   const [rows] = await db.query(`
     SELECT
-      id,
-      name,
-      description,
-      status,
-      created_at
-    FROM concern_types
-    WHERE (? = 1 OR status = 'active')
-    ORDER BY name ASC
+      category.id,
+      category.name,
+      category.description,
+      category.status,
+      category.created_at,
+      category.assigned_organization_id,
+      receiver.name AS assigned_organization_name,
+      receiver.status AS assigned_organization_status,
+      receiver.organization_type AS assigned_organization_type
+    FROM concern_types category
+    LEFT JOIN organizations receiver
+      ON receiver.id = category.assigned_organization_id
+     AND receiver.deleted_at IS NULL
+    WHERE (? = 1 OR category.status = 'active')
+    ORDER BY category.name ASC
   `, [includeInactive ? 1 : 0])
 
-  const [assignmentRows] = await db.query(`
+  const [legacyAssignmentRows] = await db.query(`
     SELECT
-      organization_concern_types.concern_type_id,
+      legacy_assignment.concern_type_id,
       organizations.id AS organization_id,
       organizations.name AS organization_name,
-      organizations.status AS organization_status
-    FROM organization_concern_types
+      organizations.status AS organization_status,
+      organizations.organization_type
+    FROM organization_concern_types legacy_assignment
+    INNER JOIN concern_types category
+      ON category.id = legacy_assignment.concern_type_id
+     AND category.assigned_organization_id IS NULL
     INNER JOIN organizations
-      ON organizations.id = organization_concern_types.organization_id
+      ON organizations.id = legacy_assignment.organization_id
     WHERE organizations.deleted_at IS NULL
     ORDER BY organizations.name ASC
   `)
 
-  const organizationsByConcernType = new Map()
+  const legacyOrganizationsByConcernType = new Map()
 
-  for (const assignment of assignmentRows) {
-    const assignedOrganizations = organizationsByConcernType.get(assignment.concern_type_id) || []
+  for (const assignment of legacyAssignmentRows) {
+    const assignedOrganizations = legacyOrganizationsByConcernType.get(assignment.concern_type_id) || []
     assignedOrganizations.push({
       id: assignment.organization_id,
       name: assignment.organization_name,
-      status: assignment.organization_status
+      status: assignment.organization_status,
+      organization_type: assignment.organization_type
     })
-    organizationsByConcernType.set(assignment.concern_type_id, assignedOrganizations)
+    legacyOrganizationsByConcernType.set(assignment.concern_type_id, assignedOrganizations)
   }
 
   const concernTypes = rows.map(concernType => ({
     ...concernType,
-    assigned_organizations: organizationsByConcernType.get(concernType.id) || []
+    assigned_organizations: concernType.assigned_organization_id && concernType.assigned_organization_name
+      ? [{
+          id: concernType.assigned_organization_id,
+          name: concernType.assigned_organization_name,
+          status: concernType.assigned_organization_status,
+          organization_type: concernType.assigned_organization_type
+        }]
+      : legacyOrganizationsByConcernType.get(concernType.id) || []
   }))
 
   return {

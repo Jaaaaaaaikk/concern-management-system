@@ -56,7 +56,7 @@ const guideSteps = computed(() => {
                 : `As a ${roleLabel.value}, you can view and comment on concerns, but you cannot create a request. `,
             emphasis: canCreateConcerns ? 'Create Concern' : 'View and comment',
             descriptionEnd: canCreateConcerns
-                ? ' and enter a clear title and description, choose a category and destination, then submit. BPO and Tenant organizations can route only to Admin Facilities; Admin Facilities can route to any other organization, not themselves.'
+                ? ' and enter a clear title and description, then choose a category. The category automatically selects its assigned receiving organization. BPO and Tenant organizations can route only to Admin Facilities; Admin Facilities can route to any other organization, not themselves.'
                 : isPrivilegedViewer
                     ? ' on concerns. Concern creation is reserved for Concern Handler and Requestor accounts.'
                     : ' on concerns. Ask your Concern Handler if a request needs to be created for you.',

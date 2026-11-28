@@ -374,7 +374,7 @@ export default defineEventHandler(async (event) => {
 
         FROM concern_status_history csh
 
-        INNER JOIN users u
+        LEFT JOIN users u
             ON u.id = csh.changed_by
 
         WHERE csh.concern_id = ?

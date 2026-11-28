@@ -152,10 +152,11 @@ export default defineEventHandler(async (event) => {
   const [concernTypeRows] = await db.query(
     `
             SELECT
-                id
-            FROM concern_types
-            WHERE id = ?
-              AND status = 'active'
+                ct.id,
+                ct.assigned_organization_id
+            FROM concern_types ct
+            WHERE ct.id = ?
+              AND ct.status = 'active'
             LIMIT 1
             `,
     [Number(concernTypeId)],
@@ -165,6 +166,16 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       statusMessage: "Invalid or inactive concern type.",
+    });
+  }
+
+  if (
+    concernTypeRows[0].assigned_organization_id == null ||
+    Number(concernTypeRows[0].assigned_organization_id) !== Number(assignedOrganizationId)
+  ) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "The selected category must have exactly one receiving organization, and the concern must be routed to it.",
     });
   }
 
@@ -238,24 +249,6 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const [assignmentRows] = await db.query(
-    `
-      SELECT 1
-      FROM organization_concern_types
-      WHERE organization_id = ?
-        AND concern_type_id = ?
-      LIMIT 1
-    `,
-    [Number(assignedOrganizationId), Number(concernTypeId)],
-  );
-
-  if (assignmentRows.length === 0) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "The selected organization is not assigned to handle this concern type.",
-    });
-  }
-
   /*
    * Generate concern number.
    *
@@ -308,6 +301,28 @@ export default defineEventHandler(async (event) => {
 
   try {
     await connection.beginTransaction();
+
+    const [lockedCategoryRows] = await connection.query(
+      `
+        SELECT id, status, assigned_organization_id
+        FROM concern_types
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [Number(concernTypeId)],
+    );
+
+    if (
+      lockedCategoryRows.length === 0 ||
+      lockedCategoryRows[0].status !== "active" ||
+      Number(lockedCategoryRows[0].assigned_organization_id) !== Number(assignedOrganizationId)
+    ) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: "This category's receiving organization changed. Refresh the form and select the category again.",
+      });
+    }
 
     /*
      * Create concern.

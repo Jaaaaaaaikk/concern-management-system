@@ -202,12 +202,15 @@ const emit = defineEmits([
             <div v-if="statusEvidenceRequired" class="mt-5 rounded-lg border border-green-200 bg-green-50 p-4">
                 <div class="mb-3">
                     <p class="text-sm font-semibold text-green-800">
-                        Resolution Evidence <span class="text-red-500">*</span>
+                        {{ creatorOrganizationAdmin && currentStatus === 'resolved' && selectedStatus === 'in_progress'
+                            ? 'Reopening Evidence'
+                            : 'Resolution Evidence' }}
+                        <span class="text-red-500">*</span>
                     </p>
                     <p class="mt-1 text-xs leading-5 text-green-700">
-                        Attach one or more images showing the completed work,
-                        repaired issue, or other evidence that the concern has
-                        been resolved.
+                        {{ creatorOrganizationAdmin && currentStatus === 'resolved' && selectedStatus === 'in_progress'
+                            ? 'Attach images proving that the work is incomplete or that the reported resolution does not match the actual condition.'
+                            : 'Attach one or more images showing the completed work, repaired issue, or other evidence that the concern has been resolved.' }}
                     </p>
                 </div>
 

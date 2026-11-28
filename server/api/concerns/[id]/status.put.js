@@ -468,6 +468,11 @@ export default defineEventHandler(async (event) => {
     concern.status === "in_progress" &&
     newStatus === "resolved";
 
+  const reopeningConcern =
+    isCreatorOrganizationAdmin &&
+    concern.status === "resolved" &&
+    newStatus === "in_progress";
+
   if (newStatus === "resolved") {
     if (!resolvingConcern) {
       throw createError({
@@ -492,6 +497,12 @@ export default defineEventHandler(async (event) => {
           "At least one resolution evidence image is required before marking the concern as resolved.",
       });
     }
+  } else if (reopeningConcern && evidenceImages.length === 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage:
+        "At least one reopening evidence image is required to prove the work is incomplete.",
+    });
   }
 
   /*
@@ -691,7 +702,7 @@ export default defineEventHandler(async (event) => {
      * -----------------------------------------------------
      */
 
-    if (resolvingConcern && evidenceImages.length > 0) {
+    if ((resolvingConcern || reopeningConcern) && evidenceImages.length > 0) {
       for (const image of evidenceImages) {
         const originalName = image.filename || "evidence";
 

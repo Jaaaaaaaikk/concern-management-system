@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   const hasFieldsToUpdate =
     Object.prototype.hasOwnProperty.call(body, 'name') ||
     Object.prototype.hasOwnProperty.call(body, 'description') ||
-    Object.prototype.hasOwnProperty.call(body, 'organization_ids') ||
+    Object.prototype.hasOwnProperty.call(body, 'organization_id') ||
     Object.prototype.hasOwnProperty.call(body, 'status')
 
   if (!hasFieldsToUpdate) {
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
     await connection.beginTransaction()
 
     const [categoryRows] = await connection.query(
-      'SELECT id FROM concern_types WHERE id = ? LIMIT 1',
+      'SELECT id FROM concern_types WHERE id = ? LIMIT 1 FOR UPDATE',
       [id]
     )
 
@@ -66,6 +66,39 @@ export default defineEventHandler(async (event) => {
       parameters.push(body.description?.trim() || null)
     }
 
+    if (Object.prototype.hasOwnProperty.call(body, 'organization_id')) {
+      const organizationId = Number(body.organization_id)
+
+      if (!Number.isInteger(organizationId) || organizationId <= 0) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Select one organization to handle this category.'
+        })
+      }
+
+      const [organizationRows] = await connection.query(
+        `
+          SELECT id
+          FROM organizations
+          WHERE id = ?
+            AND status = 'active'
+            AND deleted_at IS NULL
+          LIMIT 1
+        `,
+        [organizationId]
+      )
+
+      if (organizationRows.length === 0) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Select one active organization.'
+        })
+      }
+
+      updates.push('assigned_organization_id = ?')
+      parameters.push(organizationId)
+    }
+
     if (Object.prototype.hasOwnProperty.call(body, 'status')) {
       if (!['active', 'inactive'].includes(body.status)) {
         throw createError({
@@ -85,59 +118,11 @@ export default defineEventHandler(async (event) => {
       )
     }
 
-    if (Object.prototype.hasOwnProperty.call(body, 'organization_ids')) {
-      if (!Array.isArray(body.organization_ids)) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'Organization assignments must be a list.'
-        })
-      }
-
-      const organizationIds = [...new Set(body.organization_ids.map(Number))]
-
-      if (organizationIds.some(organizationId =>
-        !Number.isInteger(organizationId) || organizationId <= 0
-      )) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'One or more organization assignments are invalid.'
-        })
-      }
-
-      if (organizationIds.length) {
-        const [organizationRows] = await connection.query(
-          `
-            SELECT id
-            FROM organizations
-            WHERE id IN (?)
-              AND status = 'active'
-              AND deleted_at IS NULL
-          `,
-          [organizationIds]
-        )
-
-        if (organizationRows.length !== organizationIds.length) {
-          throw createError({
-            statusCode: 400,
-            statusMessage: 'Select only active organizations.'
-          })
-        }
-      }
-
+    if (Object.prototype.hasOwnProperty.call(body, 'organization_id')) {
       await connection.query(
         'DELETE FROM organization_concern_types WHERE concern_type_id = ?',
         [id]
       )
-
-      if (organizationIds.length) {
-        const placeholders = organizationIds.map(() => '(?, ?)').join(', ')
-        const assignmentParameters = organizationIds.flatMap(organizationId => [organizationId, id])
-
-        await connection.query(
-          `INSERT INTO organization_concern_types (organization_id, concern_type_id) VALUES ${placeholders}`,
-          assignmentParameters
-        )
-      }
     }
 
     await connection.commit()

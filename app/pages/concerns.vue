@@ -3,6 +3,8 @@
 import ViewConcernModal from '~/components/concerns/ViewConcernModal.vue'
 import CreateConcernModal from '~/components/concerns/CreateConcernModal.vue'
 import AppSelect from '~/components/AppSelect.vue'
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({
@@ -36,6 +38,10 @@ const showFilterPanel = ref(Boolean(
     route.query.late_response
 ))
 
+const isGlobalAdmin = computed(() =>
+    ['superadmin', 'system_admin', 'system_monitor'].includes(currentUser.value?.role_name)
+)
+
 const search = ref('')
 
 const statusFilter = ref(
@@ -46,9 +52,19 @@ const statusFilter = ref(
 
 const priorityFilter = ref('')
 
+const scopeFilter = ref('all')
+
+const senderDepartmentFilter = ref('')
+
 const departmentFilter = ref('')
 
 const exportDateFilter = ref('')
+
+const createdDateFromFilter = ref('')
+
+const createdDateToFilter = ref('')
+
+const targetDateFilter = ref('')
 
 const showViewModal = ref(false)
 
@@ -69,6 +85,18 @@ const sortBy = ref('created_at')
 const sortDirection = ref('desc')
 const lateResponseFilter = ref(String(route.query.late_response || '') === '1')
 
+const appliedAdminFilters = ref({
+    status: String(route.query.status || '').trim(),
+    priority: '',
+    senderDepartment: '',
+    department: '',
+    date: '',
+    dateFrom: '',
+    dateTo: '',
+    targetDate: '',
+    lateResponse: String(route.query.late_response || '') === '1'
+})
+
 const statusDropdownValue = computed({
     get: () => lateResponseFilter.value ? 'late_response' : statusFilter.value,
     set: (value) => {
@@ -86,9 +114,26 @@ const statusDropdownValue = computed({
 const activeFilterCount = computed(() => [
     statusDropdownValue.value,
     priorityFilter.value,
+    !isGlobalAdmin.value && scopeFilter.value !== 'all' ? scopeFilter.value : '',
+    senderDepartmentFilter.value,
     departmentFilter.value,
-    exportDateFilter.value
+    exportDateFilter.value,
+    createdDateFromFilter.value,
+    createdDateToFilter.value,
+    targetDateFilter.value
 ].filter(Boolean).length)
+
+const hasCreatedDateFilter = computed(() => {
+    const filters = isGlobalAdmin.value
+        ? appliedAdminFilters.value
+        : {
+            date: exportDateFilter.value,
+            dateFrom: createdDateFromFilter.value,
+            dateTo: createdDateToFilter.value
+        }
+
+    return Boolean(filters.date || filters.dateFrom || filters.dateTo)
+})
 
 const totalConcerns = ref(0)
 
@@ -532,6 +577,12 @@ function getConcernDuration(
 
 function getExportDateLabel() {
 
+    const filters = getConcernFilterValues()
+
+    if (filters.dateFrom || filters.dateTo) {
+        return `${filters.dateFrom || 'Any date'} – ${filters.dateTo || 'Any date'}`
+    }
+
     const labels = {
         '': 'All Dates',
         today: 'Today',
@@ -542,7 +593,7 @@ function getExportDateLabel() {
 
     return (
         labels[
-        exportDateFilter.value
+        filters.date
         ] ||
         'All Dates'
     )
@@ -659,7 +710,28 @@ async function loadCurrentUser() {
         response.user
 }
 
+function getConcernFilterValues() {
+    if (isGlobalAdmin.value) {
+        return appliedAdminFilters.value
+    }
+
+    return {
+        status: statusFilter.value,
+        priority: priorityFilter.value,
+        scope: scopeFilter.value,
+        senderDepartment: senderDepartmentFilter.value,
+        department: departmentFilter.value,
+        date: exportDateFilter.value,
+        dateFrom: createdDateFromFilter.value,
+        dateTo: createdDateToFilter.value,
+        targetDate: targetDateFilter.value,
+        lateResponse: lateResponseFilter.value
+    }
+}
+
 async function loadConcerns() {
+
+    const filters = getConcernFilterValues()
 
     const response =
         await $fetch(
@@ -678,22 +750,37 @@ async function loadConcerns() {
                         search.value.trim(),
 
                     status:
-                        statusFilter.value,
+                        filters.status,
 
                     priority:
-                        priorityFilter.value,
+                        filters.priority,
+
+                    scope:
+                        filters.scope || 'all',
+
+                    sender_department:
+                        filters.senderDepartment,
 
                     department:
-                        departmentFilter.value,
+                        filters.department,
 
                     date:
-                        exportDateFilter.value,
+                        filters.date,
+
+                    date_from:
+                        filters.dateFrom,
+
+                    date_to:
+                        filters.dateTo,
+
+                    target_date:
+                        filters.targetDate,
 
                     view:
                         trashView.value ? 'trash' : 'active',
 
                     late_response:
-                        lateResponseFilter.value ? '1' : '',
+                        filters.lateResponse ? '1' : '',
 
                     sortBy:
                         sortBy.value,
@@ -800,6 +887,8 @@ async function confirmExport() {
 
     try {
 
+        const filters = getConcernFilterValues()
+
         const query =
             new URLSearchParams()
 
@@ -816,44 +905,68 @@ async function confirmExport() {
             )
         }
 
-        if (
-            statusFilter.value
-        ) {
+        if (filters.status) {
 
             query.set(
                 'status',
-                statusFilter.value
+                filters.status
             )
         }
 
-        if (
-            priorityFilter.value
-        ) {
+        if (filters.lateResponse) {
+            query.set('late_response', '1')
+        }
+
+        if (filters.priority) {
 
             query.set(
                 'priority',
-                priorityFilter.value
+                filters.priority
             )
         }
 
-        if (
-            departmentFilter.value
-        ) {
+        if (filters.scope && filters.scope !== 'all') {
+
+            query.set(
+                'scope',
+                filters.scope
+            )
+        }
+
+        if (filters.senderDepartment) {
+
+            query.set(
+                'sender_department',
+                filters.senderDepartment
+            )
+        }
+
+        if (filters.department) {
 
             query.set(
                 'department',
-                departmentFilter.value
+                filters.department
             )
         }
 
-        if (
-            exportDateFilter.value
-        ) {
+        if (filters.date) {
 
             query.set(
                 'date',
-                exportDateFilter.value
+                filters.date
             )
+        }
+
+        if (filters.dateFrom) {
+            query.set('date_from', filters.dateFrom)
+        }
+
+        if (filters.dateTo) {
+            query.set('date_to', filters.dateTo)
+        }
+
+        if (filters.targetDate) {
+            query.set('target_date', filters.targetDate)
         }
 
         const queryString =
@@ -1040,7 +1153,35 @@ function handleSearchInput() {
         )
 }
 
+async function applyAdminFilters() {
+    if (
+        createdDateFromFilter.value &&
+        createdDateToFilter.value &&
+        createdDateFromFilter.value > createdDateToFilter.value
+    ) {
+        showToast('The created-date start must be on or before the end date.', 'error')
+        return
+    }
+
+    appliedAdminFilters.value = {
+        status: statusFilter.value,
+        priority: priorityFilter.value,
+        senderDepartment: senderDepartmentFilter.value,
+        department: departmentFilter.value,
+        date: exportDateFilter.value,
+        dateFrom: createdDateFromFilter.value,
+        dateTo: createdDateToFilter.value,
+        targetDate: targetDateFilter.value,
+        lateResponse: lateResponseFilter.value
+    }
+
+    currentPage.value = 1
+    await loadConcernsWithLoading()
+}
+
 async function handleStatusChange() {
+
+    if (isGlobalAdmin.value) return
 
     currentPage.value = 1
 
@@ -1049,12 +1190,55 @@ async function handleStatusChange() {
 
 async function handleExportDateChange() {
 
+    createdDateFromFilter.value = ''
+    createdDateToFilter.value = ''
+
+    if (isGlobalAdmin.value) return
+
     currentPage.value = 1
 
     await loadConcernsWithLoading()
 }
 
+async function handleCreatedDateRangeChange() {
+    exportDateFilter.value = ''
+
+    if (
+        createdDateFromFilter.value &&
+        createdDateToFilter.value &&
+        createdDateFromFilter.value > createdDateToFilter.value
+    ) {
+        showToast('The created-date start must be on or before the end date.', 'error')
+        return
+    }
+
+    if (isGlobalAdmin.value) return
+
+    currentPage.value = 1
+    await loadConcernsWithLoading()
+}
+
 async function handlePriorityChange() {
+
+    if (isGlobalAdmin.value) return
+
+    currentPage.value = 1
+
+    await loadConcernsWithLoading()
+}
+
+async function handleScopeChange() {
+
+    if (isGlobalAdmin.value) return
+
+    currentPage.value = 1
+
+    await loadConcernsWithLoading()
+}
+
+async function handleSenderDepartmentChange() {
+
+    if (isGlobalAdmin.value) return
 
     currentPage.value = 1
 
@@ -1063,13 +1247,30 @@ async function handlePriorityChange() {
 
 async function handleDepartmentChange() {
 
+    if (isGlobalAdmin.value) return
+
     currentPage.value = 1
 
     await loadConcernsWithLoading()
 }
 
+async function handleTargetDateChange() {
+
+    if (isGlobalAdmin.value) return
+
+    currentPage.value = 1
+    await loadConcernsWithLoading()
+}
+
 async function clearLateResponseFilter() {
     lateResponseFilter.value = false
+    if (isGlobalAdmin.value) {
+        appliedAdminFilters.value = {
+            ...appliedAdminFilters.value,
+            lateResponse: false,
+            status: statusFilter.value
+        }
+    }
     currentPage.value = 1
     await navigateTo({
         path: '/concerns',
@@ -1081,14 +1282,23 @@ async function clearLateResponseFilter() {
 async function clearAllFilters() {
     statusDropdownValue.value = ''
     priorityFilter.value = ''
+    scopeFilter.value = 'all'
+    senderDepartmentFilter.value = ''
     departmentFilter.value = ''
     exportDateFilter.value = ''
+    createdDateFromFilter.value = ''
+    createdDateToFilter.value = ''
+    targetDateFilter.value = ''
     currentPage.value = 1
     await navigateTo({
         path: '/concerns',
         query: {}
     })
-    await loadConcernsWithLoading()
+    if (isGlobalAdmin.value) {
+        await applyAdminFilters()
+    } else {
+        await loadConcernsWithLoading()
+    }
 }
 
 /*
@@ -1622,7 +1832,7 @@ function concernRowHighlightClasses(concern, alternate = false) {
                             v-model="search"
                             @input="handleSearchInput"
                             type="search"
-                            placeholder="Search concern number, title, or description..."
+                            placeholder="Search ticket, title, description, requestor, department, or type..."
                             class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-2 text-xs outline-none shadow-sm transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-2 focus:ring-blue-700/15 sm:pl-11 sm:pr-4 sm:text-sm"
                         />
                     </div>
@@ -1682,7 +1892,25 @@ function concernRowHighlightClasses(concern, alternate = false) {
                             </button>
                         </div>
 
-                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                            <label v-if="!isGlobalAdmin" class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Concern Scope
+                                    <span tabindex="0" title="Submitted concerns were created by your organization. Assigned concerns were sent to your organization." aria-label="Help: submitted concerns were created by your organization; assigned concerns were sent to it." class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-slate-400 text-[10px] font-bold normal-case text-slate-500">?</span>
+                                </span>
+                                <AppSelect
+                                    v-model="scopeFilter"
+                                    aria-label="Filter by concern scope"
+                                    placeholder="All relevant concerns"
+                                    :options="[
+                                        { label: 'All relevant concerns', value: 'all' },
+                                        { label: 'Submitted by my organization', value: 'submitted' },
+                                        { label: 'Assigned to my organization', value: 'assigned' }
+                                    ]"
+                                    @change="handleScopeChange"
+                                />
+                            </label>
+
                             <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                                 <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Status</span>
                                 <AppSelect
@@ -1720,21 +1948,44 @@ function concernRowHighlightClasses(concern, alternate = false) {
                             </label>
 
                             <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                                <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Department</span>
+                                <span class="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Requesting Department
+                                    <span tabindex="0" title="The organization of the person who submitted the concern." aria-label="Help: filters by the organization that submitted the concern." class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-slate-400 text-[10px] font-bold normal-case text-slate-500">?</span>
+                                </span>
+                                <AppSelect
+                                    v-model="senderDepartmentFilter"
+                                    aria-label="Filter by requesting department"
+                                    placeholder="All requesting departments"
+                                    :options="[
+                                        { label: 'All requesting departments', value: '' },
+                                        ...organizations.map(organization => ({ label: organization.name, value: String(organization.id) }))
+                                    ]"
+                                    @change="handleSenderDepartmentChange"
+                                />
+                            </label>
+
+                            <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Receiving Department
+                                    <span tabindex="0" title="The organization this concern was sent to. This filters by destination." aria-label="Help: filters by the organization the concern was sent to." class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-slate-400 text-[10px] font-bold normal-case text-slate-500">?</span>
+                                </span>
                                 <AppSelect
                                     v-model="departmentFilter"
-                                    aria-label="Filter by department"
-                                    placeholder="All departments"
+                                    aria-label="Filter by receiving department"
+                                    placeholder="All receiving departments"
                                     :options="[
-                                        { label: 'All departments', value: '' },
+                                        { label: 'All receiving departments', value: '' },
                                         ...organizations.map(organization => ({ label: organization.name, value: String(organization.id) }))
                                     ]"
                                     @change="handleDepartmentChange"
                                 />
                             </label>
 
-                            <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                                <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date created</span>
+                            <div class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Date Created
+                                    <span tabindex="0" title="The date the concern was submitted. Use From and To to select any year or a custom date range." aria-label="Help: filters by when the concern was submitted; custom dates can select any year." class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-slate-400 text-[10px] font-bold normal-case text-slate-500">?</span>
+                                </span>
                                 <AppSelect
                                     v-model="exportDateFilter"
                                     aria-label="Filter by date created"
@@ -1748,7 +1999,68 @@ function concernRowHighlightClasses(concern, alternate = false) {
                                     ]"
                                     @change="handleExportDateChange"
                                 />
+                                <div class="mt-3 grid grid-cols-2 gap-2">
+                                    <div class="text-[11px] font-medium text-slate-500">
+                                        From
+                                        <VueDatePicker
+                                            v-model="createdDateFromFilter"
+                                            model-type="yyyy-MM-dd"
+                                            format="MMM d, yyyy"
+                                            placeholder="Any start date"
+                                            :enable-time-picker="false"
+                                            :auto-apply="true"
+                                            :clearable="true"
+                                            input-class-name="!rounded-lg !border-slate-300 !py-2 !text-sm focus:!border-blue-700"
+                                            menu-class-name="rounded-xl border border-slate-200 shadow-xl"
+                                            class="mt-1 w-full"
+                                            aria-label="Created date from"
+                                            @update:model-value="handleCreatedDateRangeChange"
+                                        />
+                                    </div>
+                                    <div class="text-[11px] font-medium text-slate-500">
+                                        To
+                                        <VueDatePicker
+                                            v-model="createdDateToFilter"
+                                            model-type="yyyy-MM-dd"
+                                            format="MMM d, yyyy"
+                                            placeholder="Any end date"
+                                            :enable-time-picker="false"
+                                            :auto-apply="true"
+                                            :clearable="true"
+                                            input-class-name="!rounded-lg !border-slate-300 !py-2 !text-sm focus:!border-blue-700"
+                                            menu-class-name="rounded-xl border border-slate-200 shadow-xl"
+                                            class="mt-1 w-full"
+                                            aria-label="Created date to"
+                                            @update:model-value="handleCreatedDateRangeChange"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <label class="block rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                <span class="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Committed Start Date
+                                    <span tabindex="0" title="The date the receiving organization committed to start work; it is not a due date." aria-label="Help: this is the receiving organization's committed work start date, not a due date." class="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-slate-400 text-[10px] font-bold normal-case text-slate-500">?</span>
+                                </span>
+                                <AppSelect
+                                    v-model="targetDateFilter"
+                                    aria-label="Filter by committed start date"
+                                    placeholder="All committed start dates"
+                                    :options="[
+                                        { label: 'All committed start dates', value: '' },
+                                        { label: 'Date set', value: 'set' },
+                                        { label: 'No committed date', value: 'none' },
+                                        { label: 'Committed date is past', value: 'past' }
+                                    ]"
+                                    @change="handleTargetDateChange"
+                                />
                             </label>
+                        </div>
+
+                        <div v-if="isGlobalAdmin" class="mt-4 flex justify-end">
+                            <button type="button" class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800" @click="applyAdminFilters">
+                                Apply Filters
+                            </button>
                         </div>
                     </section>
                 </Transition>
@@ -2465,7 +2777,7 @@ function concernRowHighlightClasses(concern, alternate = false) {
                                     <div>
 
                                         <p class="text-xs font-medium uppercase tracking-wide text-slate-400">
-                                            Export Date
+                                            Created Date
                                         </p>
 
                                         <p class="mt-1 text-sm font-semibold text-slate-800">
@@ -2493,6 +2805,40 @@ function concernRowHighlightClasses(concern, alternate = false) {
 
                             </div>
 
+                            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+
+                                <div class="flex gap-3">
+
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.8" stroke="currentColor"
+                                        class="mt-0.5 h-5 w-5 shrink-0 text-amber-700">
+
+                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                            d="M12 9.75h.008v.008H12V9.75Zm0 3v3.75m9-4.5a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+
+                                    </svg>
+
+                                    <div>
+
+                                        <p class="text-sm font-semibold text-amber-900">
+                                            Filter first and set a date before exporting
+                                        </p>
+
+                                        <p class="mt-1 text-xs leading-5 text-amber-800">
+                                            Open <strong>Filters</strong>, choose the requesting and receiving departments, status, priority, created date or a custom From/To range, and committed start date, then apply the filters before exporting.
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                            <div v-if="!hasCreatedDateFilter" class="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700">
+                                <span aria-hidden="true" class="font-bold">!</span>
+                                <span>No created-date filter is applied. The export will include matching concerns from all years.</span>
+                            </div>
+
                             <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
 
                                 <div class="flex gap-3">
@@ -2504,6 +2850,7 @@ function concernRowHighlightClasses(concern, alternate = false) {
                                         <path stroke-linecap="round" stroke-linejoin="round"
                                             d="M12 9.75h.008v.008H12V9.75Zm0 3v3.75m9-4.5a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
 
+                                                                      
                                     </svg>
 
                                     <div>
@@ -2514,8 +2861,7 @@ function concernRowHighlightClasses(concern, alternate = false) {
 
                                         <p class="mt-1 text-xs leading-5 text-blue-700">
                                             The export is not limited to the current table page.
-                                            Your search, status, priority, department, and selected date will be
-                                            applied.
+                                            Your search and applied status, priority, requesting and receiving department, created-date range, and committed start-date filters will be used.
                                         </p>
 
                                     </div>
@@ -2550,9 +2896,7 @@ function concernRowHighlightClasses(concern, alternate = false) {
                                     stroke-width="1.8" stroke="currentColor" class="h-4 w-4">
 
                                     <path stroke-linecap="round" stroke-linejoin="round"
-                                        d="M12 3v12m0 0 4-4m-4 4-4-4" />
-
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 21h14" />
+                                        d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
 
                                 </svg>
 
@@ -2564,7 +2908,7 @@ function concernRowHighlightClasses(concern, alternate = false) {
                                     Exporting...
                                 </span>
 
-                            </button>
+                                                       </button>
 
                         </div>
 

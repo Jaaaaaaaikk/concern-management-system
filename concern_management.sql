@@ -125,6 +125,7 @@ CREATE TABLE `concern_types` (
   `id` int(10) UNSIGNED NOT NULL,
   `name` varchar(100) NOT NULL,
   `description` varchar(255) DEFAULT NULL,
+  `assigned_organization_id` int(10) unsigned DEFAULT NULL,
   `status` enum('active','inactive') NOT NULL DEFAULT 'active',
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
@@ -347,7 +348,8 @@ ALTER TABLE `concern_status_history`
 --
 ALTER TABLE `concern_types`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `name` (`name`);
+  ADD UNIQUE KEY `name` (`name`),
+  ADD KEY `idx_concern_types_assigned_organization` (`assigned_organization_id`);
 
 --
 -- Indexes for table `organizations`
@@ -509,6 +511,12 @@ ALTER TABLE `concern_status_history`
 ALTER TABLE `organizations`
   ADD CONSTRAINT `fk_organizations_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_organizations_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Constraints for table `concern_types`
+--
+ALTER TABLE `concern_types`
+  ADD CONSTRAINT `fk_concern_types_assigned_organization` FOREIGN KEY (`assigned_organization_id`) REFERENCES `organizations` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Constraints for table `organization_concern_types`

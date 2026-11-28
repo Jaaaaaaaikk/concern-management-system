@@ -1,13 +1,16 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useBodyScrollLock } from '~/composables/useBodyScrollLock'
+import AppSelect from '~/components/AppSelect.vue'
 
 const props = defineProps({
     show: { type: Boolean, default: false },
     form: { type: Object, required: true },
     saving: { type: Boolean, default: false },
     organizations: { type: Array, default: () => [] },
-    mode: { type: String, default: 'create' }
+    mode: { type: String, default: 'create' },
+    currentOrganizationId: { type: [String, Number], default: '' },
+    currentOrganizationName: { type: String, default: '' }
 })
 
 const emit = defineEmits(['close', 'submit'])
@@ -16,17 +19,28 @@ const isEditing = computed(() => props.mode === 'edit')
 useBodyScrollLock(() => props.show)
 
 const confirmationTitle = computed(() =>
-    isEditing.value ? 'Update concern category?' : 'Create concern category?'
+    isReceiverChanging.value
+        ? 'Change receiving organization?'
+        : isEditing.value ? 'Update concern category?' : 'Create concern category?'
 )
 
 const confirmationMessage = computed(() =>
-    isEditing.value
-        ? `Save changes to “${props.form.name?.trim() || 'this category'}”?`
-        : `Create “${props.form.name?.trim() || 'this category'}” and make it available for new concerns?`
+    isEditing.value && props.currentOrganizationName &&
+    Number(props.form.organization_id) !== Number(props.currentOrganizationId)
+        ? `Change “${props.form.name?.trim() || 'this category'}” from ${props.currentOrganizationName} to ${props.organizations.find(organization => Number(organization.id) === Number(props.form.organization_id))?.name || 'the selected organization'}? This affects new concerns only. Existing concerns will stay assigned to their current organization.`
+        : isEditing.value
+            ? `Save changes to “${props.form.name?.trim() || 'this category'}”? The selected receiving organization will handle new concerns; existing concerns will not be reassigned.`
+            : `Create “${props.form.name?.trim() || 'this category'}” and route new concerns to ${props.organizations.find(organization => Number(organization.id) === Number(props.form.organization_id))?.name || 'the selected organization'}?`
+)
+
+const isReceiverChanging = computed(() =>
+    isEditing.value &&
+    Boolean(props.currentOrganizationName) &&
+    Number(props.form.organization_id) !== Number(props.currentOrganizationId)
 )
 
 function requestSubmit() {
-    if (!props.saving) showConfirmation.value = true
+    if (!props.saving && props.form.organization_id) showConfirmation.value = true
 }
 
 function cancelConfirmation() {
@@ -37,15 +51,6 @@ function confirmSubmit() {
     if (props.saving) return
     showConfirmation.value = false
     emit('submit')
-}
-
-function toggleOrganization(organizationId) {
-    const assignedIds = props.form.organization_ids || []
-    const id = Number(organizationId)
-
-    props.form.organization_ids = assignedIds.some(value => Number(value) === id)
-        ? assignedIds.filter(value => Number(value) !== id)
-        : [...assignedIds, id]
 }
 
 watch(() => props.show, (isShown) => {
@@ -67,7 +72,7 @@ watch(() => props.show, (isShown) => {
                 <div>
                     <p class="text-xs font-bold uppercase tracking-[0.16em] text-blue-700">Category setup</p>
                     <h3 class="mt-1 text-xl font-semibold text-slate-900">{{ isEditing ? 'Edit concern category' : 'Add concern category' }}</h3>
-                    <p class="mt-1 text-sm text-slate-500">{{ isEditing ? 'Update the category name, description, and organization assignments.' : 'Create a label for classifying incoming concerns.' }}</p>
+                    <p class="mt-1 text-sm text-slate-500">{{ isEditing ? 'Update the category details and its one receiving organization.' : 'Create a category and route it to one responsible organization.' }}</p>
                 </div>
                 <button
                     type="button"
@@ -110,28 +115,28 @@ watch(() => props.show, (isShown) => {
                 placeholder="Briefly describe what belongs in this category."
             />
 
-            <fieldset class="mt-5 rounded-xl border border-slate-200 p-4">
-                <legend class="px-1 text-sm font-medium text-slate-700">Organizations that handle this category</legend>
-                <p class="mb-3 text-xs leading-5 text-slate-500">Select every organization that is eligible to receive concerns in this category.</p>
-                <div v-if="props.organizations.length" class="max-h-48 space-y-1 overflow-y-auto">
-                    <label
-                        v-for="organization in props.organizations"
-                        :key="organization.id"
-                        class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                    >
-                        <input
-                            type="checkbox"
-                            :checked="(props.form.organization_ids || []).some(value => Number(value) === Number(organization.id))"
-                            class="rounded border-slate-300 text-blue-700 focus:ring-blue-600"
-                            @change="toggleOrganization(organization.id)"
-                        >
-                        <span>{{ organization.name }}</span>
-                        <span class="ml-auto text-xs text-slate-400">{{ organization.organization_type?.replaceAll('_', ' ') }}</span>
-                    </label>
-                </div>
-                <p v-else class="text-sm text-slate-500">No active organizations are available.</p>
-                <p v-if="!(props.form.organization_ids || []).length" class="mt-2 text-xs text-amber-700">No organization is assigned yet; this category will have no routing destination.</p>
-            </fieldset>
+            <div class="mt-5 rounded-xl border border-slate-200 p-4">
+                <label for="category-organization" class="mb-2 block text-sm font-medium text-slate-700">
+                    Receiving organization <span class="text-red-500">*</span>
+                </label>
+                <p class="mb-3 text-xs leading-5 text-slate-500">Each category routes to exactly one organization. Selecting this category when creating a concern will fill in its destination automatically.</p>
+                <AppSelect
+                    id="category-organization"
+                    v-model="props.form.organization_id"
+                    aria-label="Organization that handles this category"
+                    placeholder="Select one organization"
+                    :required="true"
+                    :searchable="true"
+                    :options="[
+                        { label: 'Select one organization', value: '', disabled: true },
+                        ...props.organizations.map(organization => ({
+                            label: `${organization.name} · ${organization.organization_type?.replaceAll('_', ' ') || 'organization'}`,
+                            value: organization.id
+                        }))
+                    ]"
+                />
+                <p v-if="!props.organizations.length" class="mt-2 text-xs text-amber-700">No active organizations are available. Add or activate an organization first.</p>
+            </div>
 
             <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button
@@ -143,7 +148,7 @@ watch(() => props.show, (isShown) => {
                 <button
                     type="submit"
                     class="primary-action-button cursor-pointer rounded-lg bg-blue-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
-                    :disabled="props.saving"
+                    :disabled="props.saving || !props.form.organization_id"
                 >{{ props.saving ? (isEditing ? 'Saving…' : 'Creating…') : (isEditing ? 'Save changes' : 'Create category') }}</button>
             </div>
         </form>
@@ -152,7 +157,7 @@ watch(() => props.show, (isShown) => {
             :show="showConfirmation"
             :title="confirmationTitle"
             :message="confirmationMessage"
-            :confirm-label="isEditing ? 'Save changes' : 'Create category'"
+            :confirm-label="isReceiverChanging ? 'Change future routing' : isEditing ? 'Save changes' : 'Create category'"
             :loading="props.saving"
             @cancel="cancelConfirmation"
             @confirm="confirmSubmit"

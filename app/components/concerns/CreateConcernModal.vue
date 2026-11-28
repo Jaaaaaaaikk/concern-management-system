@@ -57,50 +57,44 @@ const form = ref({
 
 })
 
-const availableOrganizations = computed(() => {
+const availableConcernTypes = computed(() => {
+    if (!props.currentUser) return []
 
-    if (!props.currentUser || !form.value.concern_type_id) {
-        return []
-    }
-
-    const concernTypeId = Number(form.value.concern_type_id)
-    let eligibleOrganizations = []
-
-    if (
-        props.currentUser.role_name === 'superadmin'
-    ) {
-        eligibleOrganizations = props.organizations
-    } else {
-        const ownOrganizationId = Number(props.currentUser.organization_id)
-        const ownOrganization = props.organizations.find(
-            organization => Number(organization.id) === ownOrganizationId
-        )
-        const isAdminFacilitiesOrganization =
-            ownOrganization?.organization_type === 'admin_facilities'
-
-        eligibleOrganizations = !isAdminFacilitiesOrganization
-            ? props.organizations.filter(
-                organization => organization.organization_type === 'admin_facilities'
-            )
-            : props.organizations.filter(
-                organization => Number(organization.id) !== ownOrganizationId
-            )
-    }
-
-    return eligibleOrganizations.filter(organization =>
-        organization.status === 'active' &&
-        (organization.concern_type_ids || []).some(
-            assignedTypeId => Number(assignedTypeId) === concernTypeId
-        )
+    const ownOrganization = props.organizations.find(
+        organization => Number(organization.id) === Number(props.currentUser.organization_id)
     )
+    const ownOrganizationId = Number(props.currentUser.organization_id)
+    const isAdminFacilitiesOrganization = ownOrganization?.organization_type === 'admin_facilities'
 
+    return props.concernTypes.filter(type => {
+        const receivers = type.assigned_organizations || []
+        if (
+            type.status !== 'active' ||
+            type.assigned_organization_id == null ||
+            receivers.length !== 1
+        ) return false
+
+        const receiver = receivers[0]
+        if (receiver.status !== 'active' || Number(receiver.id) === ownOrganizationId) return false
+
+        return isAdminFacilitiesOrganization || receiver.organization_type === 'admin_facilities'
+    })
+})
+
+const selectedConcernType = computed(() =>
+    availableConcernTypes.value.find(type => Number(type.id) === Number(form.value.concern_type_id)) || null
+)
+
+const assignedOrganizationForSelectedType = computed(() => {
+    const receiver = selectedConcernType.value?.assigned_organizations?.[0]
+    return receiver
+        ? props.organizations.find(organization => Number(organization.id) === Number(receiver.id)) || receiver
+        : null
 })
 
 const organizationPlaceholder = computed(() => {
     if (!form.value.concern_type_id) return 'Select concern type first'
-    return availableOrganizations.value.length
-        ? 'Select organization'
-        : 'No organization handles this concern type'
+    return assignedOrganizationForSelectedType.value?.name || 'No receiving organization assigned'
 })
 
 function resetForm() {
@@ -279,11 +273,12 @@ async function createConcern(confirmed = false) {
 
     }
 
-    if (!availableOrganizations.value.some(
-        organization => Number(organization.id) === Number(form.value.assigned_organization_id)
-    )) {
+    if (
+        !assignedOrganizationForSelectedType.value ||
+        Number(assignedOrganizationForSelectedType.value.id) !== Number(form.value.assigned_organization_id)
+    ) {
         showToast(
-            'Please select an organization allowed for your department.',
+            'The selected category does not have a valid receiving organization. Please choose another category or contact a Superadmin.',
             'error'
         )
 
@@ -405,12 +400,13 @@ async function createConcern(confirmed = false) {
 
 watch(
     () => form.value.concern_type_id,
-    () => {
-        if (!availableOrganizations.value.some(
-            organization => Number(organization.id) === Number(form.value.assigned_organization_id)
-        )) {
-            form.value.assigned_organization_id = ''
-        }
+    (concernTypeId) => {
+        const concernType = availableConcernTypes.value.find(
+            type => Number(type.id) === Number(concernTypeId)
+        )
+        form.value.assigned_organization_id = concernType?.assigned_organizations?.length === 1
+            ? String(concernType.assigned_organizations[0].id)
+            : ''
     }
 )
 
@@ -593,7 +589,7 @@ onUnmounted(() => {
 
                         <div class="mb-4">
                             <h4 class="text-sm font-semibold text-slate-800">Request routing</h4>
-                            <p class="mt-1 text-xs text-slate-500">Choose a category and the organization responsible for handling this concern.</p>
+                            <p class="mt-1 text-xs text-slate-500">Choose a category. Its assigned organization will be filled in automatically.</p>
                         </div>
 
                         <div class="grid gap-5 sm:grid-cols-2">
@@ -615,9 +611,12 @@ onUnmounted(() => {
                                 :searchable="true"
                                 :options="[
                                     { label: 'Select concern type', value: '', disabled: true },
-                                    ...concernTypes.map(type => ({ label: type.name, value: type.id }))
+                                    ...availableConcernTypes.map(type => ({ label: type.name, value: type.id }))
                                 ]"
                             />
+                            <p v-if="!availableConcernTypes.length" class="mt-2 text-xs text-amber-700">
+                                No categories with a valid receiving organization are available for your organization.
+                            </p>
 
                         </div>
 
@@ -635,16 +634,16 @@ onUnmounted(() => {
                                 name="assigned_organization_id"
                                 :placeholder="organizationPlaceholder"
                                 :required="true"
-                                :disabled="!form.concern_type_id || availableOrganizations.length === 0"
-                                :searchable="true"
+                                :disabled="true"
                                 :options="[
-                                    { label: organizationPlaceholder, value: '', disabled: true },
-                                    ...availableOrganizations.map(organization => ({ label: organization.name, value: organization.id }))
+                                    ...(assignedOrganizationForSelectedType
+                                        ? [{ label: assignedOrganizationForSelectedType.name, value: assignedOrganizationForSelectedType.id }]
+                                        : [{ label: organizationPlaceholder, value: '', disabled: true }])
                                 ]"
                             />
 
-                            <p v-if="form.concern_type_id && !availableOrganizations.length" class="mt-1 text-xs text-amber-700">
-                                Ask a Superadmin to assign this concern type to an eligible organization.
+                            <p class="mt-1 text-xs text-slate-500">
+                                The destination is assigned by the selected category and cannot be changed here.
                             </p>
 
                         </div>
@@ -708,7 +707,7 @@ onUnmounted(() => {
     <ConfirmActionModal
         :show="show && showSaveConfirmation"
         title="Submit this concern?"
-        :message="`Submit “${form.title.trim()}” to ${availableOrganizations.find(organization => Number(organization.id) === Number(form.assigned_organization_id))?.name || 'the selected organization'}?`"
+        :message="`Submit “${form.title.trim()}” to ${assignedOrganizationForSelectedType?.name || 'the selected organization'}?`"
         confirm-label="Submit concern"
         :loading="saving"
         @cancel="showSaveConfirmation = false"

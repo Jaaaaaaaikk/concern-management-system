@@ -2250,6 +2250,23 @@ async function updateConcernStatus(confirmed = false) {
         return
     }
 
+    const reopeningConcern =
+        isCreatorOrganizationAdmin() &&
+        selectedConcern.value.status === 'resolved' &&
+        targetStatus === 'in_progress'
+
+    if (
+        reopeningConcern &&
+        selectedStatusImages.value.length === 0
+    ) {
+        showToast(
+            'Please attach at least one reopening evidence image showing why the work is incomplete.',
+            'error'
+        )
+
+        return
+    }
+
     if (!confirmed) {
         requestConfirmation('status')
         return
@@ -2958,7 +2975,10 @@ onUnmounted(() => {
                         v-model:status-remarks="statusRemarks"
                         :remarks-required="isRemarksRequired()"
                         :status-remarks-placeholder="statusRemarksPlaceholder()"
-                        :status-evidence-required="isAssignedAdmin() && selectedConcern.status === 'in_progress' && selectedStatus === 'resolved'"
+                        :status-evidence-required="
+                        (isAssignedAdmin() && selectedConcern.status === 'in_progress' && selectedStatus === 'resolved') ||
+                        (isCreatorOrganizationAdmin() && selectedConcern.status === 'resolved' && selectedStatus === 'in_progress')
+                    "
                         :status-image-previews="statusImagePreviews"
                         :set-status-image-input="setStatusImageInput"
                         @status-images-change="handleStatusImagesChange"

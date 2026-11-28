@@ -130,7 +130,7 @@ function toggleHistory() {
                 <p class="mt-3 text-xs text-slate-500">
                     Changed by
                     <span class="font-medium text-slate-700">
-                        {{ history.changed_by_name || '-' }}
+                        {{ history.changed_by_name || (history.new_status === 'closed' && history.old_status === 'resolved' ? 'System (automatic closure)' : '-') }}
                     </span>
                 </p>
 
@@ -148,7 +148,9 @@ function toggleHistory() {
                 <div v-if="history.attachments && history.attachments.length > 0" class="mt-4">
                     <div class="mb-2 flex items-center justify-between">
                         <p class="text-xs font-semibold text-slate-700">
-                            Resolution Evidence
+                            {{ history.old_status === 'resolved' && history.new_status === 'in_progress'
+                                ? 'Reopening Evidence'
+                                : 'Resolution Evidence' }}
                         </p>
                         <span class="text-[11px] text-slate-400">
                             {{ history.attachments.length }} image{{ history.attachments.length === 1 ? '' : 's' }}

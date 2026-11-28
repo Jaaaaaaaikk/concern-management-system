@@ -8,21 +8,12 @@ export default defineEventHandler(async (event) => {
 
   const name = body?.name?.trim()
   const description = body?.description?.trim() || null
-  const organizationIds = body?.organization_ids ?? []
+  const organizationId = Number(body?.organization_id)
 
-  if (!Array.isArray(organizationIds)) {
+  if (!Number.isInteger(organizationId) || organizationId <= 0) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Organization assignments must be a list.'
-    })
-  }
-
-  const normalizedOrganizationIds = [...new Set(organizationIds.map(Number))]
-
-  if (normalizedOrganizationIds.some(id => !Number.isInteger(id) || id <= 0)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'One or more organization assignments are invalid.'
+      statusMessage: 'Select one organization to handle this category.'
     })
   }
 
@@ -38,24 +29,23 @@ export default defineEventHandler(async (event) => {
   try {
     await connection.beginTransaction()
 
-    if (normalizedOrganizationIds.length) {
-      const [organizationRows] = await connection.query(
-        `
-          SELECT id
-          FROM organizations
-          WHERE id IN (?)
-            AND status = 'active'
-            AND deleted_at IS NULL
-        `,
-        [normalizedOrganizationIds]
-      )
+    const [organizationRows] = await connection.query(
+      `
+        SELECT id
+        FROM organizations
+        WHERE id = ?
+          AND status = 'active'
+          AND deleted_at IS NULL
+        LIMIT 1
+      `,
+      [organizationId]
+    )
 
-      if (organizationRows.length !== normalizedOrganizationIds.length) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: 'Select only active organizations.'
-        })
-      }
+    if (organizationRows.length === 0) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Select one active organization.'
+      })
     }
 
     const [result] = await connection.query(
@@ -63,28 +53,17 @@ export default defineEventHandler(async (event) => {
       INSERT INTO concern_types (
         name,
         description,
+        assigned_organization_id,
         status
       )
-      VALUES (?, ?, 'active')
+      VALUES (?, ?, ?, 'active')
       `,
       [
         name,
-        description
+        description,
+        organizationId
       ]
     )
-
-    if (normalizedOrganizationIds.length) {
-      const values = normalizedOrganizationIds.map(() => '(?, ?)').join(', ')
-      const parameters = normalizedOrganizationIds.flatMap(organizationId => [
-        organizationId,
-        result.insertId
-      ])
-
-      await connection.query(
-        `INSERT INTO organization_concern_types (organization_id, concern_type_id) VALUES ${values}`,
-        parameters
-      )
-    }
 
     await connection.commit()
 

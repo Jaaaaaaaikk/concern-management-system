@@ -4,6 +4,8 @@ import {
     Chart,
     registerables
 } from 'chart.js'
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
 import { watch } from 'vue'
 import AppSelect from '~/components/AppSelect.vue'
 import { useToast } from '~/composables/useToast'
@@ -38,6 +40,16 @@ watch(errorMessage, (message) => {
 })
 
 const selectedRange = ref('30d')
+
+const customStartDate = ref('')
+
+const customEndDate = ref('')
+
+const draftStartDate = ref('')
+
+const draftEndDate = ref('')
+
+const isDateFilterOpen = ref(false)
 
 const selectedOrganization = ref('all')
 
@@ -82,7 +94,16 @@ async function loadDashboard() {
 
                 query: {
                     range:
-                        selectedRange.value,
+                        customStartDate.value || customEndDate.value
+                            ? 'custom'
+                            : selectedRange.value,
+
+                    ...(customStartDate.value || customEndDate.value
+                        ? {
+                            start_date: customStartDate.value,
+                            end_date: customEndDate.value
+                        }
+                        : {}),
 
                     organization_id:
                         selectedOrganization.value
@@ -168,6 +189,46 @@ async function changeDashboardFilter() {
 
         loadingRange.value = false
     }
+}
+
+function handleDashboardRangeChange() {
+    customStartDate.value = ''
+    customEndDate.value = ''
+    draftStartDate.value = ''
+    draftEndDate.value = ''
+    isDateFilterOpen.value = false
+    changeDashboardFilter()
+}
+
+function openDateFilter() {
+    draftStartDate.value = customStartDate.value
+    draftEndDate.value = customEndDate.value
+    isDateFilterOpen.value = !isDateFilterOpen.value
+}
+
+function applyDashboardDateRange() {
+    if (
+        draftStartDate.value &&
+        draftEndDate.value &&
+        draftStartDate.value > draftEndDate.value
+    ) {
+        showToast('The start date must be on or before the end date.', 'error')
+        return
+    }
+
+    customStartDate.value = draftStartDate.value
+    customEndDate.value = draftEndDate.value
+    isDateFilterOpen.value = false
+    changeDashboardFilter()
+}
+
+function resetDashboardDateRange() {
+    draftStartDate.value = ''
+    draftEndDate.value = ''
+    customStartDate.value = ''
+    customEndDate.value = ''
+    isDateFilterOpen.value = false
+    changeDashboardFilter()
 }
 
 
@@ -325,6 +386,24 @@ function formatTrendTooltipDate(dateValue) {
 
 const selectedRangeLabel = computed(() => {
 
+    if (customStartDate.value || customEndDate.value) {
+        const formatDate = (dateValue) => dateValue
+            ? new Date(`${dateValue}T00:00:00`).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            })
+            : ''
+
+        if (customStartDate.value && customEndDate.value) {
+            return `${formatDate(customStartDate.value)} to ${formatDate(customEndDate.value)}`
+        }
+
+        return customStartDate.value
+            ? `From ${formatDate(customStartDate.value)}`
+            : `Through ${formatDate(customEndDate.value)}`
+    }
+
     const labels = {
 
         today: 'Today',
@@ -348,7 +427,6 @@ const selectedRangeLabel = computed(() => {
         'Last 30 Days'
     )
 })
-
 
 /* --------------------------------------------------------------------------
 | Organization Label
@@ -1461,9 +1539,9 @@ onMounted(() => {
             <!-- Header -->
 
             <header :class="[
-                'flex min-h-16 flex-col items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 backdrop-blur-md transition-[transform,opacity,background-color,box-shadow,padding] duration-300 ease-out sm:flex-row sm:items-center sm:px-6 lg:px-8',
+                'relative z-50 flex min-h-16 flex-col items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 backdrop-blur-md transition-[transform,opacity,background-color,box-shadow,padding] duration-300 ease-out sm:flex-row sm:items-center sm:px-6 lg:px-8',
                 isHeaderSticky
-                    ? 'lg:sticky lg:top-0 lg:z-30 lg:-translate-y-1 lg:py-3 bg-white/30 shadow-md'
+                    ? 'lg:sticky lg:top-0 lg:z-50 lg:-translate-y-1 lg:py-3 bg-white/30 shadow-md'
                     : 'translate-y-0 bg-white/30 shadow-sm'
             ]">
 
@@ -1493,8 +1571,8 @@ onMounted(() => {
                     </div>
 
                     <div v-if="showMobileFilters" id="dashboard-mobile-filters" class="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:hidden">
-                        <label class="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                            <span class="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800">Date range</span>
+                        <div class="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:col-span-2">
+                            <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Date created</span>
                             <AppSelect
                                 v-model="selectedRange"
                                 aria-label="Date range"
@@ -1510,9 +1588,54 @@ onMounted(() => {
                                     { label: 'This Year', value: 'year' },
                                     { label: 'All Time', value: 'all' }
                                 ]"
-                                @change="changeDashboardFilter"
+                                @change="handleDashboardRangeChange"
                             />
-                        </label>
+                            <div class="mt-3 grid grid-cols-2 gap-2">
+                                <label class="text-[11px] font-medium text-slate-500">
+                                    From
+                                    <VueDatePicker
+                                        v-model="draftStartDate"
+                                        model-type="yyyy-MM-dd"
+                                        format="MMM d, yyyy"
+                                        placeholder="Any start date"
+                                        :enable-time-picker="false"
+                                        :auto-apply="true"
+                                        :clearable="true"
+                                        :max-date="draftEndDate || undefined"
+                                        :teleport="true"
+                                        :disabled="loadingRange"
+                                        input-class-name="!cursor-pointer !rounded-lg !border-slate-300 !py-2 !text-xs focus:!border-blue-700"
+                                        menu-class-name="rounded-xl border border-slate-200 shadow-xl"
+                                        class="mt-1 w-full"
+                                        aria-label="Created date from"
+                                    />
+                                </label>
+                                <label class="text-[11px] font-medium text-slate-500">
+                                    To
+                                    <VueDatePicker
+                                        v-model="draftEndDate"
+                                        model-type="yyyy-MM-dd"
+                                        format="MMM d, yyyy"
+                                        placeholder="Any end date"
+                                        :enable-time-picker="false"
+                                        :auto-apply="true"
+                                        :clearable="true"
+                                        :min-date="draftStartDate || undefined"
+                                        :teleport="true"
+                                        :disabled="loadingRange"
+                                        input-class-name="!cursor-pointer !rounded-lg !border-slate-300 !py-2 !text-xs focus:!border-blue-700"
+                                        menu-class-name="rounded-xl border border-slate-200 shadow-xl"
+                                        class="mt-1 w-full"
+                                        aria-label="Created date to"
+                                    />
+                                </label>
+                            </div>
+                            <div class="mt-3 flex justify-end">
+                                <button type="button" :disabled="loadingRange || (!draftStartDate && !draftEndDate)" class="cursor-pointer rounded-lg bg-blue-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50" @click="applyDashboardDateRange">
+                                    Apply dates
+                                </button>
+                            </div>
+                        </div>
 
                         <label v-if="['superadmin', 'system_admin', 'system_monitor'].includes(currentUser?.role_name)" class="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
                             <span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">Organization</span>
@@ -1535,34 +1658,122 @@ onMounted(() => {
 
                 <!-- Dashboard Filters -->
 
-                <div class="hidden flex-wrap items-center justify-end gap-3 lg:flex">
+                <div class="hidden flex-wrap items-end justify-end gap-3 lg:flex">
 
                     <!-- Date Range -->
 
-                    <div class="flex items-center gap-3">
-
-                        <label for="dashboard-range" class="hidden text-sm font-medium text-slate-600 sm:block">
-                            Date Range
-                        </label>
-
-                        <AppSelect
-                            id="dashboard-range"
-                            v-model="selectedRange"
-                            aria-label="Date range"
+                    <div class="relative">
+                        <button
+                            type="button"
                             data-tour="dashboard-range"
+                            aria-label="Filter dashboard by date created"
+                            :aria-expanded="isDateFilterOpen"
+                            aria-haspopup="dialog"
                             :disabled="loadingRange"
-                            :options="[
-                                { label: 'Today', value: 'today' },
-                                { label: 'Last 7 Days', value: '7d' },
-                                { label: 'Last 30 Days', value: '30d' },
-                                { label: 'Last 3 Months', value: '3m' },
-                                { label: 'Last 6 Months', value: '6m' },
-                                { label: 'This Year', value: 'year' },
-                                { label: 'All Time', value: 'all' }
-                            ]"
-                            @change="changeDashboardFilter"
-                        />
+                            class="inline-flex h-10 min-w-40 cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50/50 focus:outline-none focus:ring-2 focus:ring-blue-700/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            @click="openDateFilter"
+                        >
+                            <span class="flex min-w-0 items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true">
+                                    <rect width="18" height="18" x="3" y="4" rx="2" />
+                                    <path stroke-linecap="round" d="M16 2v4M8 2v4M3 10h18" />
+                                </svg>
+                                <span class="truncate">{{ selectedRangeLabel }}</span>
+                            </span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4 shrink-0 text-slate-400 transition-transform" :class="isDateFilterOpen ? 'rotate-180' : ''" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6" />
+                            </svg>
+                        </button>
 
+                        <div v-if="isDateFilterOpen" role="dialog" aria-label="Date created filter" class="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-4 shadow-xl ring-1 ring-slate-900/5">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <h3 class="text-sm font-semibold text-slate-900">Date created</h3>
+                                    <p class="mt-0.5 text-xs text-slate-500">Choose a preset or set exact dates.</p>
+                                </div>
+                                <button type="button" aria-label="Close date filter" class="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" @click="isDateFilterOpen = false">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m6 6 12 12M18 6 6 18" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div class="mt-3 grid grid-cols-2 gap-2">
+                                <button
+                                    v-for="range in [
+                                        { label: 'Today', value: 'today' },
+                                        { label: 'Last 7 days', value: '7d' },
+                                        { label: 'Last 30 days', value: '30d' },
+                                        { label: 'Last 3 months', value: '3m' },
+                                        { label: 'Last 6 months', value: '6m' },
+                                        { label: 'This year', value: 'year' },
+                                        { label: 'All time', value: 'all' }
+                                    ]"
+                                    :key="range.value"
+                                    type="button"
+                                    class="cursor-pointer rounded-lg border px-3 py-2 text-left text-xs font-medium transition"
+                                    :class="!customStartDate && !customEndDate && selectedRange === range.value ? 'border-blue-300 bg-blue-50 text-blue-900' : 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'"
+                                    @click="selectedRange = range.value; handleDashboardRangeChange()"
+                                >
+                                    {{ range.label }}
+                                </button>
+                            </div>
+
+                            <div class="my-4 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                <span class="h-px flex-1 bg-slate-200"></span>
+                                Custom range
+                                <span class="h-px flex-1 bg-slate-200"></span>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="text-xs font-medium text-slate-600">
+                                    From
+                                    <VueDatePicker
+                                        v-model="draftStartDate"
+                                        model-type="yyyy-MM-dd"
+                                        format="MMM d, yyyy"
+                                        placeholder="Any start date"
+                                        :enable-time-picker="false"
+                                        :auto-apply="true"
+                                        :clearable="true"
+                                        :max-date="draftEndDate || undefined"
+                                        :teleport="true"
+                                        :disabled="loadingRange"
+                                        input-class-name="!cursor-pointer !rounded-lg !border-slate-300 !py-2 !text-sm focus:!border-blue-700"
+                                        menu-class-name="rounded-xl border border-slate-200 shadow-xl"
+                                        class="mt-1 w-full"
+                                        aria-label="Created date from"
+                                    />
+                                </label>
+                                <label class="text-xs font-medium text-slate-600">
+                                    To
+                                    <VueDatePicker
+                                        v-model="draftEndDate"
+                                        model-type="yyyy-MM-dd"
+                                        format="MMM d, yyyy"
+                                        placeholder="Any end date"
+                                        :enable-time-picker="false"
+                                        :auto-apply="true"
+                                        :clearable="true"
+                                        :min-date="draftStartDate || undefined"
+                                        :teleport="true"
+                                        :disabled="loadingRange"
+                                        input-class-name="!cursor-pointer !rounded-lg !border-slate-300 !py-2 !text-sm focus:!border-blue-700"
+                                        menu-class-name="rounded-xl border border-slate-200 shadow-xl"
+                                        class="mt-1 w-full"
+                                        aria-label="Created date to"
+                                    />
+                                </label>
+                            </div>
+                            <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                                <button type="button" class="cursor-pointer text-xs font-medium text-slate-500 transition hover:text-slate-800" @click="resetDashboardDateRange">
+                                    Reset to preset
+                                </button>
+                                <button type="button" :disabled="loadingRange || (!draftStartDate && !draftEndDate)" class="cursor-pointer rounded-lg bg-blue-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50" @click="applyDashboardDateRange">
+                                    Apply range
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
 

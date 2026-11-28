@@ -35,7 +35,7 @@ export async function notifyConcernParticipants(executor, {
       INNER JOIN users creator
         ON creator.id = concern.created_by
       INNER JOIN users recipient
-        ON recipient.id <> ?
+        ON recipient.id <> COALESCE(?, 0)
        AND recipient.deleted_at IS NULL
        AND recipient.status = 'active'
       INNER JOIN roles recipient_role

@@ -42,12 +42,32 @@ export default defineEventHandler(async (event) => {
         queryParams.priority || ''
     ).trim()
 
+    const scope = String(
+        queryParams.scope || 'all'
+    ).trim()
+
+    const senderDepartment = Number(
+        queryParams.sender_department || 0
+    )
+
     const department = Number(
         queryParams.department || 0
     )
 
     const date = String(
         queryParams.date || ''
+    ).trim()
+
+    const dateFrom = String(
+        queryParams.date_from || ''
+    ).trim()
+
+    const dateTo = String(
+        queryParams.date_to || ''
+    ).trim()
+
+    const targetDate = String(
+        queryParams.target_date || ''
     ).trim()
 
     const trashView = String(
@@ -103,6 +123,29 @@ export default defineEventHandler(async (event) => {
     const conditions = []
     const params = []
 
+    const isValidCalendarDate = (value) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return false
+        }
+
+        const parsedDate = new Date(`${value}T00:00:00.000Z`)
+        return !Number.isNaN(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === value
+    }
+
+    if ((dateFrom && !isValidCalendarDate(dateFrom)) || (dateTo && !isValidCalendarDate(dateTo))) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Enter valid created-date range values.'
+        })
+    }
+
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'The created-date start must be on or before the end date.'
+        })
+    }
+
     /*
      * ROLE-BASED VISIBILITY
      *
@@ -119,10 +162,10 @@ export default defineEventHandler(async (event) => {
     /*
      * ADMIN
      *
-     * Can see:
+    * Can see active concerns:
      *
      * 1. Concerns they created themselves
-     * 2. Concerns created by someone in their organization
+    * 2. Concerns created by any member of their organization
      * 3. Concerns assigned to their organization
      */
 
@@ -146,14 +189,15 @@ export default defineEventHandler(async (event) => {
     /*
      * REGULAR USER
      *
-     * Can see:
+    * Can see active concerns:
      *
      * 1. Concerns they created themselves
-     * 2. Concerns created by someone in their organization
+    * 2. Concerns created by any member of their organization
      * 3. Concerns assigned to their organization
      *
-     * Regular users can VIEW concerns assigned to their
-     * organization, but they cannot manage their status.
+    * Requestors can view and comment on their organization's concerns,
+    * including tickets created by colleagues or assigned to their
+    * organization. They cannot manage status.
      */
 
     else if (currentUser.role_name === 'requestor') {
@@ -180,6 +224,40 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Invalid user role.'
         })
     }
+
+    /*
+     * RELATIONSHIP SCOPE
+     */
+
+    if (!['all', 'submitted', 'assigned'].includes(scope)) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Invalid concern scope.'
+        })
+    }
+
+    if (['concern_handler', 'requestor'].includes(currentUser.role_name)) {
+        if (scope === 'submitted') {
+            conditions.push('u.organization_id = ?')
+            params.push(currentUser.organization_id)
+        } else if (scope === 'assigned') {
+            conditions.push('c.assigned_organization_id = ?')
+            params.push(currentUser.organization_id)
+        }
+    } else if (scope === 'submitted') {
+        conditions.push('u.organization_id IS NOT NULL')
+    } else if (scope === 'assigned') {
+        conditions.push('c.assigned_organization_id IS NOT NULL')
+    }
+
+    if (Number.isInteger(senderDepartment) && senderDepartment > 0) {
+        conditions.push('u.organization_id = ?')
+        params.push(senderDepartment)
+    }
+
+    /*
+     * TRASH VIEW CONDITIONS
+     */
 
     if (trashView) {
         if (currentUser.role_name === 'concern_handler') {
@@ -221,7 +299,7 @@ export default defineEventHandler(async (event) => {
     /*
      * SEARCH
      *
-     * Search concern number, title, or description.
+    * Search ticket text and key routing/creator details.
      */
 
     if (search) {
@@ -233,10 +311,18 @@ export default defineEventHandler(async (event) => {
                 c.concern_number LIKE ?
                 OR c.title LIKE ?
                 OR c.description LIKE ?
+                OR CONCAT(u.first_name, ' ', u.last_name) LIKE ?
+                OR creator_org.name LIKE ?
+                OR assigned_org.name LIKE ?
+                OR ct.name LIKE ?
             )
         `)
 
         params.push(
+            searchValue,
+            searchValue,
+            searchValue,
+            searchValue,
             searchValue,
             searchValue,
             searchValue
@@ -298,6 +384,19 @@ export default defineEventHandler(async (event) => {
     if (Number.isInteger(department) && department > 0) {
         conditions.push('c.assigned_organization_id = ?')
         params.push(department)
+    }
+
+    if (targetDate === 'set') {
+        conditions.push('c.target_commitment_at IS NOT NULL')
+    } else if (targetDate === 'none') {
+        conditions.push('c.target_commitment_at IS NULL')
+    } else if (targetDate === 'past') {
+        conditions.push('c.target_commitment_at IS NOT NULL AND DATE(c.target_commitment_at) < CURDATE()')
+    } else if (targetDate) {
+        throw createError({
+            statusCode: 400,
+            statusMessage: 'Invalid target date filter.'
+        })
     }
 
     /*
@@ -375,6 +474,16 @@ export default defineEventHandler(async (event) => {
 
     }
 
+    if (dateFrom) {
+        conditions.push('c.created_at >= ?')
+        params.push(dateFrom)
+    }
+
+    if (dateTo) {
+        conditions.push('c.created_at < DATE_ADD(?, INTERVAL 1 DAY)')
+        params.push(dateTo)
+    }
+
     /*
      * BUILD WHERE CLAUSE
      */
@@ -396,6 +505,8 @@ export default defineEventHandler(async (event) => {
             ON creator_org.id = u.organization_id
         LEFT JOIN organizations assigned_org
             ON assigned_org.id = c.assigned_organization_id
+        LEFT JOIN concern_types ct
+            ON ct.id = c.concern_type_id
         ${whereClause}
     `
 

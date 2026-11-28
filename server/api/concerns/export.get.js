@@ -17,9 +17,21 @@ export default defineEventHandler(async (event) => {
 
   const priority = String(queryParams.priority || "").trim();
 
+  const scope = String(queryParams.scope || "all").trim();
+
+  const senderDepartment = Number(queryParams.sender_department || 0);
+
   const department = Number(queryParams.department || 0);
 
   const date = String(queryParams.date || "").trim();
+
+  const dateFrom = String(queryParams.date_from || "").trim();
+
+  const dateTo = String(queryParams.date_to || "").trim();
+
+  const targetDate = String(queryParams.target_date || "").trim();
+
+  const lateResponseFilter = String(queryParams.late_response || "").trim() === "1";
 
   /*
    * WHERE CONDITIONS
@@ -27,6 +39,29 @@ export default defineEventHandler(async (event) => {
 
   const conditions = [];
   const params = [];
+
+  const isValidCalendarDate = (value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+
+    const parsedDate = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === value;
+  };
+
+  if ((dateFrom && !isValidCalendarDate(dateFrom)) || (dateTo && !isValidCalendarDate(dateTo))) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Enter valid created-date range values.",
+    });
+  }
+
+  if (dateFrom && dateTo && dateFrom > dateTo) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "The created-date start must be on or before the end date.",
+    });
+  }
 
   /*
    * ROLE-BASED VISIBILITY
@@ -36,18 +71,11 @@ export default defineEventHandler(async (event) => {
    */
 
   if (["superadmin", "system_admin", "system_monitor"].includes(currentUser.role_name)) {
-    // No role-based filter.
+    // Global roles can see all concerns.
   } else if (currentUser.role_name === "concern_handler") {
     /*
-     * ADMIN
-     *
-     * Can see:
-     *
-     * 1. Concerns they created themselves
-     * OR
-     * 2. Concerns created by someone in their organization
-     * OR
-     * 3. Concerns assigned to their organization
+     * Concern handlers can see concerns they created, concerns from their
+     * organization, and concerns assigned to their organization.
      */
     conditions.push(`
             (
@@ -63,25 +91,20 @@ export default defineEventHandler(async (event) => {
       currentUser.organization_id,
     );
   } else if (currentUser.role_name === "requestor") {
-    /*
-     * REGULAR USER
-     *
-     * Can see:
-     *
-     * 1. Concerns they created themselves
-     * OR
-     * 2. Concerns created by someone in their organization
-     *
-     * Regular users are NOT treated as the assigned recipient.
-     */
+    /* Requestors have the same organization-based view, without status management. */
     conditions.push(`
             (
                 c.created_by = ?
                 OR u.organization_id = ?
+                OR c.assigned_organization_id = ?
             )
         `);
 
-    params.push(currentUser.id, currentUser.organization_id);
+    params.push(
+      currentUser.id,
+      currentUser.organization_id,
+      currentUser.organization_id,
+    );
   } else {
     throw createError({
       statusCode: 403,
@@ -113,10 +136,22 @@ export default defineEventHandler(async (event) => {
                 c.concern_number LIKE ?
                 OR c.title LIKE ?
                 OR c.description LIKE ?
+                OR CONCAT(u.first_name, ' ', u.last_name) LIKE ?
+                OR creator_org.name LIKE ?
+                OR assigned_org.name LIKE ?
+                OR ct.name LIKE ?
             )
         `);
 
-    params.push(searchValue, searchValue, searchValue);
+    params.push(
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+      searchValue,
+    );
   }
 
   /*
@@ -129,6 +164,32 @@ export default defineEventHandler(async (event) => {
         `);
 
     params.push(status);
+  }
+
+  if (lateResponseFilter) {
+    conditions.push(`
+      c.status = 'pending'
+      AND c.created_at < DATE_SUB(NOW(), INTERVAL 4 HOUR)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM concern_status_history response_status
+        INNER JOIN users response_user
+          ON response_user.id = response_status.changed_by
+        WHERE response_status.concern_id = c.id
+          AND response_status.new_status <> 'pending'
+          AND response_user.organization_id = c.assigned_organization_id
+          AND response_status.created_at <= DATE_ADD(c.created_at, INTERVAL 4 HOUR)
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM concern_comments response_comment
+        INNER JOIN users response_user
+          ON response_user.id = response_comment.user_id
+        WHERE response_comment.concern_id = c.id
+          AND response_user.organization_id = c.assigned_organization_id
+          AND response_comment.created_at <= DATE_ADD(c.created_at, INTERVAL 4 HOUR)
+      )
+    `);
   }
 
   /*
@@ -146,6 +207,19 @@ export default defineEventHandler(async (event) => {
   if (Number.isInteger(department) && department > 0) {
     conditions.push("c.assigned_organization_id = ?");
     params.push(department);
+  }
+
+  if (targetDate === "set") {
+    conditions.push("c.target_commitment_at IS NOT NULL");
+  } else if (targetDate === "none") {
+    conditions.push("c.target_commitment_at IS NULL");
+  } else if (targetDate === "past") {
+    conditions.push("c.target_commitment_at IS NOT NULL AND DATE(c.target_commitment_at) < CURDATE()");
+  } else if (targetDate) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: "Invalid target date filter.",
+    });
   }
 
   /*
@@ -207,6 +281,46 @@ export default defineEventHandler(async (event) => {
             INTERVAL 1 YEAR
         )
     `);
+  }
+
+  if (dateFrom) {
+    conditions.push("c.created_at >= ?");
+    params.push(dateFrom);
+  }
+
+  if (dateTo) {
+    conditions.push("c.created_at < DATE_ADD(?, INTERVAL 1 DAY)");
+    params.push(dateTo);
+  }
+
+  /*
+   * SCOPE AND ORGANIZATION FILTERS
+   */
+
+  if (!['all', 'submitted', 'assigned'].includes(scope)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid concern scope.',
+    });
+  }
+
+  if (['concern_handler', 'requestor'].includes(currentUser.role_name)) {
+    if (scope === 'submitted') {
+      conditions.push('u.organization_id = ?');
+      params.push(currentUser.organization_id);
+    } else if (scope === 'assigned') {
+      conditions.push('c.assigned_organization_id = ?');
+      params.push(currentUser.organization_id);
+    }
+  } else if (scope === 'submitted') {
+    conditions.push('u.organization_id IS NOT NULL');
+  } else if (scope === 'assigned') {
+    conditions.push('c.assigned_organization_id IS NOT NULL');
+  }
+
+  if (Number.isInteger(senderDepartment) && senderDepartment > 0) {
+    conditions.push('u.organization_id = ?');
+    params.push(senderDepartment);
   }
 
   /*
@@ -281,6 +395,29 @@ export default defineEventHandler(async (event) => {
     `;
 
   const [rows] = await db.query(query, params);
+
+  if (rows.length === 0) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: "No concerns match the selected filters. Nothing was exported.",
+    });
+  }
+
+  const filterOrganizationIds = [senderDepartment, department]
+    .filter((id) => Number.isInteger(id) && id > 0);
+  const organizationNameById = new Map();
+
+  if (filterOrganizationIds.length > 0) {
+    const placeholders = filterOrganizationIds.map(() => "?").join(", ");
+    const [organizationRows] = await db.query(
+      `SELECT id, name FROM organizations WHERE id IN (${placeholders})`,
+      filterOrganizationIds,
+    );
+
+    for (const organization of organizationRows) {
+      organizationNameById.set(Number(organization.id), organization.name);
+    }
+  }
 
   const statusHistoryByConcern = new Map();
   const concernIds = rows.map((row) => row.id);
@@ -521,7 +658,7 @@ export default defineEventHandler(async (event) => {
    * REPORT TITLE
    */
 
-  worksheet.mergeCells("A1:M1");
+  worksheet.mergeCells("A1:L1");
 
   worksheet.getCell("A1").value = "Concern Management System - Concern Report";
 
@@ -541,7 +678,7 @@ export default defineEventHandler(async (event) => {
    * GENERATED DATE
    */
 
-  worksheet.mergeCells("A2:M2");
+  worksheet.mergeCells("A2:L2");
 
   worksheet.getCell("A2").value =
     `Generated: ${formatDateForDisplay(new Date())}`;
@@ -570,30 +707,51 @@ export default defineEventHandler(async (event) => {
     filterParts.push(`Status: ${formatStatus(status)}`);
   }
 
+  if (lateResponseFilter) {
+    filterParts.push("Late Response: No response within 4 hours");
+  }
+
   if (priority) {
     filterParts.push(`Priority: ${formatPriority(priority)}`);
   }
 
+  if (scope === "submitted") {
+    filterParts.push("Scope: Submitted by my organization");
+  } else if (scope === "assigned") {
+    filterParts.push("Scope: Assigned to my organization");
+  }
+
+  if (Number.isInteger(senderDepartment) && senderDepartment > 0) {
+    filterParts.push(`Requesting Department: ${organizationNameById.get(senderDepartment) || "Unknown organization"}`);
+  }
+
   if (Number.isInteger(department) && department > 0) {
-    const selectedDepartment = rows.find(
-      (row) => Number(row.assigned_organization_id) === department,
-    );
-    filterParts.push(`Department: ${selectedDepartment?.organization_name || department}`);
+    filterParts.push(`Receiving Department: ${organizationNameById.get(department) || "Unknown organization"}`);
   }
 
-  if (date === "today") {
-    filterParts.push("Date: Today");
+  if (targetDate === "set") {
+    filterParts.push("Committed Start Date: Set");
+  } else if (targetDate === "none") {
+    filterParts.push("Committed Start Date: Not Set");
+  } else if (targetDate === "past") {
+    filterParts.push("Committed Start Date: Passed");
+  }
+
+  if (dateFrom || dateTo) {
+    filterParts.push(`Created Date: ${dateFrom || "Any date"} to ${dateTo || "Any date"}`);
+  } else if (date === "today") {
+    filterParts.push("Created Date: Today");
   } else if (date === "week") {
-    filterParts.push("Date: This Week");
+    filterParts.push("Created Date: This Week");
   } else if (date === "month") {
-    filterParts.push("Date: This Month");
+    filterParts.push("Created Date: This Month");
   } else if (date === "year") {
-    filterParts.push("Date: This Year");
+    filterParts.push("Created Date: This Year");
   } else {
-    filterParts.push("Date: All Dates");
+    filterParts.push("Created Date: All Years");
   }
 
-  worksheet.mergeCells("A3:M3");
+  worksheet.mergeCells("A3:L3");
 
   worksheet.getCell("A3").value = filterParts.length
     ? `Filters: ${filterParts.join(" | ")}`
@@ -624,16 +782,15 @@ export default defineEventHandler(async (event) => {
     "Concern No.",
     "Title",
     "Description",
-    "Type",
+    "Concern Type",
+    "Creator Organization",
     "Assigned To",
     "Priority",
     "Status",
-    "Created By",
-    "Creator Organization",
-    "Date",
     "Committed Start",
-    "Resolved At",
     "Handling Duration",
+    "Resolved At",
+    "Date",
   ];
 
   const headerRow = worksheet.getRow(5);
@@ -657,7 +814,7 @@ export default defineEventHandler(async (event) => {
    * HEADER BORDERS
    */
 
-  for (let column = 1; column <= 13; column++) {
+  for (let column = 1; column <= 12; column++) {
     const cell = headerRow.getCell(column);
 
     cell.border = {
@@ -686,22 +843,21 @@ export default defineEventHandler(async (event) => {
       concern.title || "-",
       concern.description || "-",
       concern.concern_type_name || "-",
+      concern.creator_organization_name || "-",
       concern.organization_name || "-",
       formatPriority(concern.priority),
       formatStatus(concern.status),
-      concern.created_by_name || "-",
-      concern.creator_organization_name || "-",
-      concern.created_at ? new Date(concern.created_at) : null,
       concern.target_commitment_at ? parseLocalDateTime(concern.target_commitment_at) : null,
-      concern.resolved_at ? new Date(concern.resolved_at) : null,
       getHandlingDuration(concern),
+      concern.resolved_at ? new Date(concern.resolved_at) : null,
+      concern.created_at ? new Date(concern.created_at) : null,
     ]);
 
     /*
      * DATE CELLS
      */
 
-    row.getCell(10).numFmt = "mmm d, yyyy h:mm AM/PM";
+    row.getCell(9).numFmt = "mmm d, yyyy h:mm AM/PM";
 
     row.getCell(11).numFmt = "mmm d, yyyy h:mm AM/PM";
 
@@ -720,7 +876,7 @@ export default defineEventHandler(async (event) => {
      * BORDERS
      */
 
-    for (let column = 1; column <= 13; column++) {
+    for (let column = 1; column <= 12; column++) {
       const cell = row.getCell(column);
 
       cell.border = {
@@ -749,14 +905,13 @@ export default defineEventHandler(async (event) => {
   worksheet.getColumn(3).width = 45;
   worksheet.getColumn(4).width = 24;
   worksheet.getColumn(5).width = 28;
-  worksheet.getColumn(6).width = 14;
-  worksheet.getColumn(7).width = 16;
-  worksheet.getColumn(8).width = 25;
-  worksheet.getColumn(9).width = 28;
-  worksheet.getColumn(10).width = 24;
+  worksheet.getColumn(6).width = 28;
+  worksheet.getColumn(7).width = 14;
+  worksheet.getColumn(8).width = 16;
+  worksheet.getColumn(9).width = 24;
+  worksheet.getColumn(10).width = 20;
   worksheet.getColumn(11).width = 24;
   worksheet.getColumn(12).width = 24;
-  worksheet.getColumn(13).width = 20;
 
   /*
    * FREEZE HEADER
@@ -775,7 +930,7 @@ export default defineEventHandler(async (event) => {
 
   worksheet.autoFilter = {
     from: "A5",
-    to: "M5",
+    to: "L5",
   };
 
   /*

@@ -20,7 +20,7 @@ const showCreateModal = ref(false)
 const categoryToEdit = ref(null)
 const categoryToToggle = ref(null)
 const errorMessage = ref('')
-const form = ref({ name: '', description: '', organization_ids: [] })
+const form = ref({ name: '', description: '', organization_id: '' })
 
 const categoryModalMode = computed(() => categoryToEdit.value ? 'edit' : 'create')
 
@@ -55,7 +55,7 @@ async function loadData() {
 
 function openCreateModal() {
     categoryToEdit.value = null
-    form.value = { name: '', description: '', organization_ids: [] }
+    form.value = { name: '', description: '', organization_id: '' }
     showCreateModal.value = true
 }
 
@@ -64,7 +64,9 @@ function openEditModal(category) {
     form.value = {
         name: category.name || '',
         description: category.description || '',
-        organization_ids: (category.assigned_organizations || []).map(organization => organization.id)
+        organization_id: category.assigned_organizations?.length === 1
+            ? String(category.assigned_organizations[0].id)
+            : ''
     }
     showCreateModal.value = true
 }
@@ -88,7 +90,7 @@ async function saveCategory() {
                 body: {
                     name: form.value.name.trim(),
                     description: form.value.description.trim(),
-                    organization_ids: form.value.organization_ids
+                    organization_id: form.value.organization_id
                 }
             })
 
@@ -99,7 +101,7 @@ async function saveCategory() {
                 body: {
                     name: form.value.name.trim(),
                     description: form.value.description.trim(),
-                    organization_ids: form.value.organization_ids
+                    organization_id: form.value.organization_id
                 }
             })
 
@@ -263,13 +265,14 @@ onMounted(loadData)
                                     </div>
                                     <p class="mt-1 text-sm leading-5 text-slate-500">{{ category.description || 'No description provided.' }}</p>
                                     <div class="mt-3">
-                                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Assigned organizations</p>
-                                        <div v-if="category.assigned_organizations?.length" class="mt-1 flex flex-wrap gap-1.5">
-                                            <span v-for="organization in category.assigned_organizations" :key="organization.id" class="rounded-full border px-2.5 py-1 text-xs font-medium" :class="organization.status === 'active' ? 'border-blue-100 bg-blue-50 text-blue-800' : 'border-slate-200 bg-slate-100 text-slate-500'">
-                                                {{ organization.name }}{{ organization.status === 'active' ? '' : ' (inactive)' }}
-                                            </span>
-                                        </div>
-                                        <p v-else class="mt-1 text-xs text-amber-700">No organizations assigned</p>
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Receiving organization</p>
+                                        <p v-if="category.assigned_organization_id != null && category.assigned_organizations?.length === 1" class="mt-1 text-sm font-medium text-blue-800">
+                                            {{ category.assigned_organizations[0].name }}{{ category.assigned_organizations[0].status === 'active' ? '' : ' (inactive)' }}
+                                        </p>
+                                        <p v-else-if="category.assigned_organizations?.length" class="mt-1 text-xs text-amber-700">
+                                            Legacy destination{{ category.assigned_organizations.length === 1 ? '' : 's' }} need confirmation. Edit this category and choose one.
+                                        </p>
+                                        <p v-else class="mt-1 text-xs text-amber-700">No destination selected. Edit this category to choose one.</p>
                                     </div>
                                     <p class="mt-2 text-xs text-slate-400">Added {{ formatDate(category.created_at) }}</p>
                                 </div>
@@ -301,6 +304,8 @@ onMounted(loadData)
             :saving="saving"
             :organizations="organizations"
             :mode="categoryModalMode"
+            :current-organization-id="categoryToEdit?.assigned_organizations?.length === 1 ? categoryToEdit.assigned_organizations[0].id : ''"
+            :current-organization-name="categoryToEdit?.assigned_organizations?.length === 1 ? categoryToEdit.assigned_organizations[0].name : ''"
             @close="closeCreateModal"
             @submit="saveCategory"
         />
